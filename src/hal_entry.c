@@ -1,4 +1,5 @@
 #include "hal_data.h"
+#include "user_uart_log.h"
 
 extern int ptxAPP_Entry(void);
 
@@ -12,6 +13,10 @@ FSP_CPP_FOOTER
  **********************************************************************************************************************/
 void hal_entry(void)
 {
+    /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
+     * output is mirrored from the very first log line. */
+    (void)UserUartLog_Init();
+
     /* TODO: add your own code here */
     (void) ptxAPP_Entry();
 

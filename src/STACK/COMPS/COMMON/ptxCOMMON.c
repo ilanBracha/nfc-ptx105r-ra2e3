@@ -59,6 +59,8 @@
  */
 #define ENABLE_PRINTF_OPTION
 #define ENABLE_PRINTF_OPTION_SEGGER_RTT
+/* Also pipe debug output through g_uart0 (P1_09 TXD / P1_10 RXD on RA2E3 FPB). */
+#define ENABLE_PRINTF_OPTION_UART
 
 #ifdef ENABLE_PRINTF_OPTION
 #ifdef ENABLE_PRINTF_OPTION_SEGGER_RTT
@@ -66,8 +68,12 @@
 #else
     #include "ptxDBG_PORT.h"
 #endif
+#ifdef ENABLE_PRINTF_OPTION_UART
+    #include "user_uart_log.h"
+#endif
     #include <stdarg.h>
     #include <stdio.h>
+    #include <string.h>
 #endif
 
 /*
@@ -93,6 +99,11 @@ void ptxCommon_PrintF(const char *format, ...)
     (void)SEGGER_RTT_printf(0, buffer, max_len);
 #else
     (void)ptxDBGPORT_Write(buffer);
+#endif
+
+#ifdef ENABLE_PRINTF_OPTION_UART
+    /* Mirror the formatted line to g_uart0 (TXD on P1_09). */
+    UserUartLog_Write((const uint8_t *)buffer, strnlen(buffer, max_len));
 #endif
 
     va_end(argptr);

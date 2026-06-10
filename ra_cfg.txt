@@ -109,8 +109,8 @@ FSP Configuration
       P103 33 - ARDUINO_D10_SS_PMOD1_SS H - Disabled - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 GPIO ARDUINO_D9 - - "Output mode (Initial Low)" - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 - - H - Disabled - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
-      P109 26 - ARDUINO_D1_TX - - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - None - - 
-      P110 27 - ARDUINO_D0_RX - - Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - None - - 
+      P109 26 - ARDUINO_D1_TX H - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
+      P110 27 - ARDUINO_D0_RX H None Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - I - - 
       P111 28 - ARDUINO_D3 - - Disabled - - "AGT0: AGTOA0; GPT6: GTIOC6A; ICU: IRQ4; SCI2: SCK2; SCI9: SCK9" - None - - 
       P112 29 GPIO ARDUINO_D8 - - "Output mode (Initial Low)" - - "AGT0: AGTOB0; GPT6: GTIOC6B; SCI1: SCK1; SCI2: TXD2" - None - - 
       P200 21 - SW1 - - Disabled - - "ICU: NMI" - None - - 
@@ -158,8 +158,8 @@ FSP Configuration
       P103 33 - ARDUINO_D10_SS_PMOD1_SS H - Disabled - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 - ARDUINO_D9 - - Disabled - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 - - H - Disabled - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
-      P109 26 - ARDUINO_D1_TX - - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - None - - 
-      P110 27 - ARDUINO_D0_RX - - Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - None - - 
+      P109 26 - ARDUINO_D1_TX H - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
+      P110 27 - ARDUINO_D0_RX H None Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - I - - 
       P111 28 - ARDUINO_D3 - - Disabled - - "AGT0: AGTOA0; GPT6: GTIOC6A; ICU: IRQ4; SCI2: SCK2; SCI9: SCK9" - None - - 
       P112 29 - ARDUINO_D8 - - Disabled - - "AGT0: AGTOB0; GPT6: GTIOC6B; SCI1: SCK1; SCI2: TXD2" - None - - 
       P200 21 - SW1 - - Disabled - - "ICU: NMI" - None - - 
@@ -207,8 +207,8 @@ FSP Configuration
       P103 33 - ARDUINO_D10_SS_PMOD1_SS H - Disabled - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 - ARDUINO_D9 - - Disabled - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 - - H - Disabled - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
-      P109 26 - ARDUINO_D1_TX - - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - None - - 
-      P110 27 - ARDUINO_D0_RX - - Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - None - - 
+      P109 26 - ARDUINO_D1_TX H - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
+      P110 27 - ARDUINO_D0_RX H None Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - I - - 
       P111 28 - ARDUINO_D3 - - Disabled - - "AGT0: AGTOA0; GPT6: GTIOC6A; ICU: IRQ4; SCI2: SCK2; SCI9: SCK9" - None - - 
       P112 29 - ARDUINO_D8 - - Disabled - - "AGT0: AGTOB0; GPT6: GTIOC6B; SCI1: SCK1; SCI2: TXD2" - None - - 
       P200 21 - SW1 - - Disabled - - "ICU: NMI" - None - - 
@@ -256,8 +256,8 @@ FSP Configuration
       P103 33 - ARDUINO_D10_SS_PMOD1_SS H - Disabled - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 - ARDUINO_D9 - - Disabled - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 - - H - Disabled - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
-      P109 26 - ARDUINO_D1_TX - - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - None - - 
-      P110 27 - ARDUINO_D0_RX - - Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - None - - 
+      P109 26 - ARDUINO_D1_TX H - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
+      P110 27 - ARDUINO_D0_RX H None Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - I - - 
       P111 28 - ARDUINO_D3 - - Disabled - - "AGT0: AGTOA0; GPT6: GTIOC6A; ICU: IRQ4; SCI2: SCK2; SCI9: SCK9" - None - - 
       P112 29 - ARDUINO_D8 - - Disabled - - "AGT0: AGTOB0; GPT6: GTIOC6B; SCI1: SCK1; SCI2: TXD2" - None - - 
       P200 21 - SW1 - - Disabled - - "ICU: NMI" - None - - 
@@ -305,8 +305,8 @@ FSP Configuration
       P103 33 SCI0_CTS_RTS0 ARDUINO_D10_SS_PMOD1_SS H - "Peripheral mode" - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 GPIO ARDUINO_D9 - - "Output mode (Initial Low)" - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 JTAG/SWD_SWDIO - H - "Peripheral mode" - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
-      P109 26 SCI9_TXD9 ARDUINO_D1_TX - - "Peripheral mode" - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - None - - 
-      P110 27 SCI9_RXD9 ARDUINO_D0_RX - - "Peripheral mode" - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - None - - 
+      P109 26 SCI9_TXD9 ARDUINO_D1_TX H - "Peripheral mode" - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
+      P110 27 SCI9_RXD9 ARDUINO_D0_RX H None "Peripheral mode" - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - I - - 
       P111 28 GPIO ARDUINO_D3 - - "Output mode (Initial Low)" - - "AGT0: AGTOA0; GPT6: GTIOC6A; ICU: IRQ4; SCI2: SCK2; SCI9: SCK9" - None - - 
       P112 29 GPIO ARDUINO_D8 - - "Output mode (Initial Low)" - - "AGT0: AGTOB0; GPT6: GTIOC6B; SCI1: SCK1; SCI2: TXD2" - None - - 
       P200 21 ICU_NMI SW1 - - "IRQ mode" - - "ICU: NMI" - None - - 
@@ -354,8 +354,8 @@ FSP Configuration
       P103 33 SCI0_CTS_RTS0 ARDUINO_D10_SS_PMOD1_SS H - "Peripheral mode" - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 - ARDUINO_D9 - - Disabled - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 JTAG/SWD_SWDIO - H - "Peripheral mode" - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
-      P109 26 - ARDUINO_D1_TX - - Disabled - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - None - - 
-      P110 27 - ARDUINO_D0_RX - - Disabled - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - None - - 
+      P109 26 SCI9_TXD9 ARDUINO_D1_TX H - "Peripheral mode" - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
+      P110 27 SCI9_RXD9 ARDUINO_D0_RX H None "Peripheral mode" - - "GPT4: GTIOC4B; GPT_OPS: GTOVLO; ICU: IRQ3; SCI2: CTS_RTS2; SCI9: RXD9" - I - - 
       P111 28 - ARDUINO_D3 - - Disabled - - "AGT0: AGTOA0; GPT6: GTIOC6A; ICU: IRQ4; SCI2: SCK2; SCI9: SCK9" - None - - 
       P112 29 - ARDUINO_D8 - - Disabled - - "AGT0: AGTOB0; GPT6: GTIOC6B; SCI1: SCK1; SCI2: TXD2" - None - - 
       P200 21 - SW1 - - Disabled - - "ICU: NMI" - None - - 
@@ -416,6 +416,14 @@ FSP Configuration
   Module "Transfer (r_dtc)"
     Parameter Checking: Default (BSP)
     Linker section to keep DTC vector table: .fsp_dtc_vector_table
+    
+  Module "UART (r_sci_uart)"
+    Parameter Checking: Default (BSP)
+    FIFO Support: Disable
+    DTC Support: Disable
+    Flow Control Support: Disable
+    RS-485 Support: Disable
+    IrDA Support: Disabled
     
   HAL
     Instance "g_ioport I/O Port (r_ioport)"
@@ -544,3 +552,32 @@ FSP Configuration
         Number of Transfer Descriptors: 1
         Activation Source: SCI0 RXI (Receive data full)
         
+    Instance "g_uart0 UART (r_sci_uart)"
+      General: Name: g_uart0
+      General: Channel: 9
+      General: Data Bits: 8bits
+      General: Parity: None
+      General: Stop Bits: 1bit
+      Baud: Baud Rate: 115200
+      Baud: Baud Rate Modulation: Disabled
+      Baud: Max Error (%): 5
+      Flow Control: CTS/RTS Selection: Hardware RTS
+      Flow Control: Software RTS Port: Disabled
+      Flow Control: Software RTS Pin: Disabled
+      Extra: Clock Source: Internal Clock
+      Extra: Start bit detection: Falling Edge
+      Extra: Noise Filter: Disable
+      Extra: Receive FIFO Trigger Level: Max
+      Extra: IrDA: Enable: Disabled
+      Extra: IrDA: RXD Polarity Switching: Normal
+      Extra: IrDA: TXD Polarity Switching: Normal
+      Extra: RS-485: DE Pin: Disable
+      Extra: RS-485: DE Pin Polarity: Active High
+      Extra: RS-485: DE Port Number: Disabled
+      Extra: RS-485: DE Pin Number: Disabled
+      Interrupts: Callback: NULL
+      Interrupts: Receive Interrupt Priority: Priority 2
+      Interrupts: Transmit Data Empty Interrupt Priority: Priority 2
+      Interrupts: Transmit End Interrupt Priority: Priority 2
+      Interrupts: Error Interrupt Priority: Priority 2
+      
