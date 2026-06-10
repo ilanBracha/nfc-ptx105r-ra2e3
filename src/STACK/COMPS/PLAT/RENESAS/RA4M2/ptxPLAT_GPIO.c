@@ -61,8 +61,8 @@
     #define PTX_EXT_IRQ_PIN_POLLER_BOARD        BSP_IO_PORT_00_PIN_02
     #define PTX_GPIO_SEN_PIN                    BSP_IO_PORT_00_PIN_14
 #else                                           // These #defines are used for the PTX1xxR Reader-Board
-    /* PTX1K IRQ on RA8M1 EK is routed to PMOD1 IRQ = P0_06 (ICU IRQ11). */
-    #define PTX_EXT_IRQ_PIN                     BSP_IO_PORT_00_PIN_06
+    /* PTX1K IRQ on RA2E3 FPB is routed to PMOD1 IRQ = P0_15 (ICU IRQ7). */
+    #define PTX_EXT_IRQ_PIN                     BSP_IO_PORT_00_PIN_15
 #endif
 
 /*
@@ -104,6 +104,18 @@ ptxPlatGpio_t gpio_irq_ctx;
 #else
                 gpio_irq_ctx.PortPin = PTX_EXT_IRQ_PIN;
 #endif
+
+                /*
+                 * Ensure the IRQ pin is configured as an input with IRQ enabled even
+                 * if the generated `g_bsp_pin_cfg` does not include it (some slim FSP
+                 * pin configurations omit it).  Must be done BEFORE opening the ICU
+                 * driver so the input buffer / IRQ functionality is active.
+                 */
+                (void)R_IOPORT_PinCfg(gpio_irq_ctx.PortInstance->p_ctrl,
+                                      gpio_irq_ctx.PortPin,
+                                      ((uint32_t)IOPORT_CFG_PORT_DIRECTION_INPUT
+                                       | (uint32_t)IOPORT_CFG_IRQ_ENABLE));
+
                 r_status = R_ICU_ExternalIrqOpen(gpio_irq_ctx.ExtIrqInstance->p_ctrl, gpio_irq_ctx.ExtIrqInstance->p_cfg);
 
                 if (FSP_SUCCESS == r_status)

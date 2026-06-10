@@ -6,13 +6,11 @@
 
 /*******************************************************************************************************************//**
  * @ingroup BSP_MCU
- * @defgroup BSP_MCU_RA8M1 RA8M1
- * @includedoc config_bsp_ra8m1_fsp.html
- * @includedoc device_ra8m1_fsp_modules_list.html
+ * @defgroup BSP_MCU_RA2E3 RA2E3
+ * @includedoc config_bsp_ra2e3_fsp.html
+ * @includedoc device_ra2e3_fsp_modules_list.html
  * @{
  **********************************************************************************************************************/
-
-/** @} (end defgroup BSP_MCU_RA8M1) */
 
 #ifndef BSP_MCU_INFO_H
 #define BSP_MCU_INFO_H
@@ -32,7 +30,7 @@
 /***********************************************************************************************************************
  * Typedef definitions
  **********************************************************************************************************************/
-typedef elc_event_t bsp_interrupt_event_t;
+typedef icu_event_t bsp_interrupt_event_t;
 
 /***********************************************************************************************************************
  * Exported global variables
@@ -43,3 +41,5 @@ typedef elc_event_t bsp_interrupt_event_t;
  **********************************************************************************************************************/
 
 #endif
+
+/** @} (end defgroup BSP_MCU_RA2E3) */

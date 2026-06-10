@@ -7,7 +7,7 @@ const icu_extended_cfg_t g_ext_irq_ext_cfg =
 { .filter_src = EXTERNAL_IRQ_DIGITAL_FILTER_PCLK_DIV, };
 
 const external_irq_cfg_t g_ext_irq_cfg =
-{ .channel = 11, .trigger = EXTERNAL_IRQ_TRIG_RISING, .filter_enable = false, .clock_source_div =
+{ .channel = 7, .trigger = EXTERNAL_IRQ_TRIG_RISING, .filter_enable = false, .clock_source_div =
           EXTERNAL_IRQ_CLOCK_SOURCE_DIV_64,
   .p_callback = ptxPLAT_GPIO_IsrCallback,
   /** If NULL then do not add & */
@@ -18,8 +18,8 @@ const external_irq_cfg_t g_ext_irq_cfg =
 #endif
   .p_extend = (void*) &g_ext_irq_ext_cfg,
   .ipl = (2),
-#if defined(VECTOR_NUMBER_ICU_IRQ11)
-    .irq                 = VECTOR_NUMBER_ICU_IRQ11,
+#if defined(VECTOR_NUMBER_ICU_IRQ7)
+    .irq                 = VECTOR_NUMBER_ICU_IRQ7,
 #else
   .irq = FSP_INVALID_VECTOR,
 #endif

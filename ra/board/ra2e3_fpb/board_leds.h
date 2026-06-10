@@ -5,11 +5,11 @@
 */
 
 /*******************************************************************************************************************//**
- * @ingroup BOARD_RA8M1_EK
- * @defgroup BOARD_RA8M1_EK_LEDS Board LEDs
+ * @ingroup BOARD_RA2E3_FPB
+ * @defgroup BOARD_RA2E3_FPB_LEDS Board LEDs
  * @brief LED information for this board.
  *
- * This is code specific to the EK board. It includes info on the number of LEDs and which pins are they
+ * This is code specific to the FPB board. It includes info on the number of LEDs and which pins are they
  * are on.
  *
  * @{
@@ -42,7 +42,6 @@ typedef enum e_bsp_led
 {
     BSP_LED_LED1,                      ///< LED1
     BSP_LED_LED2,                      ///< LED2
-    BSP_LED_LED3,                      ///< LED3
 } bsp_led_t;
 
 /***********************************************************************************************************************
@@ -58,4 +57,4 @@ FSP_FOOTER
 
 #endif
 
-/** @} (end defgroup BOARD_RA8M1_EK_LEDS) */
+/** @} (end defgroup BOARD_RA2E3_FPB_LEDS) */

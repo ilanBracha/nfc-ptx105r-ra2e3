@@ -1,79 +1,119 @@
 /* generated HAL source file - do not edit */
 #include "hal_data.h"
 
-#define RA_NOT_DEFINED (UINT32_MAX)
-#if (RA_NOT_DEFINED) != (RA_NOT_DEFINED)
+dtc_instance_ctrl_t g_transfer1_ctrl;
 
-/* If the TX transfer module is DMAC, define a DMAC TX transfer callback. */
-#include "r_dmac.h"
-extern void sci_b_spi_tx_dmac_callback(sci_b_spi_instance_ctrl_t const * const p_ctrl);
+#if (1 == 1)
+transfer_info_t g_transfer1_info DTC_TRANSFER_INFO_ALIGNMENT =
+{ .transfer_settings_word_b.dest_addr_mode = TRANSFER_ADDR_MODE_INCREMENTED,
+  .transfer_settings_word_b.repeat_area = TRANSFER_REPEAT_AREA_DESTINATION,
+  .transfer_settings_word_b.irq = TRANSFER_IRQ_END,
+  .transfer_settings_word_b.chain_mode = TRANSFER_CHAIN_MODE_DISABLED,
+  .transfer_settings_word_b.src_addr_mode = TRANSFER_ADDR_MODE_FIXED,
+  .transfer_settings_word_b.size = TRANSFER_SIZE_1_BYTE,
+  .transfer_settings_word_b.mode = TRANSFER_MODE_NORMAL,
+  .p_dest = (void*) NULL,
+  .p_src = (void const*) NULL,
+  .num_blocks = (uint16_t) 0,
+  .length = (uint16_t) 0, };
 
-void ptx_pmod_spi_tx_transfer_callback (dmac_callback_args_t * p_args)
-{
-    FSP_PARAMETER_NOT_USED(p_args);
-    sci_b_spi_tx_dmac_callback(&ptx_pmod_spi_ctrl);
-}
+#elif (1 > 1)
+/* User is responsible to initialize the array. */
+transfer_info_t g_transfer1_info[1] DTC_TRANSFER_INFO_ALIGNMENT;
+#else
+/* User must call api::reconfigure before enable DTC transfer. */
 #endif
 
-#if (RA_NOT_DEFINED) != (RA_NOT_DEFINED)
+const dtc_extended_cfg_t g_transfer1_cfg_extend =
+{ .activation_source = VECTOR_NUMBER_SCI0_RXI, };
 
-/* If the RX transfer module is DMAC, define a DMAC RX transfer callback. */
-#include "r_dmac.h"
-extern void sci_b_spi_rx_dmac_callback(sci_b_spi_instance_ctrl_t const * const p_ctrl);
-
-void ptx_pmod_spi_rx_transfer_callback (dmac_callback_args_t * p_args)
+const transfer_cfg_t g_transfer1_cfg =
 {
-    FSP_PARAMETER_NOT_USED(p_args);
-    sci_b_spi_rx_dmac_callback(&ptx_pmod_spi_ctrl);
-}
+#if (1 == 1)
+  .p_info = &g_transfer1_info,
+#elif (1 > 1)
+    .p_info              = g_transfer1_info,
+#else
+    .p_info = NULL,
 #endif
-#undef RA_NOT_DEFINED
+  .p_extend = &g_transfer1_cfg_extend, };
 
-sci_b_spi_instance_ctrl_t ptx_pmod_spi_ctrl;
+/* Instance structure to use this module. */
+const transfer_instance_t g_transfer1 =
+{ .p_ctrl = &g_transfer1_ctrl, .p_cfg = &g_transfer1_cfg, .p_api = &g_transfer_on_dtc };
+dtc_instance_ctrl_t g_transfer0_ctrl;
+
+#if (1 == 1)
+transfer_info_t g_transfer0_info DTC_TRANSFER_INFO_ALIGNMENT =
+{ .transfer_settings_word_b.dest_addr_mode = TRANSFER_ADDR_MODE_FIXED,
+  .transfer_settings_word_b.repeat_area = TRANSFER_REPEAT_AREA_SOURCE,
+  .transfer_settings_word_b.irq = TRANSFER_IRQ_END,
+  .transfer_settings_word_b.chain_mode = TRANSFER_CHAIN_MODE_DISABLED,
+  .transfer_settings_word_b.src_addr_mode = TRANSFER_ADDR_MODE_INCREMENTED,
+  .transfer_settings_word_b.size = TRANSFER_SIZE_1_BYTE,
+  .transfer_settings_word_b.mode = TRANSFER_MODE_NORMAL,
+  .p_dest = (void*) NULL,
+  .p_src = (void const*) NULL,
+  .num_blocks = (uint16_t) 0,
+  .length = (uint16_t) 0, };
+
+#elif (1 > 1)
+/* User is responsible to initialize the array. */
+transfer_info_t g_transfer0_info[1] DTC_TRANSFER_INFO_ALIGNMENT;
+#else
+/* User must call api::reconfigure before enable DTC transfer. */
+#endif
+
+const dtc_extended_cfg_t g_transfer0_cfg_extend =
+{ .activation_source = VECTOR_NUMBER_SCI0_TXI, };
+
+const transfer_cfg_t g_transfer0_cfg =
+{
+#if (1 == 1)
+  .p_info = &g_transfer0_info,
+#elif (1 > 1)
+    .p_info              = g_transfer0_info,
+#else
+    .p_info = NULL,
+#endif
+  .p_extend = &g_transfer0_cfg_extend, };
+
+/* Instance structure to use this module. */
+const transfer_instance_t g_transfer0 =
+{ .p_ctrl = &g_transfer0_ctrl, .p_cfg = &g_transfer0_cfg, .p_api = &g_transfer_on_dtc };
+sci_spi_instance_ctrl_t ptx_pmod_spi_ctrl;
 
 /** SPI extended configuration */
-const sci_b_spi_extended_cfg_t ptx_pmod_spi_cfg_extend =
-        { .clk_div =
-        {
-        /* Actual calculated bitrate: 1000000. */.cks = 0,
-          .brr = 59, .bgdm = 1, },
-          .clock_source = (sci_b_spi_clock_source_t) 1, .rx_sampling_delay = SCI_B_SPI_RX_SAMPLING_DELAY_CYCLES_0, .tx_fifo_trigger =
-                  SCI_B_SPI_TX_FIFO_TRIGGER_DISABLED, };
+const sci_spi_extended_cfg_t ptx_pmod_spi_cfg_extend =
+{ .clk_div =
+{
+/* Actual calculated bitrate: 1000000. */.cks = 0,
+  .brr = 5, .mddr = 0, } };
 
 const spi_cfg_t ptx_pmod_spi_cfg =
 { .channel = 0, .operating_mode = SPI_MODE_MASTER, .clk_phase = SPI_CLK_PHASE_EDGE_ODD, .clk_polarity =
           SPI_CLK_POLARITY_LOW,
   .mode_fault = SPI_MODE_FAULT_ERROR_DISABLE, .bit_order = SPI_BIT_ORDER_MSB_FIRST,
 #define RA_NOT_DEFINED (1)
-#if (RA_NOT_DEFINED == RA_NOT_DEFINED)
-  .p_transfer_tx = NULL,
+#if (RA_NOT_DEFINED == g_transfer0)
+    .p_transfer_tx   = NULL,
 #else
-    .p_transfer_tx   = &RA_NOT_DEFINED,
+  .p_transfer_tx = &g_transfer0,
 #endif
-#if (RA_NOT_DEFINED == RA_NOT_DEFINED)
-  .p_transfer_rx = NULL,
+#if (RA_NOT_DEFINED == g_transfer1)
+    .p_transfer_rx   = NULL,
 #else
-    .p_transfer_rx   = &RA_NOT_DEFINED,
+  .p_transfer_rx = &g_transfer1,
 #endif
 #undef RA_NOT_DEFINED
   .p_callback = ptxPLAT_SPI_TransferCallback,
-  .p_context = NULL,
-#if defined(VECTOR_NUMBER_SCI0_RXI)
-    .rxi_irq         = VECTOR_NUMBER_SCI0_RXI,
-#else
-  .rxi_irq = FSP_INVALID_VECTOR,
-#endif
-#if defined(VECTOR_NUMBER_SCI0_TXI)
-    .txi_irq         = VECTOR_NUMBER_SCI0_TXI,
-#else
-  .txi_irq = FSP_INVALID_VECTOR,
-#endif
-  .tei_irq = VECTOR_NUMBER_SCI0_TEI,
-  .eri_irq = VECTOR_NUMBER_SCI0_ERI, .rxi_ipl = (3), .txi_ipl = (3), .tei_ipl = (12), .eri_ipl = (12), .p_extend =
+  .p_context = NULL, .rxi_irq = VECTOR_NUMBER_SCI0_RXI, .txi_irq = VECTOR_NUMBER_SCI0_TXI, .tei_irq =
+          VECTOR_NUMBER_SCI0_TEI,
+  .eri_irq = VECTOR_NUMBER_SCI0_ERI, .rxi_ipl = (2), .txi_ipl = (2), .tei_ipl = (2), .eri_ipl = (2), .p_extend =
           &ptx_pmod_spi_cfg_extend, };
 /* Instance structure to use this module. */
 const spi_instance_t ptx_pmod_spi =
-{ .p_ctrl = &ptx_pmod_spi_ctrl, .p_cfg = &ptx_pmod_spi_cfg, .p_api = &g_spi_on_sci_b };
+{ .p_ctrl = &ptx_pmod_spi_ctrl, .p_cfg = &ptx_pmod_spi_cfg, .p_api = &g_spi_on_sci };
 gpt_instance_ctrl_t g_timer0_ctrl;
 #if 0
 const gpt_extended_pwm_cfg_t g_timer0_pwm_extend =
@@ -181,7 +221,7 @@ const gpt_extended_cfg_t g_timer0_extend =
 
 const timer_cfg_t g_timer0_cfg =
 { .mode = TIMER_MODE_PERIODIC,
-/* Actual period: 0.0005461333333333333 seconds. Actual duty: 50%. */.period_counts = (uint32_t) 0x10000,
+/* Actual period: 0.0013653333333333334 seconds. Actual duty: 50%. */.period_counts = (uint32_t) 0x10000,
   .duty_cycle_counts = 0x8000, .source_div = (timer_source_div_t) 0, .channel = 0, .p_callback =
           ptxPLAT_TIMER_IsrCallback,
   /** If NULL then do not add & */

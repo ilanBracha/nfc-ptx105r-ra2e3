@@ -7,15 +7,19 @@
 
 #include "user_board_utils.h"
 
-/* LED pins shared by both utilities */
+/* LED pins shared by both utilities.
+ * Mapping for RA2E3 FPB:
+ *   LED1 = P02_13 (on-board LED1 of the RA2E3 FPB)
+ *   LED2 = P09_14 (PMOD1_GPIO9 / external user-board LED)
+ *   LED3 = P09_13 (PMOD1_GPIO10 / external user-board LED, == LED_STATUS)
+ * Additional user-board LEDs on PMOD1 (P09_13/14/15) are kept for compatibility.
+ */
 static const bsp_io_port_pin_t led_pins[] =
 {
-    BSP_IO_PORT_06_PIN_00,   /* LED1 (BSP) */
-    BSP_IO_PORT_04_PIN_14,   /* LED2 (BSP) */
-    BSP_IO_PORT_01_PIN_07,   /* LED3 (BSP) */
-    BSP_IO_PORT_09_PIN_13,   /* user-board LED */
-    BSP_IO_PORT_09_PIN_14,   /* user-board LED */
-    BSP_IO_PORT_09_PIN_15,   /* user-board LED */
+    BSP_IO_PORT_02_PIN_13,   /* LED1 (on-board RA2E3 FPB LED) */
+    BSP_IO_PORT_09_PIN_14,   /* LED2 (PMOD1_GPIO9)            */
+    BSP_IO_PORT_09_PIN_13,   /* LED3 (PMOD1_GPIO10)           */
+    BSP_IO_PORT_09_PIN_15,   /* user-board LED (PMOD1_RESET)  */
 };
 static const uint32_t LED_COUNT = (uint32_t)(sizeof(led_pins) / sizeof(led_pins[0]));
 

@@ -96,9 +96,10 @@ const ptxPLAT_SpiPort_t available_spi_port =
         .SpiInstance = (ptxPLAT_SpiInstance_t *)&g_spi0,
         .Nss = {&g_ioport, IOPORT_PORT_06_PIN_12}
 # else
-        /* PTX1K on PMOD1: SCI0 (ptx_pmod_spi). CS/SSL0 = P6_12 (PMOD1_1). */
+        /* PTX1K on PMOD1 (RA2E3 FPB): SCI0 Simple-SPI (ptx_pmod_spi).
+         * CS/SSL0 = P1_03 (PMOD1_SS / ARDUINO_D10). */
         .SpiInstance = (ptxPLAT_SpiInstance_t *)&ptx_pmod_spi,
-        .Nss = {&g_ioport, IOPORT_PORT_06_PIN_12}
+        .Nss = {&g_ioport, BSP_IO_PORT_01_PIN_03}
 # endif
 
 };
@@ -371,19 +372,36 @@ static ptxStatus_t ptxPLAT_SPI_PortOpen(ptxPLAT_SpiPort_t **spiPort, ptxPLAT_Spi
             if(FSP_SUCCESS == r_status)
             {
                 /*
-                 * Force SCI0 Simple-SPI data-pin mux on PMOD1 (J26):
-                 *   P6_09 = TXD0 (MOSI, J26:2), P6_10 = RXD0 (MISO, J26:3).
-                 * The FSP pin generator can drop these (MISO/MOSI left as "None" in the SCI0
-                 * module), so we apply them here to survive project regeneration. Setting each
-                 * pin to its SCI0 peripheral function lets the silicon assign TXD0/RXD0 automatically.
-                 * SCK=P6_11 (J26:4) and CS=P6_12/SSL0 (J26:1) are handled by the generated pin config.
+                 * Force SCI0 Simple-SPI pin-mux on PMOD1 of the RA2E3 FPB.
+                 *   P1_01 = TXD0  (MOSI, ARDUINO_D11 / PMOD1_MOSI)
+                 *   P1_00 = RXD0  (MISO, ARDUINO_D12 / PMOD1_MISO)
+                 *   P1_02 = SCK0  (SCK,  ARDUINO_D13 / PMOD1_SCK)
+                 *   P1_03 = CS    (driven as GPIO output by ptxPLAT_SPI_SetChipSelect,
+                 *                  PMOD1_SS / ARDUINO_D10)
+                 *
+                 * The generated `g_bsp_pin_cfg` only configures a subset of pins, so we
+                 * apply the SPI muxes here so the project keeps working even if the FSP
+                 * pin tab is regenerated without the SCI0 pins selected.
                  */
-                (void)R_IOPORT_PinCfg(available_spi_port.Nss.PortInstance->p_ctrl,
-                                      BSP_IO_PORT_06_PIN_09,
+                ioport_instance_ctrl_t *p_ioport_ctrl = available_spi_port.Nss.PortInstance->p_ctrl;
+
+                (void)R_IOPORT_PinCfg(p_ioport_ctrl,
+                                      BSP_IO_PORT_01_PIN_01,
                                       ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI0_2_4_6_8));
-                (void)R_IOPORT_PinCfg(available_spi_port.Nss.PortInstance->p_ctrl,
-                                      BSP_IO_PORT_06_PIN_10,
+                (void)R_IOPORT_PinCfg(p_ioport_ctrl,
+                                      BSP_IO_PORT_01_PIN_00,
                                       ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI0_2_4_6_8));
+                (void)R_IOPORT_PinCfg(p_ioport_ctrl,
+                                      BSP_IO_PORT_01_PIN_02,
+                                      ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI0_2_4_6_8));
+
+                /* CS pin is bit-banged: drive as GPIO output, idle HIGH (deselected). */
+                (void)R_IOPORT_PinCfg(p_ioport_ctrl,
+                                      BSP_IO_PORT_01_PIN_03,
+                                      ((uint32_t)IOPORT_CFG_PORT_DIRECTION_OUTPUT | (uint32_t)IOPORT_CFG_PORT_OUTPUT_HIGH));
+                (void)R_IOPORT_PinWrite(p_ioport_ctrl,
+                                        BSP_IO_PORT_01_PIN_03,
+                                        BSP_IO_LEVEL_HIGH);
 
                 *spiPort = (ptxPLAT_SpiPort_t *)&available_spi_port;
             }

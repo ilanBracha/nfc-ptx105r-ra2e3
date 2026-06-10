@@ -5,16 +5,19 @@
 */
 
 /*******************************************************************************************************************//**
- * @addtogroup BOARD_RA8M1_EK_LEDS
+ * @addtogroup BOARD_RA2E3_FPB
+ * @brief Board specific code for the FPB-RA2E3 Board
+ *
+ * This include file is specific to the FPB-RA2E3 board.
  *
  * @{
  **********************************************************************************************************************/
 
-/***********************************************************************************************************************
- * Includes
- **********************************************************************************************************************/
-#include "bsp_api.h"
-#if defined(BOARD_RA8M1_EK)
+#ifndef BOARD_INIT_H
+#define BOARD_INIT_H
+
+/** Common macro for FSP header files. There is also a corresponding FSP_FOOTER macro at the end of this file. */
+FSP_HEADER
 
 /***********************************************************************************************************************
  * Macro definitions
@@ -25,33 +28,17 @@
  **********************************************************************************************************************/
 
 /***********************************************************************************************************************
- * Private global variables and functions
+ * Exported global variables
  **********************************************************************************************************************/
-
-/** Array of LED IOPORT pins. */
-static const uint16_t g_bsp_prv_leds[] =
-{
-    (uint16_t) BSP_IO_PORT_06_PIN_00,  ///< LED1
-    (uint16_t) BSP_IO_PORT_04_PIN_14,  ///< LED2
-    (uint16_t) BSP_IO_PORT_01_PIN_07,  ///< LED3
-};
 
 /***********************************************************************************************************************
- * Exported global variables (to be accessed by other files)
+ * Exported global functions (to be accessed by other files)
  **********************************************************************************************************************/
+void bsp_init(void * p_args);
 
-/** Structure with LED information for this board. */
-
-const bsp_leds_t g_bsp_leds =
-{
-    .led_count = (uint16_t) ((sizeof(g_bsp_prv_leds) / sizeof(g_bsp_prv_leds[0]))),
-    .p_leds    = &g_bsp_prv_leds[0]
-};
-
-/***********************************************************************************************************************
- * Exported global variables (to be accessed by other files)
- **********************************************************************************************************************/
+/** Common macro for FSP header files. There is also a corresponding FSP_HEADER macro at the top of this file. */
+FSP_FOOTER
 
 #endif
 
-/** @} (end addtogroup BOARD_RA8M1_EK_LEDS) */
+/** @} (end addtogroup BOARD_RA2E3_FPB) */

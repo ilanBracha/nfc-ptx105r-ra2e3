@@ -5,27 +5,30 @@
 */
 
 /*******************************************************************************************************************//**
- * @ingroup BOARD_RA8M1_EK
- * @defgroup BOARD_RA8M1_EK_ETHERNET_PHY Board Ethernet Phy
- * @brief Ethernet Phy information for this board.
+ * @ingroup BOARDS
+ * @defgroup BOARD_RA2E3_FPB for the FPB-RA2E3 board
+ * @brief BSP for the FPB-RA2E3 Board
  *
- * This is code specific to the RA8M1_EK board.
+ * The FPB-RA2E3 is a development kit for the Renesas R7FA2E3073CFL microcontroller in a LQFP48 package.
  *
  * @{
  **********************************************************************************************************************/
 
-#ifndef BSP_ETHERNET_PHY_H
-#define BSP_ETHERNET_PHY_H
+#ifndef BOARD_H
+#define BOARD_H
 
-/** Common macro for FSP header files. There is also a corresponding FSP_FOOTER macro at the end of this file. */
-FSP_HEADER
+/***********************************************************************************************************************
+ * Includes   <System Includes> , "Project Includes"
+ **********************************************************************************************************************/
+
+/* BSP Board Specific Includes. */
+#include "board_init.h"
+#include "board_leds.h"
 
 /***********************************************************************************************************************
  * Macro definitions
  **********************************************************************************************************************/
-#define ETHER_PHY_CFG_TARGET_ICS1894_ENABLE    (1)
-#define ETHER_PHY_LSI_TYPE_KIT_COMPONENT       ETHER_PHY_LSI_TYPE_ICS1894
-#define BOARD_PHY_REF_CLK                      (1)
+#define BOARD_RA2E3_FPB
 
 /***********************************************************************************************************************
  * Typedef definitions
@@ -36,12 +39,9 @@ FSP_HEADER
  **********************************************************************************************************************/
 
 /***********************************************************************************************************************
- * Public Functions
+ * Exported global functions (to be accessed by other files)
  **********************************************************************************************************************/
 
-/** Common macro for FSP header files. There is also a corresponding FSP_HEADER macro at the top of this file. */
-FSP_FOOTER
+/** @} (end defgroup BOARD_RA2E3_FPB) */
 
 #endif
-
-/** @} (end defgroup BOARD_RA8M1_EK_ETHERNET_PHY) */
