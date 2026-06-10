@@ -158,6 +158,7 @@
 #include "ptxHCE_Loopback.h"
 
 #include "user_board_utils.h"
+#include "user_cli.h"
 
 #include <string.h>
 
@@ -455,6 +456,9 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
      */
     while (0 == exit_loop)
     {
+        /* Service the cooperative UART CLI between every demo iteration. */
+        UserCli_Poll();
+
         /* check regularly for critical system errors */
         st = ptxIoTRd_Get_Status_Info (iotRd, StatusType_System, &system_state);
 

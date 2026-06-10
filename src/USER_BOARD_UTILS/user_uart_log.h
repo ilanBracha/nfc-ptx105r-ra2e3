@@ -36,6 +36,18 @@ void UserUartLog_Write(const uint8_t *buf, size_t len);
  */
 void UserUartLog_Puts(const char *s);
 
+/**
+ * Non-blocking: returns the number of received bytes currently waiting in the
+ * internal RX ring buffer. Safe to call from main context.
+ */
+size_t UserUartLog_RxAvailable(void);
+
+/**
+ * Non-blocking: pop one byte from the RX ring buffer.
+ * Returns 1 if a byte was written to *out, 0 if the buffer is empty.
+ */
+int UserUartLog_RxGet(uint8_t *out);
+
 #ifdef __cplusplus
 }
 #endif

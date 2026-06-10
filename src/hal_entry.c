@@ -1,5 +1,6 @@
 #include "hal_data.h"
 #include "user_uart_log.h"
+#include "user_cli.h"
 
 extern int ptxAPP_Entry(void);
 
@@ -16,6 +17,11 @@ void hal_entry(void)
     /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
      * output is mirrored from the very first log line. */
     (void)UserUartLog_Init();
+
+    /* Bring up the cooperative CLI on the same UART. The menu is printed now;
+     * UserCli_Poll() will be driven from the demo main loop so commands are
+     * processed cooperatively while logs keep flowing. */
+    UserCli_Init();
 
     /* TODO: add your own code here */
     (void) ptxAPP_Entry();
