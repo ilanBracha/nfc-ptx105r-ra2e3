@@ -25,7 +25,6 @@
 #include "r_ioport.h"
 #include "r_sci_uart.h"
 #include "SEGGER_RTT.h"
-
 #include <string.h>
 
 /* The FSP-generated baud setting struct lives in ra_gen/hal_data.c and is
@@ -91,7 +90,7 @@ static volatile uint8_t  s_tx_busy;     /* 1 while FSP write in flight */
  * either main (after enqueue) or ISR (on TX_COMPLETE). Caller must guarantee
  * mutual exclusion (we disable IRQs around the main-side call). */
 static void user_uart_tx_dispatch_locked(void);
-
+void UserUartLog_Write(const uint8_t *buf, size_t len);
 /*
  * ####################################################################################################################
  * CALLBACK

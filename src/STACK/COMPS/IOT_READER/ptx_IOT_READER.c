@@ -118,7 +118,7 @@ static ptxStatus_t ptxIoTRd_NSCRfClearCltMode (ptxIoTRd_t *iotRd);
 static ptxStatus_t ptxIoTRd_TempOffsetComp (ptxIoTRd_t *iotRd, int16_t *tempOffset, uint8_t *tempVal);
 static ptxStatus_t ptxIoTRd_Set_T3T_MultiRxMode(ptxIoTRd_t *iotRd, uint8_t enableRxMode, uint32_t timeoutMS);
 static ptxStatus_t ptxIoTRd_Manage_DDPC (ptxIoTRd_t *iotRd, uint8_t enableDDPC);
-
+void ptxCommon_PrintF(const char *format, ...);
 /*
  * IoT Reader. Add Card to registry from NTF.
  */

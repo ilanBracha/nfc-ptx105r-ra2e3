@@ -103,7 +103,7 @@ void ptxCommon_PrintF(const char *format, ...)
 
 #ifdef ENABLE_PRINTF_OPTION_UART
     /* Mirror the formatted line to g_uart0 (TXD on P1_09). */
-    UserUartLog_Write((const uint8_t *)buffer, strnlen(buffer, max_len));
+    UserUartLog_Write((const uint8_t *)buffer, (size_t )strnlen(buffer, max_len));
 #endif
 
     va_end(argptr);

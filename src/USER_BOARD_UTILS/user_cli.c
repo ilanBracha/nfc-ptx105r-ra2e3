@@ -29,8 +29,8 @@ extern void ptxCommon_PrintF(const char *format, ...);
  * CONFIG
  * ####################################################################################################################
  */
-#define CLI_LINE_MAX        80u
-#define CLI_PROMPT          "> "
+#define CLI_LINE_MAX        120u
+#define CLI_PROMPT          "$ "
 #define CLI_NEWLINE         "\r\n"
 
 /*
@@ -52,22 +52,28 @@ static uint16_t s_line_len;
 static uint8_t  s_initialized = 0u;
 static uint8_t  s_prev_was_cr = 0u; /* swallow LF that follows CR (CRLF) */
 
+/* One-shot "erase the next activated tag" request. Set by the `erase` CLI
+ * command; consumed by the NFC main loop once it has an active tag. */
+static volatile uint8_t s_erase_armed = 0u;
+
+void cli_prompt(void);
+
 /*
  * ####################################################################################################################
  * SMALL HELPERS
  * ####################################################################################################################
  */
-static void cli_write(const char *s)
+static void cli_write (const char *s)
 {
     UserUartLog_Puts(s);
 }
 
-static void cli_write_byte(uint8_t b)
+static void cli_write_byte (uint8_t b)
 {
     UserUartLog_Write(&b, 1u);
 }
 
-static void cli_prompt(void)
+void cli_prompt (void)
 {
     cli_write(CLI_NEWLINE CLI_PROMPT);
 }
@@ -91,42 +97,59 @@ static int cli_streq_ci(const char *a, const char *b)
  * COMMAND HANDLERS
  * ####################################################################################################################
  */
-static void cmd_help(const char *args);
+static void cmd_help (const char *args);
 
-static void cmd_version(const char *args)
+static void cmd_version (const char *args)
 {
     (void)args;
     cli_write("PTX IoT Reader (RA2E3 FPB) - CLI v1.0" CLI_NEWLINE);
 }
 
-static void cmd_ledon(const char *args)
+static void cmd_erase (const char *args)
+{
+    (void)args;
+    /* Toggle: a second `erase` cancels a pending arm. */
+    if (0u != s_erase_armed)
+    {
+        s_erase_armed = 0u;
+        cli_write("erase: disarmed (no tag will be erased)" CLI_NEWLINE);
+    }
+    else
+    {
+        s_erase_armed = 1u;
+        cli_write("erase: armed - present a TAG to erase its NDEF content" CLI_NEWLINE);
+        cli_write("       (type 'erase' again to cancel)" CLI_NEWLINE);
+    }
+}
+
+static void cmd_ledon (const char *args)
 {
     (void)args;
     UserBoardUtils_SetStatusLed(LED_ACTIVE);
     cli_write("status LED: ON" CLI_NEWLINE);
 }
 
-static void cmd_ledoff(const char *args)
+static void cmd_ledoff (const char *args)
 {
     (void)args;
     UserBoardUtils_SetStatusLed(LED_INACTIVE);
     cli_write("status LED: OFF" CLI_NEWLINE);
 }
 
-static void cmd_blink(const char *args)
+static void cmd_blink (const char *args)
 {
     (void)args;
     UserBoardUtils_BlinkAllLeds();
     cli_write("blink: done" CLI_NEWLINE);
 }
 
-static void cmd_menu(const char *args)
+static void cmd_menu (const char *args)
 {
     (void)args;
     UserCli_PrintMenu();
 }
 
-static void cmd_reboot(const char *args)
+static void cmd_reboot (const char *args)
 {
     (void)args;
     cli_write("rebooting..." CLI_NEWLINE);
@@ -141,8 +164,9 @@ static const cli_cmd_t s_cmds[] =
     { "?",       cmd_help,    "alias of 'help'"                },
     { "menu",    cmd_menu,    "reprint the menu"               },
     { "version", cmd_version, "firmware identification"        },
-    { "ledon",   cmd_ledon,   "turn the status LED on"         },
-    { "ledoff",  cmd_ledoff,  "turn the status LED off"        },
+    { "erase",   cmd_erase,   "arm: erase NDEF of the next tag"},
+    { "lon",     cmd_ledon,   "turn the status LED on"         },
+    { "loff",    cmd_ledoff,  "turn the status LED off"        },
     { "blink",   cmd_blink,   "blink all board LEDs once"      },
     { "reboot",  cmd_reboot,  "soft-reset the MCU"             },
 };
@@ -287,4 +311,19 @@ void UserCli_Poll(void)
     {
         cli_handle_byte(b);
     }
+}
+
+void UserCli_ArmEraseNext(void)
+{
+    s_erase_armed = 1u;
+}
+
+uint8_t UserCli_IsEraseArmed(void)
+{
+    return s_erase_armed;
+}
+
+void UserCli_ClearEraseArmed(void)
+{
+    s_erase_armed = 0u;
 }

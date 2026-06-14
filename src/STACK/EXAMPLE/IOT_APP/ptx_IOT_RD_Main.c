@@ -548,7 +548,7 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
 #if defined(USE_PTX_IOTRD_DEMO) && !defined(USE_NDEF)
 
 /* Lightweight BER-TLV search (1- or 2-byte tags, multi-byte length, recursive into constructed). */
-static uint8_t ptxIoTRdInt_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
+static inline uint8_t ptxIoTRdInt_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
                                    const uint8_t **val, uint32_t *valLen)
 {
     uint32_t i = 0;
@@ -573,7 +573,7 @@ static uint8_t ptxIoTRdInt_TlvFind(const uint8_t *buf, uint32_t len, uint16_t ta
 /*
  * Compare an NDEF type field against a C-string literal.
  */
-static uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const char *s)
+static inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const char *s)
 {
     uint32_t n = 0;
     while (s[n] != '\0') { n++; }
@@ -588,7 +588,7 @@ static uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const c
 /*
  * Case-sensitive "string starts with prefix" for a (non null-terminated) buffer.
  */
-static uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const char *prefix)
+static inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const char *prefix)
 {
     uint32_t n = 0;
     while (prefix[n] != '\0')
@@ -626,7 +626,7 @@ static uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t wa
 /*
  * Decode a Wi-Fi Simple Config (vnd.wfa.wsc) MIME record.
  */
-static void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
+static inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
 {
     const uint8_t *v;
     uint16_t vl;
@@ -693,7 +693,7 @@ static void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
  * Decode a Bluetooth OOB (BR/EDR or LE) MIME record. Prints device address
  * (BR/EDR) and local name (from EIR/AD structures) if present.
  */
-static void ptxIoTRdInt_PrintBt(const uint8_t *p, uint32_t len, uint8_t isLE)
+static inline void ptxIoTRdInt_PrintBt(const uint8_t *p, uint32_t len, uint8_t isLE)
 {
     ptxCommon_PrintF("    Value   : Bluetooth %s\n", isLE ? "LE" : "BR/EDR");
 
@@ -738,213 +738,25 @@ static void ptxIoTRdInt_PrintNDEFMsg(const uint8_t *msg, uint32_t len, uint8_t d
  */
 static void ptxIoTRdInt_PrintNDEFMsg(const uint8_t *msg, uint32_t len, uint8_t depth)
 {
-    /* URI Identifier Code prefix table (NFC Forum URI RTD) */
-    static const char *const uri_prefix[] = {
-        "", "http://www.", "https://www.", "http://", "https://",
-        "tel:", "mailto:", "ftp://anonymous:anonymous@", "ftp://ftp.",
-        "ftps://", "sftp://", "smb://", "nfs://", "ftp://", "dav://",
-        "news:", "telnet://", "imap:", "rtsp://", "urn:", "pop:",
-        "sip:", "sips:", "tftp:", "btspp://", "btl2cap://", "btgoep://",
-        "tcpobex://", "irdaobex://", "file://", "urn:epc:id:",
-        "urn:epc:tag:", "urn:epc:pat:", "urn:epc:raw:", "urn:epc:", "urn:nfc:"
-    };
-    const uint32_t uri_prefix_count = (uint32_t)(sizeof(uri_prefix) / sizeof(uri_prefix[0]));
-
-    uint32_t i = 0;
-    uint8_t rec_nr = 1;
-
-    while (i < len)
+    /* Slim raw-hex dump. The original NDEF Forum decoder (URI prefix table,
+     * URL/Text/Smart Poster/Wi-Fi/Bluetooth/MIME/external dispatch and format
+     * strings) was about 1.7 KB and got removed to free flash for the CLI
+     * 'erase' path on the RA2E3. The helper printers (TypeEq/StartsWith/
+     * PrintWifi/PrintBt/WscFind) are no longer referenced and will be dropped
+     * by the linker's --gc-sections pass. */
+    (void)depth;
+    if ((NULL == msg) || (0u == len))
     {
-        uint8_t hdr = msg[i++];
-        uint8_t tnf = (uint8_t)(hdr & 0x07u);
-        uint8_t sr  = (uint8_t)(hdr & 0x10u);    /* Short Record  */
-        uint8_t il  = (uint8_t)(hdr & 0x08u);    /* ID Length present */
-        uint8_t me  = (uint8_t)(hdr & 0x40u);    /* Message End   */
-
-        if (i >= len) break;
-        uint8_t type_len = msg[i++];
-
-        uint32_t payload_len;
-        if (sr)
-        {
-            if (i >= len) break;
-            payload_len = msg[i++];
-        }
-        else
-        {
-            if ((i + 4u) > len) break;
-            payload_len = ((uint32_t)msg[i] << 24) | ((uint32_t)msg[i + 1u] << 16) |
-                          ((uint32_t)msg[i + 2u] << 8) | (uint32_t)msg[i + 3u];
-            i += 4u;
-        }
-
-        uint8_t id_len = 0;
-        if (il)
-        {
-            if (i >= len) break;
-            id_len = msg[i++];
-        }
-
-        if ((i + type_len) > len) break;
-        const uint8_t *type = &msg[i];
-        i += type_len;
-
-        if (il)
-        {
-            if ((i + id_len) > len) break;
-            i += id_len;                          /* skip ID field */
-        }
-
-        if (((uint32_t)i + payload_len) > len) { payload_len = len - i; }
-        const uint8_t *payload = &msg[i];
-        i += payload_len;
-
-        ptxCommon_PrintF("  Record %u:\n", rec_nr++);
-
-        if ((0x01u == tnf) && ptxIoTRdInt_TypeEq(type, type_len, "U"))
-        {
-            /* --- Well-known URI record (URL / Location / Phone / Mail / ...) --- */
-            uint8_t code = (payload_len >= 1u) ? payload[0] : 0u;
-
-            /* Build full URI into a local buffer for scheme classification. */
-            char uri[200];
-            uint32_t up = 0;
-            if (code < uri_prefix_count)
-            {
-                const char *pf = uri_prefix[code];
-                while ((*pf != '\0') && (up < (sizeof(uri) - 1u))) { uri[up++] = *pf++; }
-            }
-            for (uint32_t k = 1; (k < payload_len) && (up < (sizeof(uri) - 1u)); k++)
-            {
-                uri[up++] = (char)payload[k];
-            }
-            uri[up] = '\0';
-
-            const char *cat = "URL";
-            if      (ptxIoTRdInt_StartsWith(uri, up, "geo:"))     { cat = "Location"; }
-            else if (ptxIoTRdInt_StartsWith(uri, up, "tel:"))     { cat = "Phone number"; }
-            else if (ptxIoTRdInt_StartsWith(uri, up, "mailto:"))  { cat = "Mail"; }
-            else if (ptxIoTRdInt_StartsWith(uri, up, "sms:"))     { cat = "SMS"; }
-            else if (ptxIoTRdInt_StartsWith(uri, up, "smsto:"))   { cat = "SMS"; }
-            else if (0x00u == code)                               { cat = "Custom URL"; }
-
-            ptxCommon_PrintF("    Type    : URI record: U (0x55)  [%s]\n", cat);
-            ptxCommon_PrintF("    Format  : NFC Well Known (0x01)\n");
-            if (code < uri_prefix_count)
-            {
-                ptxCommon_PrintF("    Protocol: %s (0x%02X)\n", uri_prefix[code], code);
-            }
-            ptxCommon_PrintF("    Value   : %s\n", uri);
-        }
-        else if ((0x01u == tnf) && ptxIoTRdInt_TypeEq(type, type_len, "T"))
-        {
-            /* --- Well-known Text record --- */
-            ptxCommon_PrintF("    Type    : Text record: T (0x54)\n");
-            ptxCommon_PrintF("    Format  : NFC Well Known (0x01)\n");
-            if (payload_len >= 1u)
-            {
-                uint8_t status   = payload[0];
-                uint8_t lang_len = (uint8_t)(status & 0x3Fu);
-                if (((uint32_t)1u + lang_len) <= payload_len)
-                {
-                    ptxCommon_PrintF("    Language: ");
-                    for (uint8_t k = 0; k < lang_len; k++) { ptxCommon_PrintF("%c", payload[1u + k]); }
-                    ptxCommon_PrintF("\n");
-                    ptxCommon_PrintF("    Value   : ");
-                    for (uint32_t k = (uint32_t)1u + lang_len; k < payload_len; k++) { ptxCommon_PrintF("%c", payload[k]); }
-                    ptxCommon_PrintF("\n");
-                }
-            }
-        }
-        else if ((0x01u == tnf) && ptxIoTRdInt_TypeEq(type, type_len, "Sp"))
-        {
-            /* --- Smart Poster: nested NDEF message (URL + title, etc.) --- */
-            ptxCommon_PrintF("    Type    : Smart Poster (Sp)\n");
-            ptxCommon_PrintF("    Format  : NFC Well Known (0x01)\n");
-            if (depth < 2u)
-            {
-                ptxCommon_PrintF("    Contents:\n");
-                ptxIoTRdInt_PrintNDEFMsg(payload, payload_len, (uint8_t)(depth + 1u));
-            }
-        }
-        else if ((0x02u == tnf) && (ptxIoTRdInt_TypeEq(type, type_len, "application/vnd.wfa.wsc")))
-        {
-            /* --- Wi-Fi Network (WSC) --- */
-            ptxCommon_PrintF("    Type    : Wi-Fi Network (MIME)\n");
-            ptxIoTRdInt_PrintWifi(payload, payload_len);
-        }
-        else if ((0x02u == tnf) &&
-                 (ptxIoTRdInt_TypeEq(type, type_len, "application/vnd.bluetooth.ep.oob") ||
-                  ptxIoTRdInt_TypeEq(type, type_len, "application/vnd.bluetooth.le.oob")))
-        {
-            /* --- Bluetooth handover --- */
-            uint8_t isLE = ptxIoTRdInt_TypeEq(type, type_len, "application/vnd.bluetooth.le.oob");
-            ptxCommon_PrintF("    Type    : Bluetooth (MIME)\n");
-            ptxIoTRdInt_PrintBt(payload, payload_len, isLE);
-        }
-        else if (0x02u == tnf)
-        {
-            /* --- Generic MIME media (incl. text/...) --- */
-            ptxCommon_PrintF("    Type    : MIME '");
-            for (uint8_t k = 0; k < type_len; k++) { ptxCommon_PrintF("%c", type[k]); }
-            ptxCommon_PrintF("'\n");
-            if ((type_len >= 5u) && ptxIoTRdInt_StartsWith((const char *)type, type_len, "text/"))
-            {
-                ptxCommon_PrintF("    Value   : ");
-                for (uint32_t k = 0; k < payload_len; k++) { ptxCommon_PrintF("%c", payload[k]); }
-                ptxCommon_PrintF("\n");
-            }
-        }
-        else if (0x03u == tnf)
-        {
-            /* --- Absolute URI (Custom URL) --- */
-            ptxCommon_PrintF("    Type    : Absolute URI  [Custom URL]\n");
-            ptxCommon_PrintF("    Value   : ");
-            for (uint8_t k = 0; k < type_len; k++) { ptxCommon_PrintF("%c", type[k]); }
-            ptxCommon_PrintF("\n");
-        }
-        else if (0x04u == tnf)
-        {
-            /* --- External type (e.g. Android App Record / app link) --- */
-            uint8_t isAar = ptxIoTRdInt_TypeEq(type, type_len, "android.com:pkg");
-            ptxCommon_PrintF("    Type    : External '");
-            for (uint8_t k = 0; k < type_len; k++) { ptxCommon_PrintF("%c", type[k]); }
-            ptxCommon_PrintF("'%s\n", isAar ? "  [App link]" : "");
-            ptxCommon_PrintF("    Value   : ");
-            for (uint32_t k = 0; k < payload_len; k++) { ptxCommon_PrintF("%c", payload[k]); }
-            ptxCommon_PrintF("\n");
-        }
-        else
-        {
-            /* --- Empty / Unknown / Reserved -> raw data --- */
-            const char *tnf_name = "Data";
-            if      (0x00u == tnf) { tnf_name = "Empty"; }
-            else if (0x05u == tnf) { tnf_name = "Unknown (Data)"; }
-            else if (0x06u == tnf) { tnf_name = "Unchanged"; }
-            else                   { tnf_name = "Reserved"; }
-            ptxCommon_PrintF("    Type    : %s (TNF=0x%02X)\n", tnf_name, tnf);
-        }
-
-        ptxCommon_PrintF("    Payload : %u bytes\n", payload_len);
-
-        /* Raw payload bytes (0xXX format, 16 per line, like the NFC Tools app) */
-        if (payload_len > 0u)
-        {
-            ptxCommon_PrintF("    Raw     :");
-            for (uint32_t k = 0; k < payload_len; k++)
-            {
-                if ((k > 0u) && (0u == (k % 16u)))
-                {
-                    /* wrap and align continuation under the first byte */
-                    ptxCommon_PrintF("\n             ");
-                }
-                ptxCommon_PrintF(" 0x%02X", payload[k]);
-            }
-            ptxCommon_PrintF("\n");
-        }
-
-        if (me) break;   /* Message End flag set */
+        ptxCommon_PrintF("  (empty NDEF message)\n");
+        return;
     }
+    ptxCommon_PrintF("  NDEF raw (%u bytes):", (unsigned)len);
+    for (uint32_t k = 0u; k < len; k++)
+    {
+        if ((k > 0u) && (0u == (k % 16u))) { ptxCommon_PrintF("\n                       "); }
+        ptxCommon_PrintF(" %02X", msg[k]);
+    }
+    ptxCommon_PrintF("\n");
 }
 
 /*
@@ -1095,6 +907,81 @@ static uint8_t ptxIoTRdInt_ReadType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
 
     ptxCommon_PrintF("Records        :\n");
     ptxIoTRdInt_PrintNDEF(tx, got);
+    return 1u;
+}
+
+/*
+ * Erase the NDEF message on an NFC Forum Type 4 Tag.
+ *
+ * Sequence: SELECT NDEF AID -> SELECT CC -> READ CC (to discover the NDEF
+ * file id) -> SELECT NDEF file -> UPDATE BINARY at offset 0 with NLEN=0.
+ * Per T4T spec, NLEN=0 marks the file as "empty NDEF message" - the rest of
+ * the file does not need to be zeroed.
+ *
+ * Returns 1 on success, 0 on any APDU failure. Caller's tx buffer is unused
+ * (kept in the signature for API symmetry with ReadType4NDEF).
+ *
+ * This deliberately bypasses the ptxNDEF_T4TOP layer: a full Open/CheckMessage/
+ * WriteMessage sequence pulls in ~3 KB of code on the RA2E3, which the part
+ * cannot fit. The raw APDU sequence is a few hundred bytes and works on any
+ * standard T4T NDEF tag (NTAG 4xx, DESFire with NDEF app, Android HCE).
+ */
+static uint8_t ptxIoTRdInt_EraseType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t *rx)
+{
+    (void)tx;
+    const uint32_t tmo = DEFAULT_APP_TIMEOUT_PROT;
+    uint32_t rx_len;
+    uint8_t  cmd[16];
+
+    /* 1. SELECT NDEF Tag Application (AID = D2 76 00 00 85 01 01) */
+    static const uint8_t sel_app[] = {0x00,0xA4,0x04,0x00,0x07,0xD2,0x76,0x00,0x00,0x85,0x01,0x01,0x00};
+    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)sel_app, (uint32_t)sizeof(sel_app), rx, &rx_len, tmo))
+    {
+        ptxCommon_PrintF("[T4T-erase] SELECT NDEF App -> FAILED\n");
+        return 0u;
+    }
+
+    /* 2. SELECT Capability Container file (EF = E103) */
+    static const uint8_t sel_cc[] = {0x00,0xA4,0x00,0x0C,0x02,0xE1,0x03};
+    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc), rx, &rx_len, tmo))
+    {
+        ptxCommon_PrintF("[T4T-erase] SELECT CC -> FAILED\n");
+        return 0u;
+    }
+
+    /* 3. READ CC (15 bytes) to learn the NDEF file id */
+    static const uint8_t read_cc[] = {0x00,0xB0,0x00,0x00,0x0F};
+    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)read_cc, (uint32_t)sizeof(read_cc), rx, &rx_len, tmo) || (rx_len < 17u))
+    {
+        ptxCommon_PrintF("[T4T-erase] READ CC -> FAILED\n");
+        return 0u;
+    }
+    /* CC layout: [9..10] = NDEF file ID, [14] = write access (0x00 = writable) */
+    uint8_t fid_hi  = rx[9];
+    uint8_t fid_lo  = rx[10];
+    uint8_t wa      = rx[14];
+    if (0x00u != wa)
+    {
+        ptxCommon_PrintF("[T4T-erase] tag is read-only (WriteAccess=0x%02X)\n", wa);
+        return 0u;
+    }
+
+    /* 4. SELECT NDEF file */
+    cmd[0]=0x00; cmd[1]=0xA4; cmd[2]=0x00; cmd[3]=0x0C; cmd[4]=0x02; cmd[5]=fid_hi; cmd[6]=fid_lo;
+    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo))
+    {
+        ptxCommon_PrintF("[T4T-erase] SELECT NDEF file -> FAILED\n");
+        return 0u;
+    }
+
+    /* 5. UPDATE BINARY at offset 0 with NLEN = 0x0000 (2 bytes). */
+    cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x00; cmd[4]=0x02; cmd[5]=0x00; cmd[6]=0x00;
+    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo))
+    {
+        ptxCommon_PrintF("[T4T-erase] UPDATE BINARY (NLEN=0) -> FAILED\n");
+        return 0u;
+    }
+
     return 1u;
 }
 
@@ -1282,177 +1169,20 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
     }
     ptxCommon_PrintF("\n");
 
-    /* ---- ISO-DEP specific: EMV record reading ---- */
+    /* ---- ISO-DEP: try Type 4 NDEF; otherwise just report as non-NDEF ---- */
     if (Prot_ISODEP == reg->ActiveCardProtType)
     {
-        /* First try NFC Forum Type 4 Tag NDEF reading (most NDEF cards/tags). */
-        if (ptxIoTRdInt_ReadType4NDEF(iotRd, tx, rx))
+        /* Try NFC Forum Type 4 Tag NDEF reading (covers most NDEF T4T tags
+         * and Android HCE apps that implement the T4T NDEF protocol). */
+        if (!ptxIoTRdInt_ReadType4NDEF(iotRd, tx, rx))
         {
-            ptxCommon_PrintF("==============================================\n");
-            return;
+            /* EMV PPSE/AID/GPO/AFL decoding was stripped to free flash for the
+             * CLI 'erase' path; non-NDEF ISO-DEP cards (e.g. payment cards,
+             * DESFire without NDEF app) are reported only at a high level. */
+            ptxCommon_PrintF("Info           : Non-NDEF ISO-DEP card\n");
+            ptxCommon_PrintF("Records        : (EMV decoder disabled in this build)\n");
         }
-
-        /* SELECT PPSE */
-        static const uint8_t PPSE[] = {0x00,0xA4,0x04,0x00,0x0E,
-            0x32,0x50,0x41,0x59,0x2E,0x53,0x59,0x53,0x2E,0x44,0x44,0x46,0x30,0x31, 0x00};
-
-        rx_len = RX_BUFFER_SIZE;
-        st = ptxIoTRd_Data_Exchange(iotRd, (uint8_t*)PPSE, (uint32_t)sizeof(PPSE), rx, &rx_len, tmo);
-        if ((ptxStatus_Success != st) || (rx_len < 2u) || (0x90u != rx[rx_len - 2u]))
-        {
-            ptxCommon_PrintF("Info           : Non-payment ISO-DEP card\n");
-            ptxCommon_PrintF("Size           : N/A\n");
-            ptxCommon_PrintF("Writeable      : No\n");
-            ptxCommon_PrintF("Records        : (none - PPSE not supported)\n");
-            ptxCommon_PrintF("[HINT] Android HCE app must implement the NFC Forum T4T NDEF\n");
-            ptxCommon_PrintF("[HINT] protocol. See below for required HCE AID and file structure.\n");
-            ptxCommon_PrintF("[HINT]   AID  : D2 76 00 00 85 01 01  (SELECT with P1=04, P2=00)\n");
-            ptxCommon_PrintF("[HINT]   CC   : file-id E103, 15 bytes (READ BINARY offset 0 len 15)\n");
-            ptxCommon_PrintF("[HINT]   NDEF : file-id from CC bytes [9:10] (e.g. E104)\n");
-            ptxCommon_PrintF("[HINT]   WiFi : NDEF MIME record type application/vnd.wfa.wsc\n");
-            ptxCommon_PrintF("==============================================\n");
-            return;
-        }
-
-        /* Extract application label (tag 0x50) for Info line */
-        if (ptxIoTRdInt_TlvFind(rx, rx_len - 2u, 0x50, &val, &val_len) && val_len > 0 && val_len < 64)
-        {
-            ptxCommon_PrintF("Info           : ");
-            for (uint32_t i = 0; i < val_len; i++) ptxCommon_PrintF("%c", val[i]);
-            ptxCommon_PrintF("\n");
-        }
-        else
-        {
-            ptxCommon_PrintF("Info           : Payment card\n");
-        }
-
-        ptxCommon_PrintF("Size           : N/A (EMV)\n");
-        ptxCommon_PrintF("Writeable      : No\n");
-
-        /* Extract first AID (tag 0x4F) */
-        if (!ptxIoTRdInt_TlvFind(rx, rx_len - 2u, 0x4F, &val, &val_len) || !val_len || val_len > 16u)
-        {
-            ptxCommon_PrintF("Records        : (no AID found)\n");
-            ptxCommon_PrintF("==============================================\n");
-            return;
-        }
-
-        uint8_t aid_len = (uint8_t)val_len;
-        (void)memcpy(tx, val, aid_len);   /* stash AID in tx buffer temporarily */
-
-        /* SELECT AID */
-        uint8_t aidBuf[16];
-        (void)memcpy(aidBuf, tx, aid_len);
-        tx_len = 0;
-        tx[tx_len++] = 0x00; tx[tx_len++] = 0xA4; tx[tx_len++] = 0x04; tx[tx_len++] = 0x00;
-        tx[tx_len++] = aid_len;
-        (void)memcpy(&tx[tx_len], aidBuf, aid_len); tx_len += aid_len;
-        tx[tx_len++] = 0x00;
-
-        rx_len = RX_BUFFER_SIZE;
-        st = ptxIoTRd_Data_Exchange(iotRd, tx, tx_len, rx, &rx_len, tmo);
-        if ((ptxStatus_Success != st) || (rx_len < 2u) || (0x90u != rx[rx_len - 2u]))
-        {
-            ptxCommon_PrintF("Records        : (SELECT AID failed)\n");
-            ptxCommon_PrintF("==============================================\n");
-            return;
-        }
-
-        /* GET PROCESSING OPTIONS — build zero-filled PDOL */
-        uint8_t pdol_len = 0;
-        if (ptxIoTRdInt_TlvFind(rx, rx_len - 2u, 0x9F38, &val, &val_len) && val_len > 0)
-        {
-            uint32_t p = 0;
-            while (p < val_len)
-            {
-                uint16_t t = (uint16_t)val[p]; p++;
-                if (((t & 0x1Fu) == 0x1Fu) && (p < val_len)) { p++; }   /* skip 2nd tag byte */
-                if (p >= val_len) break;
-                uint8_t l = val[p]; p++;
-                /* accumulate length only — data stays zero in tx buffer */
-                pdol_len = (uint8_t)(pdol_len + l);
-            }
-        }
-
-        tx_len = 0;
-        tx[tx_len++] = 0x80; tx[tx_len++] = 0xA8; tx[tx_len++] = 0x00; tx[tx_len++] = 0x00;
-        tx[tx_len++] = (uint8_t)(pdol_len + 2u);
-        tx[tx_len++] = 0x83;
-        tx[tx_len++] = pdol_len;
-        (void)memset(&tx[tx_len], 0, pdol_len); tx_len += pdol_len;
-        tx[tx_len++] = 0x00;
-
-        rx_len = RX_BUFFER_SIZE;
-        st = ptxIoTRd_Data_Exchange(iotRd, tx, tx_len, rx, &rx_len, tmo);
-        if ((ptxStatus_Success != st) || (rx_len < 2u) || (0x90u != rx[rx_len - 2u]))
-        {
-            ptxCommon_PrintF("Records        : (GPO failed SW=%02X%02X)\n",
-                             (rx_len >= 2u) ? rx[rx_len-2u] : 0u,
-                             (rx_len >= 2u) ? rx[rx_len-1u] : 0u);
-            ptxCommon_PrintF("==============================================\n");
-            return;
-        }
-
-        /* Locate AFL */
-        const uint8_t *afl = NULL;
-        uint32_t afl_len = 0;
-        if (ptxIoTRdInt_TlvFind(rx, rx_len - 2u, 0x94, &val, &val_len))
-        {
-            afl = val; afl_len = val_len;
-        }
-        else if (ptxIoTRdInt_TlvFind(rx, rx_len - 2u, 0x80, &val, &val_len) && val_len > 2u)
-        {
-            afl = &val[2]; afl_len = val_len - 2u;
-        }
-
-        ptxCommon_PrintF("Records        :\n");
-
-        if (!afl || afl_len < 4u)
-        {
-            ptxCommon_PrintF("  (no records in AFL)\n");
-        }
-        else
-        {
-            /* Copy AFL to tx buffer so it isn't overwritten by READ RECORD responses */
-            uint8_t afl_copy[64];
-            uint8_t afl_copy_len = (afl_len > 64u) ? 64u : (uint8_t)afl_len;
-            (void)memcpy(afl_copy, afl, afl_copy_len);
-
-            uint8_t rec_nr = 1;
-            for (uint32_t e = 0; (e + 4u) <= afl_copy_len; e += 4u)
-            {
-                uint8_t sfi   = (uint8_t)(afl_copy[e] >> 3);
-                uint8_t first = afl_copy[e + 1u];
-                uint8_t last  = afl_copy[e + 2u];
-                if (!sfi || !first || last < first) continue;
-
-                for (uint8_t r = first; r <= last; r++)
-                {
-                    tx_len = 0;
-                    tx[tx_len++] = 0x00; tx[tx_len++] = 0xB2;
-                    tx[tx_len++] = r;
-                    tx[tx_len++] = (uint8_t)((sfi << 3) | 0x04u);
-                    tx[tx_len++] = 0x00;
-
-                    rx_len = RX_BUFFER_SIZE;
-                    st = ptxIoTRd_Data_Exchange(iotRd, tx, tx_len, rx, &rx_len, tmo);
-
-                    ptxCommon_PrintF("  Record %02d (SFI %u, REC %u): ", rec_nr++, sfi, r);
-                    if ((ptxStatus_Success == st) && (rx_len >= 2u) && (0x90u == rx[rx_len - 2u]))
-                    {
-                        ptxCommon_Print_Buffer(rx, 0, rx_len - 2u, 1, 0);
-                    }
-                    else
-                    {
-                        ptxCommon_PrintF("FAILED (SW=%02X%02X)\n",
-                                         (rx_len >= 2u) ? rx[rx_len-2u] : 0u,
-                                         (rx_len >= 2u) ? rx[rx_len-1u] : 0u);
-                    }
-                    if (0xFFu == r) break;
-                }
-            }
-        }
-
+        (void)tmo; (void)val; (void)val_len; (void)tx_len; (void)rx_len; (void)st;
         ptxCommon_PrintF("==============================================\n");
         return;
     }
@@ -1524,11 +1254,13 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
     /* T5T Protocol Example => READ BLOCK 0 (UID to be inserted) */
     // const uint8_t PROT_T5T_EXAMPLE[] = {0x22, 0x20, 0x00};
 
+    /* Needed by the generic NDEF component used for the CLI 'erase' path even
+     * when USE_NDEF is not defined for the normal read flow. */
+    uint8_t work_buffer[NDEF_BUFFER_SIZE];
 #ifdef USE_NDEF
     /* General NDEF-exchange buffer */
     uint8_t ndef_msg_buffer[NDEF_BUFFER_SIZE];
     uint32_t ndef_msg_buffer_len;
-    uint8_t work_buffer[NDEF_BUFFER_SIZE];
 #endif
 
     if ((NULL != iotRd) && (NULL != cardRegistry) && (NULL != demoState) && (NULL != skipTxDataExchange) && (NULL != skipRxProcessing)
@@ -1647,6 +1379,106 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
 
         if (ptxStatus_Success == st)
         {
+            /* CLI: one-shot "erase next tag" hook. If the user typed `erase`
+             * before this tag came into the field, open the per-protocol NDEF
+             * Op component locally, run CheckMessage to populate CC/NLEN/
+             * LifeCycle, then WriteMessage with an empty payload to overwrite
+             * the existing NDEF content with the standard empty NDEF record
+             * (TNF=Empty: {0xD0, 0x00, 0x00}). Close the component and skip the
+             * normal read flow. The state machine transitions to
+             * DeactivateReader and the loop resumes polling.
+             *
+             * Note: ptxNDEF_T<X>OpFormatTag is a stub in this SDK that returns
+             * NotImplemented for T2T/T4T/T5T - hence we use Write with an empty
+             * NDEF message as the erase primitive for T2T.
+             *
+             * Supported here:
+             *  - T2T (NTAG21x / Ultralight) via the ptxNDEF_T2TOP layer.
+             *  - T4T (ISO-DEP NDEF tags, NTAG 4xx, Android HCE) via a tiny
+             *    raw-APDU helper (ptxIoTRdInt_EraseType4NDEF) - the full T4T
+             *    Op layer costs ~3 KB which won't fit on the RA2E3.
+             * T3T/T5T are omitted so their Op code can be dropped by the
+             * linker, keeping the firmware inside the 63 KB flash budget. */
+            if (0u != UserCli_IsEraseArmed())
+            {
+                ptxStatus_t  erase_st        = ptxStatus_Success;
+                const char  *erase_proto     = "Unknown";
+                uint8_t      erase_supported = 1u;
+                /* Non-NULL placeholder buffer - T2T's WriteMessage rejects a
+                 * NULL pointer even when msgLen == 0. The bytes are unused. */
+                static uint8_t s_erase_dummy[1] = { 0u };
+
+                switch (cardRegistry->ActiveCardProtType)
+                {
+                    case Prot_T2T:
+                        erase_proto = "T2T";
+                        (void)memset(t2tOpComp,       0, sizeof(ptxNDEF_T2TOP_t));
+                        (void)memset(t2tOpInitParams, 0, sizeof(ptxNDEF_T2TOP_InitParams_t));
+                        t2tOpInitParams->T2TInitParams.IotRd        = iotRd;
+                        t2tOpInitParams->T2TInitParams.TxBuffer     = &tx_data[0];
+                        t2tOpInitParams->T2TInitParams.TxBufferSize = TX_BUFFER_SIZE;
+                        t2tOpInitParams->WorkBuffer                 = &work_buffer[0];
+                        t2tOpInitParams->WorkBufferSize             = NDEF_BUFFER_SIZE;
+                        t2tOpInitParams->RxBuffer                   = &rx_data[0];
+                        t2tOpInitParams->RxBufferSize               = RX_BUFFER_SIZE;
+                        erase_st = ptxNDEF_T2TOpOpen(t2tOpComp, t2tOpInitParams);
+                        if (ptxStatus_Success == erase_st)
+                        {
+                            erase_st = ptxNDEF_T2TOpCheckMessage(t2tOpComp);
+                            if (ptxStatus_Success == erase_st)
+                            {
+                                erase_st = ptxNDEF_T2TOpWriteMessage(t2tOpComp, &s_erase_dummy[0], 0u);
+                            }
+                            (void)ptxNDEF_T2TOpClose(t2tOpComp);
+                        }
+                        break;
+
+#ifndef USE_NDEF
+                    /* T4T uses a tiny raw-APDU implementation (see
+                     * ptxIoTRdInt_EraseType4NDEF). It lives inside the
+                     * #ifndef USE_NDEF helper block, so this case is only
+                     * compiled in the demo-without-NDEF build configuration. */
+                    case Prot_ISODEP:
+                        erase_proto = "T4T";
+                        if (0u != ptxIoTRdInt_EraseType4NDEF(iotRd, &tx_data[0], &rx_data[0]))
+                        {
+                            erase_st = ptxStatus_Success;
+                        }
+                        else
+                        {
+                            erase_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
+                        }
+                        break;
+#endif
+
+                    default:
+                        erase_supported = 0u;
+                        break;
+                }
+
+                if (0u != erase_supported)
+                {
+                    ptxCommon_PrintF("Erase armed: writing empty NDEF on %s tag ... %s",
+                                     erase_proto,
+                                     (ptxStatus_Success == erase_st) ? "OK" : "ERROR");
+                    if (ptxStatus_Success != erase_st)
+                    {
+                        ptxCommon_PrintF(" (Status = 0x%04X)", erase_st);
+                    }
+                    ptxCommon_PrintF("\n");
+                }
+                else
+                {
+                    ptxCommon_PrintF("Erase armed: protocol 0x%02X not supported for erase\n",
+                                     (unsigned)cardRegistry->ActiveCardProtType);
+                }
+
+                UserCli_ClearEraseArmed();
+                *skipTxDataExchange = 1u;
+                *skipRxProcessing   = 1u;
+                goto data_exchange_done;
+            }
+
 #ifndef USE_NDEF
             /* Print structured card info and read records (ISO-DEP: EMV flow). */
             ptxIoTRdInt_PrintCardInfo(iotRd, cardRegistry, &tx_data[0], &rx_data[0]);
@@ -1855,6 +1687,7 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                     break;
             }
 
+data_exchange_done:
             if (0 == *skipTxDataExchange)
             {
                 ptxIoTRdInt_Sleep(iotRd, PTX_IOTRD_EXCHANGE_WAIT_TIME);

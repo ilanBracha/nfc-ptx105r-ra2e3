@@ -17,6 +17,8 @@
 #ifndef USER_BOARD_UTILS_USER_CLI_H_
 #define USER_BOARD_UTILS_USER_CLI_H_
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,6 +40,15 @@ void UserCli_Poll(void);
  * Print the menu again (useful from anywhere, e.g. after a long log burst).
  */
 void UserCli_PrintMenu(void);
+
+/**
+ * Arm a one-shot "erase the next tag" request from the CLI side. The NFC
+ * read loop should poll UserCli_IsEraseArmed() once a tag has been activated
+ * and, if armed, perform the erase and then call UserCli_ClearEraseArmed().
+ */
+void    UserCli_ArmEraseNext   (void);
+uint8_t UserCli_IsEraseArmed   (void);
+void    UserCli_ClearEraseArmed(void);
 
 #ifdef __cplusplus
 }
