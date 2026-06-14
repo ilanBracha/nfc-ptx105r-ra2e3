@@ -50,6 +50,19 @@ void    UserCli_ArmEraseNext   (void);
 uint8_t UserCli_IsEraseArmed   (void);
 void    UserCli_ClearEraseArmed(void);
 
+/**
+ * One-shot "write a Text record to the next tag" request. UserCli_ArmWriteNext
+ * stores a copy of `text` (max USER_CLI_WRITE_TEXT_MAX bytes) and arms the flag.
+ * The NFC loop polls UserCli_IsWriteArmed(), retrieves the payload via
+ * UserCli_GetWriteText(), performs the write, and calls UserCli_ClearWriteArmed().
+ */
+#define USER_CLI_WRITE_TEXT_MAX 96u
+
+void        UserCli_ArmWriteNext   (const char *text, uint16_t text_len);
+uint8_t     UserCli_IsWriteArmed   (void);
+const char *UserCli_GetWriteText   (uint16_t *out_len);
+void        UserCli_ClearWriteArmed(void);
+
 #ifdef __cplusplus
 }
 #endif

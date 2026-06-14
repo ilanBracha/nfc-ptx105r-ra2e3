@@ -911,76 +911,99 @@ static uint8_t ptxIoTRdInt_ReadType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
 }
 
 /*
- * Erase the NDEF message on an NFC Forum Type 4 Tag.
+ * Build a single NFC Forum well-known Text NDEF record (RTD-Text) into `out`.
+ * Language is fixed to "en" (2 bytes) and encoding is UTF-8.
  *
- * Sequence: SELECT NDEF AID -> SELECT CC -> READ CC (to discover the NDEF
- * file id) -> SELECT NDEF file -> UPDATE BINARY at offset 0 with NLEN=0.
- * Per T4T spec, NLEN=0 marks the file as "empty NDEF message" - the rest of
- * the file does not need to be zeroed.
+ * Layout (Short-Record form, MB=ME=1, TNF=0x01 Well-known, type 'T'):
+ *   [0] 0xD1                   header
+ *   [1] 0x01                   type length
+ *   [2] payload_len            (1 status + 2 lang + text_len)
+ *   [3] 0x54                   type 'T'
+ *   [4] 0x02                   status: UTF-8, lang_len=2
+ *   [5..6] 'e','n'             language code
+ *   [7..]  text                UTF-8 payload
  *
- * Returns 1 on success, 0 on any APDU failure. Caller's tx buffer is unused
- * (kept in the signature for API symmetry with ReadType4NDEF).
- *
- * This deliberately bypasses the ptxNDEF_T4TOP layer: a full Open/CheckMessage/
- * WriteMessage sequence pulls in ~3 KB of code on the RA2E3, which the part
- * cannot fit. The raw APDU sequence is a few hundred bytes and works on any
- * standard T4T NDEF tag (NTAG 4xx, DESFire with NDEF app, Android HCE).
+ * Caller must ensure `out` has room for (text_len + 7) bytes. text_len is
+ * capped at 248 by the Short-Record payload byte (255 - 1 - 2 - 4 header).
  */
-static uint8_t ptxIoTRdInt_EraseType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t *rx)
+static void ptxIoTRdInt_BuildTextRecord(const char *text, uint16_t text_len,
+                                        uint8_t *out, uint16_t *out_len)
 {
-    (void)tx;
+    const uint8_t payload_len = (uint8_t)(1u + 2u + text_len);  /* status + lang + text */
+
+    out[0] = 0xD1u;
+    out[1] = 0x01u;
+    out[2] = payload_len;
+    out[3] = 0x54u;
+    out[4] = 0x02u;
+    out[5] = 0x65u;
+    out[6] = 0x6Eu;
+    (void)memcpy(&out[7], text, text_len);
+
+    *out_len = (uint16_t)(7u + text_len);
+}
+
+/*
+ * Write or erase an NDEF message on an NFC Forum Type 4 Tag.
+ *
+ * Sequence:
+ *   SELECT NDEF AID -> SELECT CC -> READ CC (learn NDEF file id and verify
+ *   write access) -> SELECT NDEF file -> UPDATE BINARY NLEN=0 (file now
+ *   appears empty; this is also the erase primitive) -> [if ndef_len > 0]
+ *   UPDATE BINARY at offset 2 with the NDEF body, then UPDATE BINARY at
+ *   offset 0 with the new NLEN.
+ *
+ * ndef_len == 0 stops after the NLEN=0 step and is therefore the canonical
+ * "erase NDEF" path. ndef_len is capped at 248 (single UPDATE BINARY).
+ *
+ * Returns 1 on success, 0 on any APDU / tag failure. This deliberately
+ * bypasses the ptxNDEF_T4TOP layer: a full Open/Check/Write sequence pulls
+ * in ~3 KB of code on the RA2E3 which won't fit.
+ */
+static uint8_t ptxIoTRdInt_WriteType4NDEF(ptxIoTRd_t *iotRd, const uint8_t *ndef,
+                                          uint16_t ndef_len, uint8_t *rx)
+{
     const uint32_t tmo = DEFAULT_APP_TIMEOUT_PROT;
     uint32_t rx_len;
-    uint8_t  cmd[16];
+    uint8_t  cmd[5u + 248u];
 
-    /* 1. SELECT NDEF Tag Application (AID = D2 76 00 00 85 01 01) */
+    if (ndef_len > 248u) { return 0u; }
+
+    /* SELECT NDEF Tag Application */
     static const uint8_t sel_app[] = {0x00,0xA4,0x04,0x00,0x07,0xD2,0x76,0x00,0x00,0x85,0x01,0x01,0x00};
-    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)sel_app, (uint32_t)sizeof(sel_app), rx, &rx_len, tmo))
-    {
-        ptxCommon_PrintF("[T4T-erase] SELECT NDEF App -> FAILED\n");
-        return 0u;
-    }
+    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)sel_app, (uint32_t)sizeof(sel_app), rx, &rx_len, tmo)) { return 0u; }
 
-    /* 2. SELECT Capability Container file (EF = E103) */
+    /* SELECT CC */
     static const uint8_t sel_cc[] = {0x00,0xA4,0x00,0x0C,0x02,0xE1,0x03};
-    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc), rx, &rx_len, tmo))
-    {
-        ptxCommon_PrintF("[T4T-erase] SELECT CC -> FAILED\n");
-        return 0u;
-    }
+    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc), rx, &rx_len, tmo)) { return 0u; }
 
-    /* 3. READ CC (15 bytes) to learn the NDEF file id */
+    /* READ CC -> learn NDEF file id and check write access */
     static const uint8_t read_cc[] = {0x00,0xB0,0x00,0x00,0x0F};
-    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)read_cc, (uint32_t)sizeof(read_cc), rx, &rx_len, tmo) || (rx_len < 17u))
-    {
-        ptxCommon_PrintF("[T4T-erase] READ CC -> FAILED\n");
-        return 0u;
-    }
-    /* CC layout: [9..10] = NDEF file ID, [14] = write access (0x00 = writable) */
-    uint8_t fid_hi  = rx[9];
-    uint8_t fid_lo  = rx[10];
-    uint8_t wa      = rx[14];
-    if (0x00u != wa)
-    {
-        ptxCommon_PrintF("[T4T-erase] tag is read-only (WriteAccess=0x%02X)\n", wa);
-        return 0u;
-    }
+    if (!ptxIoTRdInt_T4Exchange(iotRd, (uint8_t *)read_cc, (uint32_t)sizeof(read_cc), rx, &rx_len, tmo) || (rx_len < 17u)) { return 0u; }
+    uint8_t fid_hi = rx[9];
+    uint8_t fid_lo = rx[10];
+    if (0x00u != rx[14]) { return 0u; }  /* tag is read-only */
 
-    /* 4. SELECT NDEF file */
+    /* SELECT NDEF file */
     cmd[0]=0x00; cmd[1]=0xA4; cmd[2]=0x00; cmd[3]=0x0C; cmd[4]=0x02; cmd[5]=fid_hi; cmd[6]=fid_lo;
-    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo))
-    {
-        ptxCommon_PrintF("[T4T-erase] SELECT NDEF file -> FAILED\n");
-        return 0u;
-    }
+    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo)) { return 0u; }
 
-    /* 5. UPDATE BINARY at offset 0 with NLEN = 0x0000 (2 bytes). */
+    /* UPDATE BINARY @0: NLEN = 0 (erase / start of partial write) */
     cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x00; cmd[4]=0x02; cmd[5]=0x00; cmd[6]=0x00;
-    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo))
-    {
-        ptxCommon_PrintF("[T4T-erase] UPDATE BINARY (NLEN=0) -> FAILED\n");
-        return 0u;
-    }
+    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo)) { return 0u; }
+
+    if (0u == ndef_len) { return 1u; }  /* erase complete */
+
+    /* UPDATE BINARY @2: NDEF body */
+    cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x02; cmd[4]=(uint8_t)ndef_len;
+    (void)memcpy(&cmd[5], ndef, ndef_len);
+    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, (uint32_t)(5u + ndef_len), rx, &rx_len, tmo)) { return 0u; }
+
+    /* UPDATE BINARY @0: NLEN = ndef_len (commit, big-endian) */
+    cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x00; cmd[4]=0x02;
+    cmd[5]=(uint8_t)(ndef_len >> 8);
+    cmd[6]=(uint8_t)(ndef_len & 0xFFu);
+    if (!ptxIoTRdInt_T4Exchange(iotRd, cmd, 7u, rx, &rx_len, tmo)) { return 0u; }
 
     return 1u;
 }
@@ -1379,100 +1402,97 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
 
         if (ptxStatus_Success == st)
         {
-            /* CLI: one-shot "erase next tag" hook. If the user typed `erase`
-             * before this tag came into the field, open the per-protocol NDEF
-             * Op component locally, run CheckMessage to populate CC/NLEN/
-             * LifeCycle, then WriteMessage with an empty payload to overwrite
-             * the existing NDEF content with the standard empty NDEF record
-             * (TNF=Empty: {0xD0, 0x00, 0x00}). Close the component and skip the
-             * normal read flow. The state machine transitions to
-             * DeactivateReader and the loop resumes polling.
-             *
-             * Note: ptxNDEF_T<X>OpFormatTag is a stub in this SDK that returns
-             * NotImplemented for T2T/T4T/T5T - hence we use Write with an empty
-             * NDEF message as the erase primitive for T2T.
-             *
-             * Supported here:
-             *  - T2T (NTAG21x / Ultralight) via the ptxNDEF_T2TOP layer.
-             *  - T4T (ISO-DEP NDEF tags, NTAG 4xx, Android HCE) via a tiny
-             *    raw-APDU helper (ptxIoTRdInt_EraseType4NDEF) - the full T4T
-             *    Op layer costs ~3 KB which won't fit on the RA2E3.
-             * T3T/T5T are omitted so their Op code can be dropped by the
-             * linker, keeping the firmware inside the 63 KB flash budget. */
-            if (0u != UserCli_IsEraseArmed())
+            /* CLI: one-shot "erase / write" hook. A single armed flag triggers
+             * a Write of the CLI-supplied NDEF message - when no text was set
+             * (cmd_erase), ndef_len is 0 and the operation collapses to "set
+             * NLEN=0 / write empty NDEF", i.e. an erase. T2T uses the
+             * ptxNDEF_T2TOp layer; T4T uses a raw-APDU helper (the full T4T
+             * Op layer costs ~3 KB which won't fit on the RA2E3). T3T/T5T are
+             * intentionally not supported so their Op code is dropped by
+             * --gc-sections to stay inside the 63 KB flash budget. */
+            if ((0u != UserCli_IsWriteArmed()) || (0u != UserCli_IsEraseArmed()))
             {
-                ptxStatus_t  erase_st        = ptxStatus_Success;
-                const char  *erase_proto     = "Unknown";
-                uint8_t      erase_supported = 1u;
-                /* Non-NULL placeholder buffer - T2T's WriteMessage rejects a
-                 * NULL pointer even when msgLen == 0. The bytes are unused. */
-                static uint8_t s_erase_dummy[1] = { 0u };
+                ptxStatus_t  op_st        = ptxStatus_Success;
+                const char  *op_proto     = "Unknown";
+                uint8_t      op_supported = 1u;
+                uint8_t      is_write     = UserCli_IsWriteArmed();
+                /* NDEF Text record max: 7 header/lang bytes + payload. The
+                 * buffer doubles as the non-NULL placeholder for the erase case
+                 * (T2T WriteMessage rejects a NULL ptr even when msgLen==0). */
+                uint8_t      ndef_buf[USER_CLI_WRITE_TEXT_MAX + 7u];
+                uint16_t     ndef_len = 0u;
+                const char  *op_name  = is_write ? "Write" : "Erase";
 
-                switch (cardRegistry->ActiveCardProtType)
+                if (0u != is_write)
                 {
-                    case Prot_T2T:
-                        erase_proto = "T2T";
-                        (void)memset(t2tOpComp,       0, sizeof(ptxNDEF_T2TOP_t));
-                        (void)memset(t2tOpInitParams, 0, sizeof(ptxNDEF_T2TOP_InitParams_t));
-                        t2tOpInitParams->T2TInitParams.IotRd        = iotRd;
-                        t2tOpInitParams->T2TInitParams.TxBuffer     = &tx_data[0];
-                        t2tOpInitParams->T2TInitParams.TxBufferSize = TX_BUFFER_SIZE;
-                        t2tOpInitParams->WorkBuffer                 = &work_buffer[0];
-                        t2tOpInitParams->WorkBufferSize             = NDEF_BUFFER_SIZE;
-                        t2tOpInitParams->RxBuffer                   = &rx_data[0];
-                        t2tOpInitParams->RxBufferSize               = RX_BUFFER_SIZE;
-                        erase_st = ptxNDEF_T2TOpOpen(t2tOpComp, t2tOpInitParams);
-                        if (ptxStatus_Success == erase_st)
-                        {
-                            erase_st = ptxNDEF_T2TOpCheckMessage(t2tOpComp);
-                            if (ptxStatus_Success == erase_st)
-                            {
-                                erase_st = ptxNDEF_T2TOpWriteMessage(t2tOpComp, &s_erase_dummy[0], 0u);
-                            }
-                            (void)ptxNDEF_T2TOpClose(t2tOpComp);
-                        }
-                        break;
-
-#ifndef USE_NDEF
-                    /* T4T uses a tiny raw-APDU implementation (see
-                     * ptxIoTRdInt_EraseType4NDEF). It lives inside the
-                     * #ifndef USE_NDEF helper block, so this case is only
-                     * compiled in the demo-without-NDEF build configuration. */
-                    case Prot_ISODEP:
-                        erase_proto = "T4T";
-                        if (0u != ptxIoTRdInt_EraseType4NDEF(iotRd, &tx_data[0], &rx_data[0]))
-                        {
-                            erase_st = ptxStatus_Success;
-                        }
-                        else
-                        {
-                            erase_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
-                        }
-                        break;
-#endif
-
-                    default:
-                        erase_supported = 0u;
-                        break;
+                    uint16_t    txt_len = 0u;
+                    const char *txt     = UserCli_GetWriteText(&txt_len);
+                    if ((NULL != txt) && (txt_len > 0u) && (txt_len <= USER_CLI_WRITE_TEXT_MAX))
+                    {
+                        ptxIoTRdInt_BuildTextRecord(txt, txt_len, ndef_buf, &ndef_len);
+                    }
+                    else
+                    {
+                        op_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
+                    }
                 }
 
-                if (0u != erase_supported)
+                if (ptxStatus_Success == op_st)
                 {
-                    ptxCommon_PrintF("Erase armed: writing empty NDEF on %s tag ... %s",
-                                     erase_proto,
-                                     (ptxStatus_Success == erase_st) ? "OK" : "ERROR");
-                    if (ptxStatus_Success != erase_st)
+                    switch (cardRegistry->ActiveCardProtType)
                     {
-                        ptxCommon_PrintF(" (Status = 0x%04X)", erase_st);
+                        case Prot_T2T:
+                            op_proto = "T2T";
+                            (void)memset(t2tOpComp,       0, sizeof(ptxNDEF_T2TOP_t));
+                            (void)memset(t2tOpInitParams, 0, sizeof(ptxNDEF_T2TOP_InitParams_t));
+                            t2tOpInitParams->T2TInitParams.IotRd        = iotRd;
+                            t2tOpInitParams->T2TInitParams.TxBuffer     = &tx_data[0];
+                            t2tOpInitParams->T2TInitParams.TxBufferSize = TX_BUFFER_SIZE;
+                            t2tOpInitParams->WorkBuffer                 = &work_buffer[0];
+                            t2tOpInitParams->WorkBufferSize             = NDEF_BUFFER_SIZE;
+                            t2tOpInitParams->RxBuffer                   = &rx_data[0];
+                            t2tOpInitParams->RxBufferSize               = RX_BUFFER_SIZE;
+                            op_st = ptxNDEF_T2TOpOpen(t2tOpComp, t2tOpInitParams);
+                            if (ptxStatus_Success == op_st)
+                            {
+                                op_st = ptxNDEF_T2TOpCheckMessage(t2tOpComp);
+                                if (ptxStatus_Success == op_st)
+                                {
+                                    op_st = ptxNDEF_T2TOpWriteMessage(t2tOpComp, &ndef_buf[0], (uint32_t)ndef_len);
+                                }
+                                (void)ptxNDEF_T2TOpClose(t2tOpComp);
+                            }
+                            break;
+
+#ifndef USE_NDEF
+                        case Prot_ISODEP:
+                            op_proto = "T4T";
+                            if (0u == ptxIoTRdInt_WriteType4NDEF(iotRd, ndef_buf, ndef_len, &rx_data[0]))
+                            {
+                                op_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
+                            }
+                            break;
+#endif
+
+                        default:
+                            op_supported = 0u;
+                            break;
                     }
-                    ptxCommon_PrintF("\n");
+                }
+
+                if (0u != op_supported)
+                {
+                    ptxCommon_PrintF("%s on %s (NDEF %u B): %s\n",
+                                     op_name, op_proto, (unsigned)ndef_len,
+                                     (ptxStatus_Success == op_st) ? "OK" : "ERROR");
                 }
                 else
                 {
-                    ptxCommon_PrintF("Erase armed: protocol 0x%02X not supported for erase\n",
-                                     (unsigned)cardRegistry->ActiveCardProtType);
+                    ptxCommon_PrintF("%s: proto 0x%02X not supported\n",
+                                     op_name, (unsigned)cardRegistry->ActiveCardProtType);
                 }
 
+                UserCli_ClearWriteArmed();
                 UserCli_ClearEraseArmed();
                 *skipTxDataExchange = 1u;
                 *skipRxProcessing   = 1u;

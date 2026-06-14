@@ -56,6 +56,12 @@ static uint8_t  s_prev_was_cr = 0u; /* swallow LF that follows CR (CRLF) */
  * command; consumed by the NFC main loop once it has an active tag. */
 static volatile uint8_t s_erase_armed = 0u;
 
+/* One-shot "write a Text record to the next activated tag" request. Set by the
+ * `write "..."` CLI command; consumed by the NFC main loop. */
+static volatile uint8_t s_write_armed    = 0u;
+static char             s_write_text[USER_CLI_WRITE_TEXT_MAX + 1u];
+static uint16_t         s_write_text_len = 0u;
+
 void cli_prompt(void);
 
 /*
@@ -105,13 +111,58 @@ static void cmd_version (const char *args)
     cli_write("PTX IoT Reader (RA2E3 FPB) - CLI v1.0" CLI_NEWLINE);
 }
 
+static void cmd_write (const char *args)
+{
+    /* Expect: write "text to write"
+     * The opening quote is mandatory so users can include spaces; the closing
+     * quote terminates the payload (no escape sequences). */
+    const char *p = args;
+    while ((*p == ' ') || (*p == '\t')) { p++; }
+    if (*p != '"')
+    {
+        cli_write("usage: write \"text to write\"" CLI_NEWLINE);
+        return;
+    }
+    p++;
+    const char *start = p;
+    while ((*p != '\0') && (*p != '"')) { p++; }
+    if (*p != '"')
+    {
+        cli_write("write: missing closing '\"'" CLI_NEWLINE);
+        return;
+    }
+    size_t len = (size_t)(p - start);
+    if (0u == len)
+    {
+        UserCli_ClearWriteArmed();
+        cli_write("write: disarmed" CLI_NEWLINE);
+        return;
+    }
+    if (len > USER_CLI_WRITE_TEXT_MAX)
+    {
+        cli_write("write: text too long (max 96 bytes)" CLI_NEWLINE);
+        return;
+    }
+
+    UserCli_ArmWriteNext(start, (uint16_t)len);
+    /* Arming write supersedes any pending erase. */
+    s_erase_armed = 0u;
+
+    cli_write("write: armed - present a TAG to write the NDEF Text record" CLI_NEWLINE);
+    cli_write("       (type 'write \"\"' to cancel)" CLI_NEWLINE);
+}
+
 static void cmd_erase (const char *args)
 {
     (void)args;
-    /* Toggle: a second `erase` cancels a pending arm. */
-    if (0u != s_erase_armed)
+    /* Toggle: a second `erase` cancels a pending arm. Arming erase also clears
+     * any pending write since the unified NFC hook treats write as the
+     * dominant op. */
+    if ((0u != s_erase_armed) || (0u != s_write_armed))
     {
-        s_erase_armed = 0u;
+        s_erase_armed    = 0u;
+        s_write_armed    = 0u;
+        s_write_text_len = 0u;
         cli_write("erase: disarmed (no tag will be erased)" CLI_NEWLINE);
     }
     else
@@ -164,6 +215,7 @@ static const cli_cmd_t s_cmds[] =
     { "?",       cmd_help,    "alias of 'help'"                },
     { "menu",    cmd_menu,    "reprint the menu"               },
     { "version", cmd_version, "firmware identification"        },
+    { "write",   cmd_write,   "write \"text\" to next tag"     },
     { "erase",   cmd_erase,   "arm: erase NDEF of the next tag"},
     { "lon",     cmd_ledon,   "turn the status LED on"         },
     { "loff",    cmd_ledoff,  "turn the status LED off"        },
@@ -326,4 +378,35 @@ uint8_t UserCli_IsEraseArmed(void)
 void UserCli_ClearEraseArmed(void)
 {
     s_erase_armed = 0u;
+}
+
+void UserCli_ArmWriteNext(const char *text, uint16_t text_len)
+{
+    if ((NULL == text) || (0u == text_len) || (text_len > USER_CLI_WRITE_TEXT_MAX))
+    {
+        s_write_armed    = 0u;
+        s_write_text_len = 0u;
+        return;
+    }
+    (void)memcpy(s_write_text, text, text_len);
+    s_write_text[text_len] = '\0';
+    s_write_text_len       = text_len;
+    s_write_armed          = 1u;
+}
+
+uint8_t UserCli_IsWriteArmed(void)
+{
+    return s_write_armed;
+}
+
+const char *UserCli_GetWriteText(uint16_t *out_len)
+{
+    if (NULL != out_len) { *out_len = s_write_text_len; }
+    return s_write_text;
+}
+
+void UserCli_ClearWriteArmed(void)
+{
+    s_write_armed    = 0u;
+    s_write_text_len = 0u;
 }
