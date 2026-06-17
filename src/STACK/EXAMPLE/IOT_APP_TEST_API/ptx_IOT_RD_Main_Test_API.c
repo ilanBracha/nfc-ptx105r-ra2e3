@@ -46,12 +46,8 @@
  * ####################################################################################################################
  */
 
-#include "ptx_IOT_RD_Main_Test_API.h"
-
-#include "ptxIoTRd_COMMON.h"
 #include "ptxCOMMON.h"
 #include "ptx_IOT_READER.h"
-#include "ptxDBG_PORT.h"
 #include "ptxFeliCa_DTE.h"
 #include "ptxRF_Test.h"
 #include "ptxPLAT.h"
@@ -60,6 +56,9 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <STACK/COMPS/COMMON/ptxIoTRd_COMMON.h>
+#include <STACK/EXAMPLE/DEBUG_PORT/ptxDBG_PORT.h>
+#include <STACK/EXAMPLE/IOT_APP_TEST_API/ptx_IOT_RD_Main_Test_API.h>
 
 /*
  * ####################################################################################################################

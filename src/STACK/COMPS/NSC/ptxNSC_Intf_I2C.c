@@ -46,13 +46,13 @@
  * ####################################################################################################################
  */
 
-#include "ptxNSC_Intf.h"
-#include "ptxNSC.h"
-#include "ptxNSC_Hal.h"
-#include "ptxNSC_Registers.h"
 #include "ptxPLAT.h"
 #include "ptxStatus.h"
 #include <string.h>
+#include <STACK/COMPS/NSC/ptxNSC.h>
+#include <STACK/COMPS/NSC/ptxNSC_Hal.h>
+#include <STACK/COMPS/NSC/ptxNSC_Intf.h>
+#include <STACK/COMPS/NSC/ptxNSC_Registers.h>
 
 /*
  * ####################################################################################################################

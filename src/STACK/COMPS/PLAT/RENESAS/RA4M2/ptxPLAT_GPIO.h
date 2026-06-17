@@ -55,9 +55,9 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxStatus.h"
-#include "ptxPLAT_EXT.h"
 #include <stddef.h>
+#include <STACK/COMPS/ptxStatus.h>
+#include <STACK/COMPS/PLAT/ptxPLAT_EXT.h>
 
 #ifdef __cplusplus
 extern "C" {

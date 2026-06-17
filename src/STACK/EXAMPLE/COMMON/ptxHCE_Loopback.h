@@ -43,7 +43,7 @@
 #ifndef PTXHCE_LOOPBACK_H_
 #define PTXHCE_LOOPBACK_H_
 
-#include "ptxHce.h"
+#include <STACK/COMPS/HCE/ptxHce.h>
 
 #ifdef __cplusplus
 extern "C" {

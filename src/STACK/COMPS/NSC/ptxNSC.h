@@ -54,12 +54,12 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxStatus.h"
-#include "ptxNSC_Event.h"
-#include "ptxNSC_RfConfigVal.h"
-#include "ptxNSC_Hal.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <STACK/COMPS/NSC/ptxNSC_Event.h>
+#include <STACK/COMPS/NSC/ptxNSC_Hal.h>
+#include <STACK/COMPS/NSC/ptxNSC_RfConfigVal.h>
+#include <STACK/COMPS/ptxStatus.h>
 
 #ifdef __cplusplus
 extern "C" {

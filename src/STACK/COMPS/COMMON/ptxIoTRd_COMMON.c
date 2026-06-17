@@ -46,9 +46,9 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxPLAT.h"
-#include "ptxIoTRd_COMMON.h"
-#include "ptxHce_Exchange.h"
+#include <STACK/COMPS/COMMON/ptxHce_Exchange.h>
+#include <STACK/COMPS/COMMON/ptxIoTRd_COMMON.h>
+#include <STACK/COMPS/PLAT/ptxPLAT.h>
 #include "SEGGER_RTT.h"
 
 /*

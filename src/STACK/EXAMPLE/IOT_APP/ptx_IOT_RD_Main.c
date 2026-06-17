@@ -141,26 +141,23 @@
 */
 
 
-#include "ptx_IOT_READER.h"
-#include "ptx_IOT_RD_Main.h"
-
-#include "ptxCOMMON.h"
-#include "ptxIoTRd_COMMON.h"
-#include "ptxPLAT.h"
-#include "ptxNativeTag_T5T.h"
-#include "ptxNDEF_T2TOP.h"
-#include "ptxNDEF_T3TOP.h"
-#include "ptxNDEF_T4TOP.h"
-#include "ptxNDEF_T5TOP.h"
-#include "ptxNDEF.h"
-
-#include "ptxT4T.h"
-#include "ptxHCE_Loopback.h"
-
 #include "user_board_utils.h"
 #include "user_cli.h"
 
 #include <string.h>
+#include <STACK/COMPS/COMMON/ptxCOMMON.h>
+#include <STACK/COMPS/COMMON/ptxIoTRd_COMMON.h>
+#include <STACK/COMPS/COMMON/ptxT4T.h>
+#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
+#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T5T.h>
+#include <STACK/COMPS/NDEF/ptxNDEF.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T2TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T3TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T4TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T5TOP.h>
+#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include <STACK/EXAMPLE/COMMON/ptxHCE_Loopback.h>
+#include <STACK/EXAMPLE/IOT_APP/ptx_IOT_RD_Main.h>
 
 /*
  * ####################################################################################################################
@@ -295,6 +292,9 @@ void ptxIOT_READER_App(void)
     /* Initial parameters for temperature sensor are ready. */
     initParams.TemperatureSensor = &tempSens;
     initParams.ComInterface = &comIntf;
+
+    // ILAN: NEW ADD
+    RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
 
     /* Initiate IoT-Reader System. */
     st = ptxIoTRd_Init(&iotRd, &initParams);

@@ -56,12 +56,12 @@
  */
 
 #include <stdint.h>
-#include "ptx_IOT_READER.h"
-#include "ptxNDEF_T2TOP.h"
-#include "ptxNDEF_T3TOP.h"
-#include "ptxNDEF_T4TOP.h"
-#include "ptxNDEF_T5TOP.h"
-#include "ptxStatus.h"
+#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T2TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T3TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T4TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T5TOP.h>
+#include <STACK/COMPS/ptxStatus.h>
 
 #ifdef __cplusplus
 extern "C" {

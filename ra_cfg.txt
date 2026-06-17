@@ -65,7 +65,7 @@ FSP Configuration
   RA2E3 event data
   RA Common
     Main stack size (bytes): 6000
-    Heap size (bytes): 0
+    Heap size (bytes): 256
     Bootloader Secondary XIP: Disabled
     MCU Vcc (mV): 3300
     Parameter checking: Disabled
@@ -401,14 +401,32 @@ FSP Configuration
     Parameter Checking: Default (BSP)
     CCD Support: Not Supported
     
+  Module "UART (r_sci_uart)"
+    Parameter Checking: Default (BSP)
+    FIFO Support: Disable
+    DTC Support: Disable
+    Flow Control Support: Disable
+    RS-485 Support: Disable
+    IrDA Support: Disabled
+    
+  Module "NFC IoT Reader on PTX (rm_nfc_reader_ptx)"
+    Parameter Checking: Default (BSP)
+    Add-on: NDEF Support: Disabled
+    Add-on: Native Tag Support: Disabled
+    NFC NDEF Work Buffer Size: 64
+    
+  Module "SPI Communication Device (rm_comms_spi)"
+    Parameter Checking: Default (BSP)
+    Auto Slave Select: Disabled
+    
+  Module "SPI Shared Bus (rm_comms_spi)"
+    Parameter Checking: Default (BSP)
+    Auto Slave Select: Disabled
+    
   Module "External IRQ (r_icu)"
     Parameter Checking: Default (BSP)
     
-  Module "Timer, General PWM (r_gpt)"
-    Parameter Checking: Default (BSP)
-    Pin Output Support: Disabled
-    Write Protect Enable: Disabled
-    
+  Module "NFC Reader PTX SDK"
   Module "SPI (r_sci_spi)"
     Parameter Checking: Default (BSP)
     DTC Support: Enabled
@@ -417,13 +435,15 @@ FSP Configuration
     Parameter Checking: Default (BSP)
     Linker section to keep DTC vector table: .fsp_dtc_vector_table
     
-  Module "UART (r_sci_uart)"
+  Module "Timer, General PWM (r_gpt)"
     Parameter Checking: Default (BSP)
-    FIFO Support: Disable
-    DTC Support: Disable
-    Flow Control Support: Disable
-    RS-485 Support: Disable
-    IrDA Support: Disabled
+    Pin Output Support: Disabled
+    Write Protect Enable: Disabled
+    
+  Module "Timer, Low-Power (r_agt)"
+    Parameter Checking: Default (BSP)
+    Pin Output Support: Disabled
+    Pin Input Support: Disabled
     
   HAL
     Instance "g_ioport I/O Port (r_ioport)"
@@ -434,124 +454,6 @@ FSP Configuration
       4th Port ELC Trigger Source: Disabled
       Pin Configuration Name: g_bsp_pin_cfg
       
-    Instance "g_ext_irq External IRQ (r_icu)"
-      Name: g_ext_irq
-      Channel: 7
-      Trigger: Rising
-      Digital Filtering: Disabled
-      Filter Source: PCLK filter
-      Digital Filtering Sample Clock (Only valid when Digital Filtering is Enabled): PCLK / 64
-      Callback: ptxPLAT_GPIO_IsrCallback
-      Pin Interrupt Priority: Priority 2
-      
-    Instance "g_timer0 Timer, General PWM (r_gpt)"
-      General: Name: g_timer0
-      General: Channel: 0
-      General: Mode: Periodic
-      General: Period: 0x10000
-      General: Compare Match: Compare Match A: Status: Disabled
-      General: Compare Match: Compare Match A: Compare match value: 0
-      General: Compare Match: Compare Match B: Status: Disabled
-      General: Compare Match: Compare Match B: Compare match value: 0
-      General: Compare Match: Compare Match C: Status: Disabled
-      General: Compare Match: Compare Match C: Compare match value: 0x10000
-      General: Compare Match: Compare Match D: Status: Disabled
-      General: Compare Match: Compare Match D: Compare match value: 0x10000
-      General: Compare Match: Compare Match E: Status: Disabled
-      General: Compare Match: Compare Match E: Compare match value: 0x10000
-      General: Compare Match: Compare Match F: Status: Disabled
-      General: Compare Match: Compare Match F: Compare match value: 0x10000
-      General: Period Unit: Raw Counts
-      Output: Custom Waveform: GTIOA: Initial Output Level: Pin Level Low
-      Output: Custom Waveform: GTIOA: Cycle End Output Level: Pin Level Retain
-      Output: Custom Waveform: GTIOA: Compare Match Output Level: Pin Level Retain
-      Output: Custom Waveform: GTIOA: Retain Output Level at Count Stop: Disabled
-      Output: Custom Waveform: GTIOB: Initial Output Level: Pin Level Low
-      Output: Custom Waveform: GTIOB: Cycle End Output Level: Pin Level Retain
-      Output: Custom Waveform: GTIOB: Compare Match Output Level: Pin Level Retain
-      Output: Custom Waveform: GTIOB: Retain Output Level at Count Stop: Disabled
-      Output: Custom Waveform: Custom Waveform Enable: Disabled
-      Output: Duty Cycle Percent (only applicable in PWM mode): 50
-      Output: GTIOCA Output Enabled: False
-      Output: GTIOCA Stop Level: Pin Level Low
-      Output: GTIOCB Output Enabled: False
-      Output: GTIOCB Stop Level: Pin Level Low
-      Input: Count Up Source: 
-      Input: Count Down Source: 
-      Input: Start Source: 
-      Input: Stop Source: 
-      Input: Clear Source: 
-      Input: Capture A Source: 
-      Input: Capture B Source: 
-      Input: Noise Filter A Sampling Clock Select: No Filter
-      Input: Noise Filter B Sampling Clock Select: No Filter
-      Pin Polarity: GTIOCnA Polarity: Normal
-      Pin Polarity: GTIOCnB Polarity: Normal
-      Interrupts: Callback: ptxPLAT_TIMER_IsrCallback
-      Interrupts: Overflow/Crest Interrupt Priority: Priority 3
-      Interrupts: Capture/Compare match A Interrupt Priority: Disabled
-      Interrupts: Capture/Compare match B Interrupt Priority: Disabled
-      Interrupts: Compare Match C Interrupt Priority: Disabled
-      Interrupts: Compare Match D Interrupt Priority: Disabled
-      Interrupts: Compare Match E Interrupt Priority: Disabled
-      Interrupts: Compare Match F Interrupt Priority: Disabled
-      Interrupts: Underflow/Trough Interrupt Priority: Disabled
-      Extra Features: Extra Features: Disabled
-      Extra Features: Output Disable: POEG Link: POEG Channel 0
-      Extra Features: Output Disable: Output Disable POEG Trigger: 
-      Extra Features: ADC Trigger: Start Event Trigger (Channels with GTINTAD only): 
-      Extra Features: ADC Trigger: ADC A Compare Match (Raw Counts): 0
-      Extra Features: ADC Trigger: ADC B Compare Match (Raw Counts): 0
-      Extra Features: Dead Time (Value range varies with Channel): Dead Time Count Up (Raw Counts): 0
-      Extra Features: Dead Time (Value range varies with Channel): Dead Time Count Down (Raw Counts) (Channels with GTDVD only): 0
-      Extra Features: Interrupt Skipping (Channels with GTITC only): Interrupt to Count: None
-      Extra Features: Interrupt Skipping (Channels with GTITC only): Interrupt Skip Count: 0
-      Extra Features: Interrupt Skipping (Channels with GTITC only): Skip ADC Events: None
-      Extra Features: Output Disable: GTIOCA Disable Setting: Disable Prohibited
-      Extra Features: Output Disable: GTIOCB Disable Setting: Disable Prohibited
-      
-    Instance "ptx_pmod_spi SPI (r_sci_spi)"
-      Name: ptx_pmod_spi
-      Channel: 0
-      Operating Mode: Master
-      Clock Phase: Data sampling on odd edge, data variation on even edge
-      Clock Polarity: Low when idle
-      Mode Fault Error: Disable
-      Bit Order: MSB First
-      Callback: ptxPLAT_SPI_TransferCallback
-      Receive Interrupt Priority: Priority 2
-      Transmit Interrupt Priority: Priority 2
-      Transmit End Interrupt Priority: Priority 2
-      Error Interrupt Priority: Priority 2
-      Bitrate: 1000000
-      Bitrate Modulation: Disabled
-      
-      Instance "g_transfer0 Transfer (r_dtc) SCI0 TXI (Transmit data empty)"
-        Name: g_transfer0
-        Mode: Normal
-        Transfer Size: 1 Byte
-        Destination Address Mode: Fixed
-        Source Address Mode: Incremented
-        Repeat Area (Unused in Normal Mode): Source
-        Interrupt Frequency: After all transfers have completed
-        Number of Transfers: 0
-        Number of Blocks (Valid only in Block Mode): 0
-        Number of Transfer Descriptors: 1
-        Activation Source: SCI0 TXI (Transmit data empty)
-        
-      Instance "g_transfer1 Transfer (r_dtc) SCI0 RXI (Receive data full)"
-        Name: g_transfer1
-        Mode: Normal
-        Transfer Size: 1 Byte
-        Destination Address Mode: Incremented
-        Source Address Mode: Fixed
-        Repeat Area (Unused in Normal Mode): Destination
-        Interrupt Frequency: After all transfers have completed
-        Number of Transfers: 0
-        Number of Blocks (Valid only in Block Mode): 0
-        Number of Transfer Descriptors: 1
-        Activation Source: SCI0 RXI (Receive data full)
-        
     Instance "g_uart0 UART (r_sci_uart)"
       General: Name: g_uart0
       General: Channel: 9
@@ -581,3 +483,171 @@ FSP Configuration
       Interrupts: Transmit End Interrupt Priority: Priority 2
       Interrupts: Error Interrupt Priority: Priority 2
       
+    Instance "g_nfc_reader_ptx0 NFC IoT Reader on PTX (rm_nfc_reader_ptx)"
+      Name: g_nfc_reader_ptx0
+      NFC Poll Type: Type-A: Enabled
+      NFC Poll Type: Type-B: Enabled
+      NFC Poll Type: Type-V: Enabled
+      NFC Poll Type: Type-F: Enabled
+      Temperature Sensor: Calibrate Sensor: Enabled
+      Temperature Sensor: Shutdown Temperature (°C): 100
+      Temperature Sensor: Ambient Temperature (°C): 25
+      Set Polling Mode: 0
+      NFC Interrupt Port: Disabled
+      NFC Interrupt Pin: Disabled
+      Device Limit: 5
+      Idle Time: 100
+      
+      Instance "g_comms_spi_device0 SPI Communication Device (rm_comms_spi)"
+        Name: g_comms_spi_device0
+        SSL Port Number: Disabled
+        SSL Pin Number: Disabled
+        SSL Next Access Delay (Microseconds): 1
+        Slave Select Polarity: Active Low
+        Semaphore Timeout (RTOS only): 0xFFFFFFFF
+        Callback: ptxPLAT_SPI_TransferCallback
+        
+        Instance "ptx_pmod_spi SPI (r_sci_spi)"
+          Name: ptx_pmod_spi
+          Channel: 0
+          Operating Mode: Master
+          Clock Phase: Data sampling on odd edge, data variation on even edge
+          Clock Polarity: Low when idle
+          Mode Fault Error: Disable
+          Bit Order: MSB First
+          Callback: rm_comms_spi_callback
+          Receive Interrupt Priority: Priority 2
+          Transmit Interrupt Priority: Priority 2
+          Transmit End Interrupt Priority: Priority 2
+          Error Interrupt Priority: Priority 2
+          Bitrate: 1000000
+          Bitrate Modulation: Disabled
+          
+          Instance "g_transfer0 Transfer (r_dtc) SCI0 TXI (Transmit data empty)"
+            Name: g_transfer0
+            Mode: Normal
+            Transfer Size: 1 Byte
+            Destination Address Mode: Fixed
+            Source Address Mode: Incremented
+            Repeat Area (Unused in Normal Mode): Source
+            Interrupt Frequency: After all transfers have completed
+            Number of Transfers: 0
+            Number of Blocks (Valid only in Block Mode): 0
+            Number of Transfer Descriptors: 1
+            Activation Source: SCI0 TXI (Transmit data empty)
+            
+          Instance "g_transfer1 Transfer (r_dtc) SCI0 RXI (Receive data full)"
+            Name: g_transfer1
+            Mode: Normal
+            Transfer Size: 1 Byte
+            Destination Address Mode: Incremented
+            Source Address Mode: Fixed
+            Repeat Area (Unused in Normal Mode): Destination
+            Interrupt Frequency: After all transfers have completed
+            Number of Transfers: 0
+            Number of Blocks (Valid only in Block Mode): 0
+            Number of Transfer Descriptors: 1
+            Activation Source: SCI0 RXI (Receive data full)
+            
+        Instance "g_comms_spi_bus0 SPI Shared Bus (rm_comms_spi)"
+          Name: g_comms_spi_bus0
+          Bus Timeout: 0xFFFFFFFF
+          Semaphore for Blocking (RTOS only): Use
+          Recursive Mutex for Bus (RTOS only): Use
+          
+      Instance "g_timer1 Timer, Low-Power (r_agt)"
+        General: Name: g_timer1
+        General: Counter Bit Width: AGT 16-bit
+        General: Channel: 0
+        General: Mode: Periodic
+        General: Period: 0x10000
+        General: Period Unit: Raw Counts
+        Output: Duty Cycle Percent (only applicable in PWM mode): 50
+        General: Count Source: PCLKB
+        Output: AGTOA Output: Disabled
+        Output: AGTOB Output: Disabled
+        Output: AGTO Output: Disabled
+        Input: Measurement Mode: Measure Disabled
+        Input: Input Filter: No Filter
+        Input: Enable Pin: Enable Pin Not Used
+        Input: Trigger Edge: Trigger Edge Rising
+        Interrupts: Callback: ptxPLAT_TIMER_IsrCallback
+        Interrupts: Underflow Interrupt Priority: Priority 3
+        
+      Instance "g_timer0 Timer, General PWM (r_gpt)"
+        General: Name: g_timer0
+        General: Channel: 0
+        General: Mode: Periodic
+        General: Period: 0x10000
+        General: Compare Match: Compare Match A: Status: Disabled
+        General: Compare Match: Compare Match A: Compare match value: 0x10000
+        General: Compare Match: Compare Match B: Status: Disabled
+        General: Compare Match: Compare Match B: Compare match value: 0x10000
+        General: Compare Match: Compare Match C: Status: Disabled
+        General: Compare Match: Compare Match C: Compare match value: 0x10000
+        General: Compare Match: Compare Match D: Status: Disabled
+        General: Compare Match: Compare Match D: Compare match value: 0x10000
+        General: Compare Match: Compare Match E: Status: Disabled
+        General: Compare Match: Compare Match E: Compare match value: 0x10000
+        General: Compare Match: Compare Match F: Status: Disabled
+        General: Compare Match: Compare Match F: Compare match value: 0x10000
+        General: Period Unit: Raw Counts
+        Output: Custom Waveform: GTIOA: Initial Output Level: Pin Level Low
+        Output: Custom Waveform: GTIOA: Cycle End Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOA: Compare Match Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOA: Retain Output Level at Count Stop: Disabled
+        Output: Custom Waveform: GTIOB: Initial Output Level: Pin Level Low
+        Output: Custom Waveform: GTIOB: Cycle End Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOB: Compare Match Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOB: Retain Output Level at Count Stop: Disabled
+        Output: Custom Waveform: Custom Waveform Enable: Disabled
+        Output: Duty Cycle Percent (only applicable in PWM mode): 50
+        Output: GTIOCA Output Enabled: False
+        Output: GTIOCA Stop Level: Pin Level Low
+        Output: GTIOCB Output Enabled: False
+        Output: GTIOCB Stop Level: Pin Level Low
+        Input: Count Up Source: 
+        Input: Count Down Source: 
+        Input: Start Source: 
+        Input: Stop Source: 
+        Input: Clear Source: 
+        Input: Capture A Source: 
+        Input: Capture B Source: 
+        Input: Noise Filter A Sampling Clock Select: No Filter
+        Input: Noise Filter B Sampling Clock Select: No Filter
+        Pin Polarity: GTIOCnA Polarity: Normal
+        Pin Polarity: GTIOCnB Polarity: Normal
+        Interrupts: Callback: ptxPLAT_TIMER_IsrCallback
+        Interrupts: Overflow/Crest Interrupt Priority: Priority 3
+        Interrupts: Capture/Compare match A Interrupt Priority: Disabled
+        Interrupts: Capture/Compare match B Interrupt Priority: Disabled
+        Interrupts: Compare Match C Interrupt Priority: Disabled
+        Interrupts: Compare Match D Interrupt Priority: Disabled
+        Interrupts: Compare Match E Interrupt Priority: Disabled
+        Interrupts: Compare Match F Interrupt Priority: Disabled
+        Interrupts: Underflow/Trough Interrupt Priority: Disabled
+        Extra Features: Extra Features: Disabled
+        Extra Features: Output Disable: POEG Link: POEG Channel 0
+        Extra Features: Output Disable: Output Disable POEG Trigger: 
+        Extra Features: ADC Trigger: Start Event Trigger (Channels with GTINTAD only): 
+        Extra Features: ADC Trigger: ADC A Compare Match (Raw Counts): 0
+        Extra Features: ADC Trigger: ADC B Compare Match (Raw Counts): 0
+        Extra Features: Dead Time (Value range varies with Channel): Dead Time Count Up (Raw Counts): 0
+        Extra Features: Dead Time (Value range varies with Channel): Dead Time Count Down (Raw Counts) (Channels with GTDVD only): 0
+        Extra Features: Interrupt Skipping (Channels with GTITC only): Interrupt to Count: None
+        Extra Features: Interrupt Skipping (Channels with GTITC only): Interrupt Skip Count: 0
+        Extra Features: Interrupt Skipping (Channels with GTITC only): Skip ADC Events: None
+        Extra Features: Output Disable: GTIOCA Disable Setting: Disable Prohibited
+        Extra Features: Output Disable: GTIOCB Disable Setting: Disable Prohibited
+        
+      Instance "g_ext_irq External IRQ (r_icu)"
+        Name: g_ext_irq
+        Channel: 7
+        Trigger: Rising
+        Digital Filtering: Disabled
+        Filter Source: PCLK filter
+        Digital Filtering Sample Clock (Only valid when Digital Filtering is Enabled): PCLK / 64
+        Callback: ptxPLAT_GPIO_IsrCallback
+        Pin Interrupt Priority: Priority 2
+        
+      Instance "NFC Reader PTX SDK"

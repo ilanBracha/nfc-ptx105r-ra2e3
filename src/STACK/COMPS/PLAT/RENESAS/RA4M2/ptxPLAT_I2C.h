@@ -49,10 +49,10 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxStatus.h"
 #include <stddef.h>
-#include "ptxPLAT.h"
-#include "ptxPLAT_GPIO.h"
+#include <STACK/COMPS/ptxStatus.h>
+#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_GPIO.h>
 
 #ifdef __cplusplus
 extern "C" {

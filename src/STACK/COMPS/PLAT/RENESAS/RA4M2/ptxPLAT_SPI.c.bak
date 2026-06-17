@@ -285,13 +285,15 @@ ptxStatus_t ptxPLAT_SPI_StopWaitForRx(ptxPLAT_Spi_t *spi)
     return status;
 }
 
-void ptxPLAT_SPI_TransferCallback(spi_callback_args_t *p_args)
+void ptxPLAT_SPI_TransferCallback(rm_comms_callback_args_t *p_args)
 {
-    if((NULL != p_args) && (PTX_PLAT_SPI_CHANNEL == p_args->channel))
+    if (NULL != p_args)
     {
-        switch(p_args->event)
+        switch (p_args->event)
         {
-            case SPI_EVENT_TRANSFER_COMPLETE:
+            case RM_COMMS_EVENT_OPERATION_COMPLETE:
+            case RM_COMMS_EVENT_TX_OPERATION_COMPLETE:
+            case RM_COMMS_EVENT_RX_OPERATION_COMPLETE:
                 ptxPLAT_SPI_SetTRxState(&spi_ctx, 1u);
                 break;
 

@@ -54,10 +54,10 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxCOMMON.h"
-#include "ptx_IOT_READER.h"
-#include "ptxHce.h"
-#include "ptxT4T.h"
+#include <STACK/COMPS/COMMON/ptxCOMMON.h>
+#include <STACK/COMPS/COMMON/ptxT4T.h>
+#include <STACK/COMPS/HCE/ptxHce.h>
+#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
 
 #ifdef __cplusplus
 extern "C" {

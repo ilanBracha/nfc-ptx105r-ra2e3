@@ -46,10 +46,9 @@
  * ####################################################################################################################
  */
 
-#include "ptxHCE_Loopback.h"
-
-#include "ptxCOMMON.h"
-#include "ptxHCE_ISO7816.h"
+#include <STACK/COMPS/COMMON/ptxCOMMON.h>
+#include <STACK/COMPS/COMMON/ptxHCE_ISO7816.h>
+#include <STACK/EXAMPLE/COMMON/ptxHCE_Loopback.h>
 
 /*
  * ####################################################################################################################
@@ -63,7 +62,7 @@
 //#define ENABLE_PRINTF_OPTION
 
 #ifdef ENABLE_PRINTF_OPTION
-    #include "ptxDBG_PORT.h"
+    #include <STACK/EXAMPLE/DEBUG_PORT/ptxDBG_PORT.h>
     #include <stdarg.h>
     #include <stdio.h>
 #endif

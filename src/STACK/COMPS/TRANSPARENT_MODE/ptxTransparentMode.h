@@ -56,7 +56,7 @@
  */
 
 #include <stdint.h>
-#include "ptxStatus.h"
+#include <STACK/COMPS/ptxStatus.h>
 
 #ifdef __cplusplus
 extern "C" {

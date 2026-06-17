@@ -49,10 +49,10 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxStatus.h"
 #include <stddef.h>
-#include "ptxPLAT.h"
-#include "ptxPLAT_GPIO.h"
+#include <STACK/COMPS/ptxStatus.h>
+#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_GPIO.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,6 +64,11 @@ extern "C" {
  * ####################################################################################################################
  */
 #define PTX_HAL_SPI_DUMMY       (0x55u)         /**< Dummy value used for SPI. */
+
+/* Forward declaration to break circular include with ptxPLAT_GPIO.h
+ * (ptxPLAT_GPIO.h -> ptxPLAT_EXT.h -> hal_data.h -> rm_nfc_reader_ptx.h -> ptxPLAT_SPI.h)
+ */
+struct ptxPlatGpio;
 
 typedef struct ptxPLAT_SpiPin
 {
@@ -96,7 +101,7 @@ typedef struct ptxPLAT_Spi
 {
     uint32_t                IntfSpeed;      /**< Clock speed in Hz to be configured. */
     ptxPLAT_SpiPort_t       *SpiPortUsed;   /**< SPI port used. */
-    ptxPlatGpio_t           *Gpio;          /**< Pointer to GPIO-IRQ Context. Platform dependent. */
+    struct ptxPlatGpio      *Gpio;          /**< Pointer to GPIO-IRQ Context. Platform dependent. */
     pptxPlat_RxCallBack_t   RxCb;           /**< Rx Callback function. */
     void                    *CtxRxCb;       /**< Rx Callback Context. */
     volatile uint8_t        TransferState;  /**< Current state of the ongoing transfer. */

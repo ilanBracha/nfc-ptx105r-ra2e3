@@ -50,9 +50,9 @@
  * ####################################################################################################################
  */
 #include "ptxPLAT.h"
-#include "ptxPLAT_I2C.h"
-#include "ptxPLAT_EXT.h"
 #include <string.h>
+#include <STACK/COMPS/PLAT/ptxPLAT_EXT.h>
+#include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_I2C.h>
 
 /*
  * ####################################################################################################################

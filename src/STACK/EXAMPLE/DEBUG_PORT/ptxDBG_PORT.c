@@ -45,9 +45,9 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxDBG_PORT.h"
-#include "ptxPLAT_EXT.h"
 #include <string.h>
+#include <STACK/COMPS/PLAT/ptxPLAT_EXT.h>
+#include <STACK/EXAMPLE/DEBUG_PORT/ptxDBG_PORT.h>
 
 /*
  * ####################################################################################################################
