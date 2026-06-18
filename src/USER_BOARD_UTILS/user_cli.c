@@ -29,9 +29,19 @@ extern void ptxCommon_PrintF(const char *format, ...);
  * CONFIG
  * ####################################################################################################################
  */
-#define CLI_LINE_MAX        120u
-#define CLI_PROMPT          "$ "
-#define CLI_NEWLINE         "\r\n"
+#define USER_CLI_COLOR_KNRM  "\x1B[0m"
+#define USER_CLI_COLOR_KRED  "\x1B[31m"
+#define USER_CLI_COLOR_KGRN  "\x1B[32m"
+#define USER_CLI_COLOR_KYEL  "\x1B[33m"
+#define USER_CLI_COLOR_KBLU  "\x1B[34m"
+#define USER_CLI_COLOR_KMAG  "\x1B[35m"
+#define USER_CLI_COLOR_KCYN  "\x1B[36m"
+#define USER_CLI_COLOR_KWHT  "\x1B[37m"
+
+#define CLI_LINE_MAX         120u
+#define CLI_PROMPT           "$ "
+#define CLI_NEWLINE          "\r\n"
+
 
 /*
  * ####################################################################################################################
@@ -173,26 +183,26 @@ static void cmd_erase (const char *args)
     }
 }
 
-static void cmd_ledon (const char *args)
-{
-    (void)args;
-    UserBoardUtils_SetStatusLed(LED_ACTIVE);
-    cli_write("status LED: ON" CLI_NEWLINE);
-}
-
-static void cmd_ledoff (const char *args)
-{
-    (void)args;
-    UserBoardUtils_SetStatusLed(LED_INACTIVE);
-    cli_write("status LED: OFF" CLI_NEWLINE);
-}
-
-static void cmd_blink (const char *args)
-{
-    (void)args;
-    UserBoardUtils_BlinkAllLeds();
-    cli_write("blink: done" CLI_NEWLINE);
-}
+//static void cmd_ledon (const char *args)
+//{
+//    (void)args;
+//    UserBoardUtils_SetStatusLed(LED_ACTIVE);
+//    cli_write("status LED: ON" CLI_NEWLINE);
+//}
+//
+//static void cmd_ledoff (const char *args)
+//{
+//    (void)args;
+//    UserBoardUtils_SetStatusLed(LED_INACTIVE);
+//    cli_write("status LED: OFF" CLI_NEWLINE);
+//}
+//
+//static void cmd_blink (const char *args)
+//{
+//    (void)args;
+//    UserBoardUtils_BlinkAllLeds();
+//    cli_write("blink: done" CLI_NEWLINE);
+//}
 
 static void cmd_menu (const char *args)
 {
@@ -217,9 +227,9 @@ static const cli_cmd_t s_cmds[] =
     { "version", cmd_version, "firmware identification"        },
     { "write",   cmd_write,   "write \"text\" to next tag"     },
     { "erase",   cmd_erase,   "arm: erase NDEF of the next tag"},
-    { "lon",     cmd_ledon,   "turn the status LED on"         },
-    { "loff",    cmd_ledoff,  "turn the status LED off"        },
-    { "blink",   cmd_blink,   "blink all board LEDs once"      },
+//    { "lon",     cmd_ledon,   "turn the status LED on"         },
+//    { "loff",    cmd_ledoff,  "turn the status LED off"        },
+//    { "blink",   cmd_blink,   "blink all board LEDs once"      },
     { "reboot",  cmd_reboot,  "soft-reset the MCU"             },
 };
 #define CLI_CMD_COUNT (sizeof(s_cmds) / sizeof(s_cmds[0]))
@@ -285,7 +295,7 @@ static void cli_handle_byte(uint8_t b)
             cli_dispatch(s_line);
         }
         s_line_len = 0u;
-        cli_write(CLI_PROMPT);
+        cli_write(USER_CLI_COLOR_KGRN CLI_PROMPT);
         return;
     }
 
@@ -326,6 +336,7 @@ static void cli_handle_byte(uint8_t b)
  */
 void UserCli_PrintMenu(void)
 {
+    cli_write(USER_CLI_COLOR_KCYN);
     cli_write(CLI_NEWLINE);
     cli_write("=== PTX IoT Reader CLI ===" CLI_NEWLINE);
     for (size_t i = 0u; i < CLI_CMD_COUNT; i++)
@@ -339,7 +350,8 @@ void UserCli_PrintMenu(void)
         cli_write(s_cmds[i].help);
         cli_write(CLI_NEWLINE);
     }
-    cli_write(CLI_PROMPT);
+//    cli_write(CLI_PROMPT);
+    cli_write(USER_CLI_COLOR_KNRM);
 }
 
 void UserCli_Init(void)
