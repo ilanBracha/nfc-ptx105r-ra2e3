@@ -15,7 +15,7 @@
  #include "ptxPLAT.h"
  #include "r_timer_api.h"
  #include <stddef.h>
-#include <STACK/COMPS/ptxStatus.h>
+ #include "ptxStatus.h"
 
  #ifdef __cplusplus
 extern "C" {

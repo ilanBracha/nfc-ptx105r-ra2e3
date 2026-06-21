@@ -46,8 +46,8 @@
  * ####################################################################################################################
  */
 
-#include <STACK/COMPS/COMMON/ptxCOMMON.h>
-#include <STACK/COMPS/COMMON/ptxHCE_ISO7816.h>
+#include "ptxCOMMON.h"
+#include "ptxHCE_ISO7816.h"
 #include <STACK/EXAMPLE/COMMON/ptxHCE_Loopback.h>
 
 /*

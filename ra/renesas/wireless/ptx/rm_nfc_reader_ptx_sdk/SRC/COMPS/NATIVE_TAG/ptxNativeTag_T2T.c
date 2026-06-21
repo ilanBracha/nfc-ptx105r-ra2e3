@@ -48,7 +48,7 @@
  */
 #include "ptxNativeTag_T2T.h"
 #include <string.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
+#include "ptx_IOT_READER.h"
 
 /*
  * ####################################################################################################################

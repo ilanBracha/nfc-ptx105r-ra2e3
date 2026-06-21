@@ -47,9 +47,9 @@
  */
 
 #include <string.h>
-#include <STACK/COMPS/NSC/ptxNSC.h>
-#include <STACK/COMPS/NSC/ptxNSC_Hal.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxNSC.h"
+#include "ptxNSC_Hal.h"
+#include "ptxPLAT.h"
 
 
 /*

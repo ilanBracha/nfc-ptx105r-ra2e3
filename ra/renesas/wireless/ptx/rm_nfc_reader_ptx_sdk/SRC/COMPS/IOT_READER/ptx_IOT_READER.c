@@ -50,11 +50,11 @@
 #include "ptx_IOT_READER.h"
 #include <string.h>
 #include <stdlib.h>
-#include <STACK/COMPS/NSC/NSC_RD/ptxNSC_Rd.h>
-#include <STACK/COMPS/NSC/ptxNSC.h>
-#include <STACK/COMPS/NSC/ptxNSC_Registers.h>
-#include <STACK/COMPS/NSC/ptxNSC_System.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxNSC_Rd.h"
+#include "ptxNSC.h"
+#include "ptxNSC_Registers.h"
+#include "ptxNSC_System.h"
+#include "ptxPLAT.h"
 #include "SEGGER_RTT.h"
 
 /*

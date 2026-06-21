@@ -50,7 +50,7 @@
 #define PTXNSC_SYSTEM_H_
 
 #include <stddef.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxStatus.h"
 
 #ifdef __cplusplus
 extern "C" {

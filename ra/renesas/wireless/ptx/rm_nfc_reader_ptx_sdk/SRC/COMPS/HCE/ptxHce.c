@@ -50,12 +50,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <STACK/COMPS/NSC/NSC_CE/ptxNSC_CE.h>
-#include <STACK/COMPS/NSC/ptxNSC.h>
-#include <STACK/COMPS/NSC/ptxNSC_Hal.h>
-#include <STACK/COMPS/NSC/ptxNSC_System.h>
-#include <STACK/COMPS/ptxStatus.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxNSC_CE.h"
+#include "ptxNSC.h"
+#include "ptxNSC_Hal.h"
+#include "ptxNSC_System.h"
+#include "ptxStatus.h"
+#include "ptxPLAT.h"
 
 
 /*

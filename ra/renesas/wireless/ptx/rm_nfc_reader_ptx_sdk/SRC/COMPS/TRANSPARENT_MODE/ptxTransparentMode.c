@@ -47,8 +47,8 @@
  */
 #include "ptxTransparentMode.h"
 #include <string.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
-#include <STACK/COMPS/NSC/ptxNSC_Registers.h>
+#include "ptx_IOT_READER.h"
+#include "ptxNSC_Registers.h"
 
 /*
  * ####################################################################################################################

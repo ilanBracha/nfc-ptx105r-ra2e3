@@ -56,8 +56,8 @@
  */
 
 #include <stdint.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T5T.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxNativeTag_T5T.h"
+#include "ptxStatus.h"
 #include "ptxNDEF_Defines.h"
 
 #ifdef __cplusplus

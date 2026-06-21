@@ -48,7 +48,7 @@
 #include "ptxNSC_Rd.h"
 #include <string.h>
 #include <stdlib.h>
-#include <STACK/COMPS/NSC/ptxNSC.h>
+#include "ptxNSC.h"
 
 /*
  * ####################################################################################################################

@@ -56,8 +56,8 @@
  */
 
 #include <stdint.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptx_IOT_READER.h"
+#include "ptxStatus.h"
 #include "ptxNDEF_T2TOP.h"
 #include "ptxNDEF_T3TOP.h"
 #include "ptxNDEF_T4TOP.h"

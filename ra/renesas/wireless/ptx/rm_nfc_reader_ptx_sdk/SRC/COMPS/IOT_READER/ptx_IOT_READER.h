@@ -55,9 +55,9 @@
  * ####################################################################################################################
  */
 #include <stddef.h>
-#include <STACK/COMPS/HCE/ptxHce.h>
-#include <STACK/COMPS/NSC/ptxNSC.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxHce.h"
+#include "ptxNSC.h"
+#include "ptxStatus.h"
 
 #ifdef __cplusplus
 extern "C" {

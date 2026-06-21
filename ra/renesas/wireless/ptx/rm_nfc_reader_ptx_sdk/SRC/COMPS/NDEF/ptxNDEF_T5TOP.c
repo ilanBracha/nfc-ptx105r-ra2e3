@@ -48,8 +48,8 @@
  */
 #include "ptxNDEF_T5TOP.h"
 #include <string.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T5T.h>
+#include "ptx_IOT_READER.h"
+#include "ptxNativeTag_T5T.h"
 
 /*
  * ####################################################################################################################

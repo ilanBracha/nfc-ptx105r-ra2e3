@@ -45,7 +45,7 @@
  * INCLUDES AND DEFINES
  * ####################################################################################################################
  */
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxStatus.h"
 #include "ptxHce_Exchange.h"
 #include "ptxCOMMON.h"
 

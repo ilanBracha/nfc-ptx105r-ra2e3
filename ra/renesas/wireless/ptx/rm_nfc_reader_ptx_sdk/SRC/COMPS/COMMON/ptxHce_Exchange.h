@@ -55,8 +55,8 @@
  * ####################################################################################################################
  */
 
-#include <STACK/COMPS/HCE/ptxHce.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxHce.h"
+#include "ptxStatus.h"
 #include "ptxT4T.h"
 
 #ifdef __cplusplus

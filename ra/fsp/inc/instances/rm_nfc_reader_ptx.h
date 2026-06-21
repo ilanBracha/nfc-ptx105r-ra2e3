@@ -15,16 +15,16 @@
 /***********************************************************************************************************************
  * Includes
  **********************************************************************************************************************/
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T2T.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T3T.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T4T.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T5T.h>
-#include <STACK/COMPS/NDEF/ptxNDEF.h>
-#include <STACK/COMPS/PERIPHERALS/RA4M2/ptxPERIPH_APPTIMER.h>
-#include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_GPIO.h>
-#include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_SPI.h>
-#include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_TIMER.h>
+#include "ptx_IOT_READER.h"
+#include "ptxNativeTag_T2T.h"
+#include "ptxNativeTag_T3T.h"
+#include "ptxNativeTag_T4T.h"
+#include "ptxNativeTag_T5T.h"
+#include "ptxNDEF.h"
+#include "ptxPLAT_GPIO.h"
+#include "ptxPLAT_SPI.h"
+#include "ptxPLAT_TIMER.h"
+#include "ptxPERIPH_APPTIMER.h"
 #include "rm_nfc_reader_ptx_cfg.h"
 
 /* Common macro for FSP header files. There is also a corresponding FSP_FOOTER macro at the end of this file. */

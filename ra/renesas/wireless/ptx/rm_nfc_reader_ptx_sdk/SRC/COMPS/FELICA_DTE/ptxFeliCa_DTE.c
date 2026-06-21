@@ -47,8 +47,8 @@
  */
 #include "ptxFeliCa_DTE.h"
 #include <string.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptx_IOT_READER.h"
+#include "ptxPLAT.h"
 
 
 /*

@@ -59,7 +59,7 @@
 #include "ptxNSC_Hal.h"
 #include <stddef.h>
 #include <stdint.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxStatus.h"
 
 #ifdef __cplusplus
 extern "C" {

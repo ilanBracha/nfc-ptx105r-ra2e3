@@ -143,19 +143,18 @@
 
 #include "user_board_utils.h"
 #include "user_cli.h"
-
 #include <string.h>
-#include <STACK/COMPS/COMMON/ptxCOMMON.h>
-#include <STACK/COMPS/COMMON/ptxIoTRd_COMMON.h>
-#include <STACK/COMPS/COMMON/ptxT4T.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
-#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T5T.h>
-#include <STACK/COMPS/NDEF/ptxNDEF.h>
-#include <STACK/COMPS/NDEF/ptxNDEF_T2TOP.h>
-#include <STACK/COMPS/NDEF/ptxNDEF_T3TOP.h>
-#include <STACK/COMPS/NDEF/ptxNDEF_T4TOP.h>
-#include <STACK/COMPS/NDEF/ptxNDEF_T5TOP.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxCOMMON.h"
+#include "ptxIoTRd_COMMON.h"
+#include "ptxT4T.h"
+#include "ptx_IOT_READER.h"
+#include "ptxNativeTag_T5T.h"
+#include "ptxNDEF.h"
+#include "ptxNDEF_T2TOP.h"
+#include "ptxNDEF_T3TOP.h"
+#include "ptxNDEF_T4TOP.h"
+#include "ptxNDEF_T5TOP.h"
+#include "ptxPLAT.h"
 #include <STACK/EXAMPLE/COMMON/ptxHCE_Loopback.h>
 #include <STACK/EXAMPLE/IOT_APP/ptx_IOT_RD_Main.h>
 
@@ -573,7 +572,7 @@ static inline uint8_t ptxIoTRdInt_TlvFind(const uint8_t *buf, uint32_t len, uint
 /*
  * Compare an NDEF type field against a C-string literal.
  */
-static inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const char *s)
+inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const char *s)
 {
     uint32_t n = 0;
     while (s[n] != '\0') { n++; }
@@ -588,7 +587,7 @@ static inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, 
 /*
  * Case-sensitive "string starts with prefix" for a (non null-terminated) buffer.
  */
-static inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const char *prefix)
+inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const char *prefix)
 {
     uint32_t n = 0;
     while (prefix[n] != '\0')
@@ -603,7 +602,7 @@ static inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, 
  * Search a Wi-Fi Simple Config (WSC) TLV blob for a given attribute id.
  * Recurses into the Credential attribute (0x100E). Big-endian 2-byte type/len.
  */
-static uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t want,
+inline uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t want,
                                    const uint8_t **val, uint16_t *vlen)
 {
     uint32_t i = 0;
@@ -626,7 +625,7 @@ static uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t wa
 /*
  * Decode a Wi-Fi Simple Config (vnd.wfa.wsc) MIME record.
  */
-static inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
+inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
 {
     const uint8_t *v;
     uint16_t vl;
@@ -693,7 +692,7 @@ static inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
  * Decode a Bluetooth OOB (BR/EDR or LE) MIME record. Prints device address
  * (BR/EDR) and local name (from EIR/AD structures) if present.
  */
-static inline void ptxIoTRdInt_PrintBt(const uint8_t *p, uint32_t len, uint8_t isLE)
+inline void ptxIoTRdInt_PrintBt(const uint8_t *p, uint32_t len, uint8_t isLE)
 {
     ptxCommon_PrintF("    Value   : Bluetooth %s\n", isLE ? "LE" : "BR/EDR");
 

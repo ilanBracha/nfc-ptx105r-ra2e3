@@ -13,7 +13,7 @@
  * ####################################################################################################################
  */
  #include <stddef.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxStatus.h"
 
  #ifdef __cplusplus
 extern "C" {
@@ -25,7 +25,7 @@ extern "C" {
  * ####################################################################################################################
  */
 
- #define PTX_INTF_SPI                                     /**< Adding this define for the SDK in place of pre-processor macro */
+// #define PTX_INTF_SPI                                     /**< Adding this define for the SDK in place of pre-processor macro */
 
 /**
  * \brief Platform-specific flags parameter initializers.

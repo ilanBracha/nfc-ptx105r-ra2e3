@@ -46,7 +46,7 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include <STACK/COMPS/PERIPHERALS/RA4M2/ptxPERIPH_APPTIMER.h>
+#include "ptxPERIPH_APPTIMER.h"
 #include "ptxTDC_Timer.h"
 
 /*

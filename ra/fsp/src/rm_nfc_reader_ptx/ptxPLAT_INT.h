@@ -7,7 +7,7 @@
 #ifndef COMPS_PLAT_PTXPLAT_INT_H_
  #define COMPS_PLAT_PTXPLAT_INT_H_
 
- #include <STACK/COMPS/ptxStatus.h>
+ #include "ptxStatus.h"
 #include "ptxPLAT.h"
 
  #if defined(PTX_INTF_UART)

@@ -49,7 +49,7 @@
 #include "ptxNativeTag_T4T.h"
 #include <string.h>
 #include <stdlib.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
+#include "ptx_IOT_READER.h"
 
 /*
  * ####################################################################################################################

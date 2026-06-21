@@ -49,7 +49,7 @@
 #include "ptxTDC.h"
 #include "ptxTDC_Timer.h"
 #include <string.h>
-#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
+#include "ptx_IOT_READER.h"
 
 /*
  * ####################################################################################################################

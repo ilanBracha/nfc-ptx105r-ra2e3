@@ -56,9 +56,9 @@
 #include <string.h>
 #include "SEGGER_RTT.h"
 #include <stdlib.h>
-#include <STACK/COMPS/ptxPlatform_Revision.h>
-#include <STACK/COMPS/ptxStatus.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxPlatform_Revision.h"
+#include "ptxStatus.h"
+#include "ptxPLAT.h"
 
 /*
  * ####################################################################################################################

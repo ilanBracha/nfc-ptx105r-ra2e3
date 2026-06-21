@@ -16,7 +16,7 @@
  #include "r_ioport_api.h"
  #include "ptxPLAT_GPIO.h"
  #include <stddef.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxStatus.h"
  #include "ptxPLAT.h"
 
  #ifdef __cplusplus

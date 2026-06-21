@@ -58,7 +58,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <STACK/COMPS/ptxStatus.h>
+#include "ptxStatus.h"
 
 #ifdef __cplusplus
 extern "C" {

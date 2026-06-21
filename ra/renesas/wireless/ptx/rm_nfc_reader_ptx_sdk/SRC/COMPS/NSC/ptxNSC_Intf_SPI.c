@@ -51,8 +51,8 @@
 #include "ptxNSC_Hal.h"
 #include "ptxNSC_Registers.h"
 #include <stdlib.h>
-#include <STACK/COMPS/ptxStatus.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxStatus.h"
+#include "ptxPLAT.h"
 
 /*
  * ####################################################################################################################

@@ -47,7 +47,7 @@
  */
 #include "ptxNSC_CE.h"
 #include <string.h>
-#include <STACK/COMPS/NSC/ptxNSC.h>
+#include "ptxNSC.h"
 
 /*
  * ####################################################################################################################

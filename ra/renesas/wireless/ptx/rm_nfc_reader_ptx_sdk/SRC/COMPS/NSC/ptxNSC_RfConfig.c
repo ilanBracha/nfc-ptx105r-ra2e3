@@ -50,7 +50,7 @@
 #include "ptxNSC_Hal.h"
 #include <string.h>
 #include <stdlib.h>
-#include <STACK/COMPS/PLAT/ptxPLAT.h>
+#include "ptxPLAT.h"
 
 /*
  * ####################################################################################################################
