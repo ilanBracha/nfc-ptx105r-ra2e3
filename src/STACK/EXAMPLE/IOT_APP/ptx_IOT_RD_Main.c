@@ -184,6 +184,39 @@
 #define DEFAULT_APP_TIMEOUT_RAW                 (uint32_t)200                 /**< Application-timeout for raw-protocols */
 #define DEFAULT_APP_TIMEOUT_PROT                (uint32_t)50000               /**< Application-timeout for standard-protocols */
 
+/*
+ * ####################################################################################################################
+ * SDK COMPATIBILITY EXCEPTIONS
+ * ####################################################################################################################
+ *
+ * The application is driven through the ra/fsp RM_NFC_READER_PTX_* wrappers.
+ * The following pieces have NO equivalent in the ra/fsp API surface and are
+ * therefore - by design - the only places that still touch the ra/renesas PTX
+ * SDK directly. They are intentionally kept and documented here so the
+ * dependency is centralized and reviewable:
+ *
+ *   1. Logging            : ptxCommon_PrintF / ptxCommon_Print_Buffer /
+ *                           ptxCommon_PrintStatusMessage (no FSP logging API).
+ *   2. Revision banner    : ptxIoTRd_Get_Revision_Info  (no FSP revision getter)
+ *                           -> isolated in ptxIoTRdInt_Print_Revision_Info().
+ *   3. Host Card Emulation: ptxT4T_Init / ptxT4T_DeInit and ptxHce_EmulateT4T
+ *                           (no FSP HCE API) -> isolated in ptxAPP_HceT4T_Init()/
+ *                           ptxAPP_HceT4T_DeInit() and the HCE demo-state helper.
+ *   4. Cold-boot init     : a single ptxIoTRd_Init() retry inside
+ *                           ptxAPP_ReaderOpen() (see that function for details).
+ *
+ * If/when ra/fsp grows equivalents for these, the wrappers below are the only
+ * call sites that need updating.
+ */
+
+/*
+ * Mirrors the (private) NFC_READER_PTX_OPEN "module is open" marker used inside
+ * ra/fsp/.../rm_nfc_reader_ptx.c, which is the ASCII string "NFC". It is derived
+ * from the characters instead of hard-coding the literal 0x4E4643, so it stays
+ * correct even if the raw value is ever re-expressed, and documents intent.
+ */
+#define PTX_APP_NFC_READER_OPEN_FLAG            ((uint32_t)(((uint32_t)'N' << 16) | ((uint32_t)'F' << 8) | (uint32_t)'C'))
+
 /**
  * Default NDEF-File
  */
@@ -257,6 +290,96 @@ static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx,
                                     : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
 }
 
+/*
+ * Open the IoT-Reader through the FSP wrapper, with the documented cold-boot
+ * recovery isolated here (the single ptxIoTRd_Init() SDK exception).
+ *
+ * RM_NFC_READER_PTX_Open() opens the peripherals, downloads the NSC firmware
+ * and performs a FIRST ptxIoTRd_Init(). On a cold boot that first init does
+ * not complete the NSC bring-up and Open() returns FSP_ERR_INVALID_DATA (0x25)
+ * even though the peripherals and FW download succeeded. The legacy application
+ * masked this by running a SECOND ptxIoTRd_Init() on a fresh context; we
+ * replicate exactly that:
+ *   - clear iotRd->Plat / iotRd->Nsc so ptxIoTRd_Init() re-runs
+ *     ptxPLAT_AllocAndInit() + ptxIoTRd_InitNSC() (re-initializing the NSC
+ *     RX/IRQ machinery the FW-download handshake needs). We do NOT call a full
+ *     ptxIoTRd_Deinit() so the static SPI port context set up by Open() is
+ *     preserved.
+ *   - on success, mark the FSP control block open (open = "NFC", state = IDLE;
+ *     p_cfg was already set by Open() before the first init failed) so the rest
+ *     of the application can keep using the RM_NFC_READER_PTX_* wrappers.
+ *
+ * RM_NFC_READER_PTX_Open() lives in ra/fsp and cannot be modified, so this
+ * retry is an unavoidable, contained SDK exception.
+ */
+static fsp_err_t ptxAPP_ReaderOpen(ptxIoTRd_t *iotRd)
+{
+    fsp_err_t fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
+
+    if (FSP_ERR_INVALID_DATA == fsp_err)
+    {
+        ptxIoTRd_InitPars_t            retry_init;
+        ptxIoTRd_TempSense_Params_t    retry_temp;
+        ptxIoTRd_ComInterface_Params_t retry_intf;
+
+        (void)memset(&retry_init, 0, sizeof(retry_init));
+        (void)memset(&retry_temp, 0, sizeof(retry_temp));
+        (void)memset(&retry_intf, 0, sizeof(retry_intf));
+
+#if defined (PTX_INTF_UART)
+        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_UART_115200;
+#elif defined(PTX_INTF_SPI)
+        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_SPI_1M;
+#elif defined(PTX_INTF_I2C)
+        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_I2C_100000;
+        retry_intf.DeviceAddress = 0x4FU;
+#endif
+        retry_temp.Calibrate = 1u;
+        retry_temp.Tambient  = 25;
+        retry_temp.Tshutdown = 100;
+        retry_init.TemperatureSensor = &retry_temp;
+        retry_init.ComInterface      = &retry_intf;
+
+        /* Force a fresh platform + NSC bring-up (see function header). */
+        iotRd->Plat = NULL;
+        iotRd->Nsc  = NULL;
+
+        ptxStatus_t retry_st = ptxIoTRd_Init(iotRd, &retry_init);
+        ptxCommon_PrintF("[INIT] Open=0x%04X retry ptxIoTRd_Init=0x%04X (Comp=%u, St=%u)\n",
+                         (unsigned)fsp_err, (unsigned)retry_st,
+                         (unsigned)((retry_st >> 8) & 0xFFu), (unsigned)(retry_st & 0xFFu));
+
+        if (ptxStatus_Success == retry_st)
+        {
+            g_nfc_reader_ptx0_ctrl.open       = PTX_APP_NFC_READER_OPEN_FLAG;
+            g_nfc_reader_ptx0_ctrl.state_flag = NFC_READER_PTX_IDLE;
+            fsp_err                           = FSP_SUCCESS;
+        }
+    }
+
+    return fsp_err;
+}
+
+#if defined(USE_PTX_IOTRD_DEMO)
+/*
+ * Host Card Emulation T4T tag-object setup/teardown. ptxT4T_Init/_DeInit have
+ * no ra/fsp equivalent (FSP exposes no HCE API), so these thin wrappers isolate
+ * that SDK exception for the HCE branch of the demo loop.
+ */
+static void ptxAPP_HceT4T_Init(ptxT4T_t *t4t)
+{
+    ptxT4T_InitParams_t params;
+    params.DefaultNDEFMessage       = NDEF_FILE_TEMPLATE;
+    params.DefaultNDEFMessageLength = NDEF_FILE_TEMPLATE_SIZE;
+    (void)ptxT4T_Init(t4t, &params);
+}
+
+static void ptxAPP_HceT4T_DeInit(ptxT4T_t *t4t)
+{
+    (void)ptxT4T_DeInit(t4t);
+}
+#endif /* USE_PTX_IOTRD_DEMO */
+
 int ptxAPP_Entry(void)
 {
     ptxIOT_READER_App();
@@ -287,78 +410,11 @@ void ptxIOT_READER_App(void)
     (void)memset(&rf_disc_config, 0, sizeof(ptxIoTRd_DiscConfig_t));
 
     /*
-     * Initialize low-level peripherals and the IoT-Reader system.
-     * RM_NFC_READER_PTX_Open() internally performs ptxIoTRd_Init() using the
-     * temperature-sensor / communication-interface settings from the FSP cfg.
+     * Initialize low-level peripherals and the IoT-Reader system through the
+     * FSP wrapper. ptxAPP_ReaderOpen() also contains the documented cold-boot
+     * recovery (the single ptxIoTRd_Init() SDK exception).
      */
-    fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
-
-    /*
-     * Cold-boot recovery for the FSP Open():
-     * RM_NFC_READER_PTX_Open() opens the peripherals, downloads the NSC
-     * firmware and then performs a FIRST ptxIoTRd_Init(). On a cold boot that
-     * first init does not complete the NSC bring-up and Open() returns
-     * FSP_ERR_INVALID_DATA (0x25), even though the peripherals and FW download
-     * succeeded. The legacy application masked this by running a SECOND
-     * ptxIoTRd_Init(); we replicate exactly that here to finish bring-up, then
-     * mark the FSP control block as open so the remainder of the application
-     * can keep using the RM_NFC_READER_PTX_* wrappers.
-     *
-     * NOTE: RM_NFC_READER_PTX_Open() lives in ra/fsp and cannot be modified,
-     * so this single ptxIoTRd_Init() retry is an unavoidable SDK call.
-     */
-    if (FSP_ERR_INVALID_DATA == fsp_err)
-    {
-        ptxIoTRd_InitPars_t            retry_init;
-        ptxIoTRd_TempSense_Params_t    retry_temp;
-        ptxIoTRd_ComInterface_Params_t retry_intf;
-
-        (void)memset(&retry_init, 0, sizeof(retry_init));
-        (void)memset(&retry_temp, 0, sizeof(retry_temp));
-        (void)memset(&retry_intf, 0, sizeof(retry_intf));
-
-#if defined (PTX_INTF_UART)
-        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_UART_115200;
-#elif defined(PTX_INTF_SPI)
-        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_SPI_1M;
-#elif defined(PTX_INTF_I2C)
-        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_I2C_100000;
-        retry_intf.DeviceAddress = 0x4FU;
-#endif
-        retry_temp.Calibrate = 1u;
-        retry_temp.Tambient  = 25;
-        retry_temp.Tshutdown = 100;
-        retry_init.TemperatureSensor = &retry_temp;
-        retry_init.ComInterface      = &retry_intf;
-
-        /*
-         * Force a fresh platform + NSC bring-up on ptx_nfc_context, exactly like
-         * the legacy code's second ptxIoTRd_Init() on a fresh context. Open()'s
-         * first init left Plat/Nsc non-NULL, which makes ptxIoTRd_Init() SKIP
-         * ptxPLAT_AllocAndInit()/ptxIoTRd_InitNSC() - so the NSC RX/IRQ machinery
-         * is not re-initialized and the FW-download handshake times out
-         * (ptxStatus_TimeOut). Clearing the pointers (WITHOUT a full Deinit, so
-         * the static SPI port context set up by Open() is preserved) makes the
-         * retry re-run those init steps.
-         */
-        iotRd->Plat = NULL;
-        iotRd->Nsc  = NULL;
-
-        ptxStatus_t retry_st = ptxIoTRd_Init(iotRd, &retry_init);
-        ptxCommon_PrintF("[INIT] Open=0x%04X retry ptxIoTRd_Init=0x%04X (Comp=%u, St=%u)\n",
-                         (unsigned)fsp_err, (unsigned)retry_st,
-                         (unsigned)((retry_st >> 8) & 0xFFu), (unsigned)(retry_st & 0xFFu));
-
-        if (ptxStatus_Success == retry_st)
-        {
-            /* Mark the FSP control block open (matches RM_NFC_READER_PTX_Open's
-             * success path: open = ASCII "NFC", state = IDLE; p_cfg was already
-             * set by Open() before the first init failed). */
-            g_nfc_reader_ptx0_ctrl.open       = (uint32_t)0x4e4643u;   /* NFC_READER_PTX_OPEN */
-            g_nfc_reader_ptx0_ctrl.state_flag = NFC_READER_PTX_IDLE;
-            fsp_err                           = FSP_SUCCESS;
-        }
-    }
+    fsp_err = ptxAPP_ReaderOpen(iotRd);
 
     st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
 
@@ -392,18 +448,15 @@ void ptxIOT_READER_App(void)
         {
             ptxCommon_PrintF("Start of RF-Discovery ... OK\n");
 
-            ptxT4T_InitParams_t T4TInitParams;
-            T4TInitParams.DefaultNDEFMessage = NDEF_FILE_TEMPLATE;
-            T4TInitParams.DefaultNDEFMessageLength = NDEF_FILE_TEMPLATE_SIZE;
-
+            /* HCE T4T tag object (SDK exception - isolated in ptxAPP_HceT4T_*). */
             ptxT4T_t t4tComp;
-            ptxT4T_Init(&t4tComp, &T4TInitParams);
+            ptxAPP_HceT4T_Init(&t4tComp);
 
 
             /* Demo IoT discovery loop. */
             ptxIoTRdInt_Run_Demo_Loop(iotRd, &t4tComp);
 
-            ptxT4T_DeInit(&t4tComp);
+            ptxAPP_HceT4T_DeInit(&t4tComp);
         } else
         {
             ptxCommon_PrintF("Start of RF-Discovery ... ERROR\n");
@@ -1857,6 +1910,11 @@ data_exchange_done:
 
 static void ptxIoTRdInt_Print_Revision_Info(ptxIoTRd_t *iotRd)
 {
+    /*
+     * SDK exception: ptxIoTRd_Get_Revision_Info() has no ra/fsp equivalent
+     * (no revision getter in the RM_NFC_READER_PTX_* API). This function is the
+     * single, isolated call site - it only prints an informational banner.
+     */
     ptxStatus_t st = ptxStatus_Success;
     uint32_t rev_info;
 
