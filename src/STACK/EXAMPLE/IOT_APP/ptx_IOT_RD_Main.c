@@ -292,9 +292,6 @@ void ptxIOT_READER_App(void)
     initParams.TemperatureSensor = &tempSens;
     initParams.ComInterface = &comIntf;
 
-    // ILAN: NEW ADD
-    RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
-
     /* Initiate IoT-Reader System. */
     st = ptxIoTRd_Init(&iotRd, &initParams);
 

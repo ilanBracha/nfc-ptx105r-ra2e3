@@ -23,6 +23,9 @@ void hal_entry(void)
      * processed cooperatively while logs keep flowing. */
     UserCli_Init();
 
+    // ILAN: NEW ADD
+    RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
+
     /* TODO: add your own code here */
     (void) ptxAPP_Entry();
 
