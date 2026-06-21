@@ -143,18 +143,19 @@
 
 #include "user_board_utils.h"
 #include "user_cli.h"
+
 #include <string.h>
-#include "ptxCOMMON.h"
-#include "ptxIoTRd_COMMON.h"
-#include "ptxT4T.h"
-#include "ptx_IOT_READER.h"
-#include "ptxNativeTag_T5T.h"
-#include "ptxNDEF.h"
-#include "ptxNDEF_T2TOP.h"
-#include "ptxNDEF_T3TOP.h"
-#include "ptxNDEF_T4TOP.h"
-#include "ptxNDEF_T5TOP.h"
-#include "ptxPLAT.h"
+#include <STACK/COMPS/COMMON/ptxCOMMON.h>
+#include <STACK/COMPS/COMMON/ptxIoTRd_COMMON.h>
+#include <STACK/COMPS/COMMON/ptxT4T.h>
+#include <STACK/COMPS/IOT_READER/ptx_IOT_READER.h>
+#include <STACK/COMPS/NATIVE_TAG/ptxNativeTag_T5T.h>
+#include <STACK/COMPS/NDEF/ptxNDEF.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T2TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T3TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T4TOP.h>
+#include <STACK/COMPS/NDEF/ptxNDEF_T5TOP.h>
+#include <STACK/COMPS/PLAT/ptxPLAT.h>
 #include <STACK/EXAMPLE/COMMON/ptxHCE_Loopback.h>
 #include <STACK/EXAMPLE/IOT_APP/ptx_IOT_RD_Main.h>
 
@@ -228,6 +229,34 @@ static void ptxIoTRdInt_Print_Revision_Info(ptxIoTRd_t *iotRd);
  * APPLICATION MAIN
  * ####################################################################################################################
  */
+
+/*
+ * Thin wrapper around the FSP RM_NFC_READER_PTX_DataExchange() so the rest of
+ * the application no longer calls the ra/renesas SDK ptxIoTRd_Data_Exchange()
+ * directly. The FSP wrapper uses a fixed (RAW) timeout internally, so the
+ * per-call timeout argument used by the legacy SDK API is intentionally
+ * dropped here. *rxLen is in/out: pass the rx buffer size in, get the received
+ * length back.
+ */
+static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx, uint32_t *rxLen)
+{
+    nfc_reader_ptx_data_info_t data_info;
+    data_info.p_tx_buf  = tx;
+    data_info.tx_length = txLen;
+    data_info.p_rx_buf  = rx;
+    data_info.rx_length = (NULL != rxLen) ? *rxLen : 0u;
+
+    fsp_err_t fsp_err = RM_NFC_READER_PTX_DataExchange(&g_nfc_reader_ptx0_ctrl, &data_info);
+
+    if (NULL != rxLen)
+    {
+        *rxLen = data_info.rx_length;
+    }
+
+    return (FSP_SUCCESS == fsp_err) ? ptxStatus_Success
+                                    : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
+}
+
 int ptxAPP_Entry(void)
 {
     ptxIOT_READER_App();
@@ -242,60 +271,98 @@ int ptxAPP_Entry(void)
 void ptxIOT_READER_App(void)
 {
     ptxStatus_t st = ptxStatus_Success;
+    fsp_err_t   fsp_err;
 
-    uint8_t start_temperature_sensor_calibration = 1;
+    /*
+     * IoT Reader context now lives in the FSP layer (ptx_nfc_context, wired via
+     * g_nfc_reader_ptx0_cfg.iot_reader_context). The application drives the
+     * stack exclusively through the RM_NFC_READER_PTX_* FSP wrappers, so it no
+     * longer owns a local ptxIoTRd_t nor builds the init/temperature/interface
+     * parameters by hand (those come from g_nfc_reader_ptx0_cfg).
+     */
+    ptxIoTRd_t *iotRd = g_nfc_reader_ptx0_cfg.iot_reader_context;
 
-    /* IoT Reader Context. */
-    ptxIoTRd_t iotRd;
-    (void)memset(&iotRd, 0, sizeof(ptxIoTRd_t));
-
-    /* RF-Discover configuration */
+    /* RF-Discover configuration (poll-flags are taken from g_nfc_reader_ptx0_cfg) */
     ptxIoTRd_DiscConfig_t rf_disc_config;
     (void)memset(&rf_disc_config, 0, sizeof(ptxIoTRd_DiscConfig_t));
 
-    ptxIoTRd_InitPars_t initParams;
-    ptxIoTRd_TempSense_Params_t tempSens;
-    ptxIoTRd_ComInterface_Params_t comIntf;
+    /*
+     * Initialize low-level peripherals and the IoT-Reader system.
+     * RM_NFC_READER_PTX_Open() internally performs ptxIoTRd_Init() using the
+     * temperature-sensor / communication-interface settings from the FSP cfg.
+     */
+    fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
 
-    (void)memset(&initParams, 0, sizeof(ptxIoTRd_InitPars_t));
-    (void)memset(&tempSens, 0, sizeof(ptxIoTRd_TempSense_Params_t));
-    (void)memset(&comIntf, 0, sizeof(ptxIoTRd_ComInterface_Params_t));
+    /*
+     * Cold-boot recovery for the FSP Open():
+     * RM_NFC_READER_PTX_Open() opens the peripherals, downloads the NSC
+     * firmware and then performs a FIRST ptxIoTRd_Init(). On a cold boot that
+     * first init does not complete the NSC bring-up and Open() returns
+     * FSP_ERR_INVALID_DATA (0x25), even though the peripherals and FW download
+     * succeeded. The legacy application masked this by running a SECOND
+     * ptxIoTRd_Init(); we replicate exactly that here to finish bring-up, then
+     * mark the FSP control block as open so the remainder of the application
+     * can keep using the RM_NFC_READER_PTX_* wrappers.
+     *
+     * NOTE: RM_NFC_READER_PTX_Open() lives in ra/fsp and cannot be modified,
+     * so this single ptxIoTRd_Init() retry is an unavoidable SDK call.
+     */
+    if (FSP_ERR_INVALID_DATA == fsp_err)
+    {
+        ptxIoTRd_InitPars_t            retry_init;
+        ptxIoTRd_TempSense_Params_t    retry_temp;
+        ptxIoTRd_ComInterface_Params_t retry_intf;
 
-    /* Define communication interface settings. */
+        (void)memset(&retry_init, 0, sizeof(retry_init));
+        (void)memset(&retry_temp, 0, sizeof(retry_temp));
+        (void)memset(&retry_intf, 0, sizeof(retry_intf));
+
 #if defined (PTX_INTF_UART)
-    comIntf.Speed = PTX_IOTRD_HOST_SPEED_UART_115200;
+        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_UART_115200;
 #elif defined(PTX_INTF_SPI)
-    comIntf.Speed = PTX_IOTRD_HOST_SPEED_SPI_1M;
+        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_SPI_1M;
 #elif defined(PTX_INTF_I2C)
-    comIntf.Speed = PTX_IOTRD_HOST_SPEED_I2C_100000;
-    comIntf.DeviceAddress = 0x4FU;
-#else
-    #error Error - Missing or unsupported Host-Interface implementation used
+        retry_intf.Speed = PTX_IOTRD_HOST_SPEED_I2C_100000;
+        retry_intf.DeviceAddress = 0x4FU;
 #endif
+        retry_temp.Calibrate = 1u;
+        retry_temp.Tambient  = 25;
+        retry_temp.Tshutdown = 100;
+        retry_init.TemperatureSensor = &retry_temp;
+        retry_init.ComInterface      = &retry_intf;
 
-    if(1u == start_temperature_sensor_calibration)
-    {
-        /* Calibration required. Set ambient temperature and expected shutdown temperature threshold. */
-        tempSens.Calibrate = 1;
-        tempSens.Tambient = 25;
-        tempSens.Tshutdown = 100;
+        /*
+         * Force a fresh platform + NSC bring-up on ptx_nfc_context, exactly like
+         * the legacy code's second ptxIoTRd_Init() on a fresh context. Open()'s
+         * first init left Plat/Nsc non-NULL, which makes ptxIoTRd_Init() SKIP
+         * ptxPLAT_AllocAndInit()/ptxIoTRd_InitNSC() - so the NSC RX/IRQ machinery
+         * is not re-initialized and the FW-download handshake times out
+         * (ptxStatus_TimeOut). Clearing the pointers (WITHOUT a full Deinit, so
+         * the static SPI port context set up by Open() is preserved) makes the
+         * retry re-run those init steps.
+         */
+        iotRd->Plat = NULL;
+        iotRd->Nsc  = NULL;
 
-        /* Calibration will take place now. Doesn´t need to be done anymore if ptxPOS_Init is successful. */
-        start_temperature_sensor_calibration = 0;
-    } else
-    {
-        /* Calibration not needed, it has already been done. Provide compensated threshold temperature word. */
-        tempSens.Tshutdown = 223u;
+        ptxStatus_t retry_st = ptxIoTRd_Init(iotRd, &retry_init);
+        ptxCommon_PrintF("[INIT] Open=0x%04X retry ptxIoTRd_Init=0x%04X (Comp=%u, St=%u)\n",
+                         (unsigned)fsp_err, (unsigned)retry_st,
+                         (unsigned)((retry_st >> 8) & 0xFFu), (unsigned)(retry_st & 0xFFu));
+
+        if (ptxStatus_Success == retry_st)
+        {
+            /* Mark the FSP control block open (matches RM_NFC_READER_PTX_Open's
+             * success path: open = ASCII "NFC", state = IDLE; p_cfg was already
+             * set by Open() before the first init failed). */
+            g_nfc_reader_ptx0_ctrl.open       = (uint32_t)0x4e4643u;   /* NFC_READER_PTX_OPEN */
+            g_nfc_reader_ptx0_ctrl.state_flag = NFC_READER_PTX_IDLE;
+            fsp_err                           = FSP_SUCCESS;
+        }
     }
 
-    /* Initial parameters for temperature sensor are ready. */
-    initParams.TemperatureSensor = &tempSens;
-    initParams.ComInterface = &comIntf;
+    st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
 
-    /* Initiate IoT-Reader System. */
-    st = ptxIoTRd_Init(&iotRd, &initParams);
-
-    if (ptxStatus_Success == st)
+    if (FSP_SUCCESS == fsp_err)
     {
         /* Initialization complete */
         g_ioport.p_api->pinWrite(g_ioport.p_ctrl, LED_IOT_RD, LED_ACTIVE);
@@ -303,12 +370,13 @@ void ptxIOT_READER_App(void)
         ptxCommon_PrintF("System Initialization ... OK\n");
 
         /* Print available revisions */
-        ptxIoTRdInt_Print_Revision_Info(&iotRd);
+        ptxIoTRdInt_Print_Revision_Info(iotRd);
 
 #if defined(USE_PTX_IOTRD_DEMO)
         /*
          * Initiate polling for Type-A, -B, -F and -V cards.
-         * Note: Parameter can also be set to NULL -> internal default values are used
+         * The actual poll-flags are configured in g_nfc_reader_ptx0_cfg and
+         * applied by RM_NFC_READER_PTX_DiscoveryStart().
          */
         rf_disc_config.PollTypeA    = 1u;
         rf_disc_config.PollTypeB    = 1u;
@@ -317,9 +385,10 @@ void ptxIOT_READER_App(void)
         rf_disc_config.ListenTypeA  = 1u;
         rf_disc_config.IdleTime     = 100u;
 
-        st = ptxIoTRd_Initiate_Discovery (&iotRd, &rf_disc_config);
+        fsp_err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
+        st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
 
-        if (ptxStatus_Success == st)
+        if (FSP_SUCCESS == fsp_err)
         {
             ptxCommon_PrintF("Start of RF-Discovery ... OK\n");
 
@@ -332,7 +401,7 @@ void ptxIOT_READER_App(void)
 
 
             /* Demo IoT discovery loop. */
-            ptxIoTRdInt_Run_Demo_Loop(&iotRd, &t4tComp);
+            ptxIoTRdInt_Run_Demo_Loop(iotRd, &t4tComp);
 
             ptxT4T_DeInit(&t4tComp);
         } else
@@ -349,13 +418,14 @@ void ptxIOT_READER_App(void)
 
         rf_disc_config.IdleTime    = 100u;
 
-        st = ptxIoTRd_Initiate_Discovery (&iotRd, &rf_disc_config);
+        fsp_err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
+        st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
 
-        if (ptxStatus_Success == st)
+        if (FSP_SUCCESS == fsp_err)
         {
             ptxCommon_PrintF("Start of RF-Discovery ... OK\n");
 
-            ptxHce_Loopback_Demo(&iotRd.Hce);
+            ptxHce_Loopback_Demo(&iotRd->Hce);
         } else
         {
             ptxCommon_PrintF("Start of RF-Discovery ... ERROR\n");
@@ -366,15 +436,14 @@ void ptxIOT_READER_App(void)
 #endif
 
         /* Deactivate the Reader. */
-        (void) ptxIoTRd_Reader_Deactivation (&iotRd, PTX_IOTRD_RF_DEACTIVATION_TYPE_IDLE);
+        (void) RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl, NFC_READER_PTX_RETURN_IDLE);
     } else
     {
-        ptxCommon_PrintF("System Initialization ... ERROR (Status-Code = 0x%04X, Comp = %u, St = %u)\n",
-                         st, (unsigned)((st >> 8) & 0xFFu), (unsigned)(st & 0xFFu));
+        ptxCommon_PrintF("System Initialization ... ERROR (FSP Error-Code = 0x%04X)\n", (unsigned)fsp_err);
     }
 
     /* Clean up: de-initialize IOT Reader L1 System. */
-    (void)ptxIoTRd_Deinit(&iotRd);
+    (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
 }
 
 
@@ -427,7 +496,7 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
     if (ptxStatus_Success == st)
     {
         /* get reference to the internal card registry */
-        (void)ptxIoTRd_Get_Card_Registry (iotRd, &card_registry);
+        (void)RM_NFC_READER_PTX_CardRegistryGet (&g_nfc_reader_ptx0_ctrl, &card_registry);
 
         if (NULL == card_registry)
         {
@@ -456,7 +525,8 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
         UserCli_Poll();
 
         /* check regularly for critical system errors */
-        st = ptxIoTRd_Get_Status_Info (iotRd, StatusType_System, &system_state);
+        fsp_err_t fsp_err = RM_NFC_READER_PTX_StatusGet (&g_nfc_reader_ptx0_ctrl, StatusType_System, &system_state);
+        st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
 
         if (PTX_SYSTEM_STATUS_OK != system_state)
         {
@@ -471,7 +541,7 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
         }
 
         /* check optionally if PA current-limiter got activated */
-        (void)ptxIoTRd_Get_Status_Info (iotRd, StatusType_LastRFError, &last_rf_error);
+        (void)RM_NFC_READER_PTX_StatusGet (&g_nfc_reader_ptx0_ctrl, StatusType_LastRFError, &last_rf_error);
 
         if (PTX_RF_ERROR_NTF_CODE_WARNING_PA_OVERCURRENT_LIMIT == last_rf_error)
         {
@@ -524,7 +594,8 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
         }
     }
 
-    (void)ptxNativeTag_T5TClose(&t5t_comp);
+    /* T5T Native-Tag component is no longer opened (raw FSP data-exchange is used). */
+    (void)t5t_comp;
 #ifdef USE_NDEF
     (void)ptxNDEF_T2TOpClose(&t2top_comp);
     (void)ptxNDEF_T3TOpClose(&t3top_comp);
@@ -569,7 +640,7 @@ static inline uint8_t ptxIoTRdInt_TlvFind(const uint8_t *buf, uint32_t len, uint
 /*
  * Compare an NDEF type field against a C-string literal.
  */
-inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const char *s)
+static inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const char *s)
 {
     uint32_t n = 0;
     while (s[n] != '\0') { n++; }
@@ -584,7 +655,7 @@ inline uint8_t ptxIoTRdInt_TypeEq(const uint8_t *type, uint8_t type_len, const c
 /*
  * Case-sensitive "string starts with prefix" for a (non null-terminated) buffer.
  */
-inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const char *prefix)
+static inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const char *prefix)
 {
     uint32_t n = 0;
     while (prefix[n] != '\0')
@@ -599,7 +670,7 @@ inline uint8_t ptxIoTRdInt_StartsWith(const char *str, uint32_t str_len, const c
  * Search a Wi-Fi Simple Config (WSC) TLV blob for a given attribute id.
  * Recurses into the Credential attribute (0x100E). Big-endian 2-byte type/len.
  */
-inline uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t want,
+static uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t want,
                                    const uint8_t **val, uint16_t *vlen)
 {
     uint32_t i = 0;
@@ -622,7 +693,7 @@ inline uint8_t ptxIoTRdInt_WscFind(const uint8_t *buf, uint32_t len, uint16_t wa
 /*
  * Decode a Wi-Fi Simple Config (vnd.wfa.wsc) MIME record.
  */
-inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
+static inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
 {
     const uint8_t *v;
     uint16_t vl;
@@ -689,7 +760,7 @@ inline void ptxIoTRdInt_PrintWifi(const uint8_t *p, uint32_t len)
  * Decode a Bluetooth OOB (BR/EDR or LE) MIME record. Prints device address
  * (BR/EDR) and local name (from EIR/AD structures) if present.
  */
-inline void ptxIoTRdInt_PrintBt(const uint8_t *p, uint32_t len, uint8_t isLE)
+static inline void ptxIoTRdInt_PrintBt(const uint8_t *p, uint32_t len, uint8_t isLE)
 {
     ptxCommon_PrintF("    Value   : Bluetooth %s\n", isLE ? "LE" : "BR/EDR");
 
@@ -772,7 +843,8 @@ static uint8_t ptxIoTRdInt_T4Exchange(ptxIoTRd_t *iotRd, uint8_t *cmd, uint32_t 
                                       uint8_t *rx, uint32_t *rx_len, uint32_t tmo)
 {
     *rx_len = RX_BUFFER_SIZE;
-    ptxStatus_t st = ptxIoTRd_Data_Exchange(iotRd, cmd, cmd_len, rx, rx_len, tmo);
+    ptxStatus_t st = ptxAPP_DataExchange(cmd, cmd_len, rx, rx_len);
+    (void)iotRd; (void)tmo;
     if ((ptxStatus_Success != st) || (*rx_len < 2u) ||
         (0x90u != rx[*rx_len - 2u]) || (0x00u != rx[*rx_len - 1u]))
     {
@@ -798,7 +870,7 @@ static uint8_t ptxIoTRdInt_ReadType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
     /* 1. SELECT NDEF Tag Application (AID = D2 76 00 00 85 01 01) */
     static const uint8_t sel_app[] = {0x00,0xA4,0x04,0x00,0x07,0xD2,0x76,0x00,0x00,0x85,0x01,0x01,0x00};
     rx_len = RX_BUFFER_SIZE;
-    (void)ptxIoTRd_Data_Exchange(iotRd, (uint8_t *)sel_app, (uint32_t)sizeof(sel_app), rx, &rx_len, tmo);
+    (void)ptxAPP_DataExchange((uint8_t *)sel_app, (uint32_t)sizeof(sel_app), rx, &rx_len);
     if ((rx_len < 2u) || (0x90u != rx[rx_len - 2u]) || (0x00u != rx[rx_len - 1u]))
     {
         ptxCommon_PrintF("[T4T] SELECT NDEF App (D276000085010100) -> SW=%02X%02X (FAILED)\n",
@@ -812,7 +884,7 @@ static uint8_t ptxIoTRdInt_ReadType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
     /* 2. SELECT Capability Container file (EF = E103) */
     static const uint8_t sel_cc[] = {0x00,0xA4,0x00,0x0C,0x02,0xE1,0x03};
     rx_len = RX_BUFFER_SIZE;
-    (void)ptxIoTRd_Data_Exchange(iotRd, (uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc), rx, &rx_len, tmo);
+    (void)ptxAPP_DataExchange((uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc), rx, &rx_len);
     if ((rx_len < 2u) || (0x90u != rx[rx_len - 2u]) || (0x00u != rx[rx_len - 1u]))
     {
         ptxCommon_PrintF("[T4T] SELECT CC (E103) -> SW=%02X%02X (FAILED)\n",
@@ -825,7 +897,7 @@ static uint8_t ptxIoTRdInt_ReadType4NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
     /* 3. READ CC (15 bytes) */
     static const uint8_t read_cc[] = {0x00,0xB0,0x00,0x00,0x0F};
     rx_len = RX_BUFFER_SIZE;
-    (void)ptxIoTRd_Data_Exchange(iotRd, (uint8_t *)read_cc, (uint32_t)sizeof(read_cc), rx, &rx_len, tmo);
+    (void)ptxAPP_DataExchange((uint8_t *)read_cc, (uint32_t)sizeof(read_cc), rx, &rx_len);
     if ((rx_len < 2u) || (0x90u != rx[rx_len - 2u]) || (0x00u != rx[rx_len - 1u]) || (rx_len < 17u))
     {
         ptxCommon_PrintF("[T4T] READ CC -> SW=%02X%02X len=%u (FAILED)\n",
@@ -1005,6 +1077,64 @@ static uint8_t ptxIoTRdInt_WriteType4NDEF(ptxIoTRd_t *iotRd, const uint8_t *ndef
 }
 
 /*
+ * Write or erase an NDEF message on an NFC Forum Type 2 Tag using only raw
+ * T2T WRITE commands (0xA2 <block> <4 bytes>) sent through the FSP
+ * data-exchange wrapper. The NDEF message is wrapped in an NDEF Message TLV
+ * (0x03 <len> <msg> 0xFE) and written page-by-page starting at block 4 (the
+ * start of the T2T data area). ndef_len == 0 writes an empty NDEF TLV
+ * (0x03 0x00 0xFE) and is therefore the canonical "erase NDEF" path.
+ *
+ * This intentionally bypasses the ra/renesas ptxNDEF_T2TOp layer. ndef_len is
+ * capped at 248 (short TLV length form / single demo record).
+ *
+ * Returns 1 on success, 0 on any tag / exchange failure.
+ */
+static uint8_t ptxIoTRdInt_WriteType2NDEF(const uint8_t *ndef, uint16_t ndef_len, uint8_t *rx)
+{
+    uint8_t  tlv[3u + 248u + 1u];
+    uint16_t tlv_len = 0u;
+    uint32_t rx_len;
+    uint8_t  cmd[6];
+
+    if (ndef_len > 248u) { return 0u; }
+
+    /* Build the NDEF Message TLV: 0x03 <len> <msg...> 0xFE */
+    tlv[tlv_len++] = 0x03u;
+    tlv[tlv_len++] = (uint8_t)ndef_len;
+    if ((ndef_len > 0u) && (NULL != ndef))
+    {
+        (void)memcpy(&tlv[tlv_len], ndef, ndef_len);
+        tlv_len = (uint16_t)(tlv_len + ndef_len);
+    }
+    tlv[tlv_len++] = 0xFEu;
+
+    /* Write 4-byte pages starting at block 4. */
+    uint16_t offset = 0u;
+    uint8_t  block  = 4u;
+    while (offset < tlv_len)
+    {
+        uint8_t chunk = ((uint16_t)(tlv_len - offset) >= 4u) ? 4u : (uint8_t)(tlv_len - offset);
+
+        cmd[0] = 0xA2u;          /* T2T WRITE */
+        cmd[1] = block;
+        (void)memset(&cmd[2], 0, 4u);
+        (void)memcpy(&cmd[2], &tlv[offset], chunk);
+
+        rx_len = RX_BUFFER_SIZE;
+        if (ptxStatus_Success != ptxAPP_DataExchange(cmd, 6u, rx, &rx_len))
+        {
+            return 0u;
+        }
+
+        offset = (uint16_t)(offset + chunk);
+        if ((uint16_t)block + 1u > 0xFFu) { break; }
+        block = (uint8_t)(block + 1u);
+    }
+
+    return 1u;
+}
+
+/*
  * Try to read an NFC Forum Type 2 Tag NDEF message and print it.
  * Returns 1 if the tag is NDEF-formatted (Info/Size/Writeable/Records were
  * printed), 0 otherwise.
@@ -1019,11 +1149,12 @@ static uint8_t ptxIoTRdInt_ReadType2NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
     uint32_t rx_len;
     ptxStatus_t st;
     uint8_t cmd[2];
+    (void)iotRd; (void)tmo;
 
     /* READ block 3 -> CC (response = blocks 3..6, 16 bytes) */
     cmd[0] = 0x30; cmd[1] = 0x03;
     rx_len = RX_BUFFER_SIZE;
-    st = ptxIoTRd_Data_Exchange(iotRd, cmd, 2u, rx, &rx_len, tmo);
+    st = ptxAPP_DataExchange(cmd, 2u, rx, &rx_len);
     if ((ptxStatus_Success != st) || (rx_len < 4u))
     {
         return 0u;
@@ -1052,7 +1183,7 @@ static uint8_t ptxIoTRdInt_ReadType2NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
     {
         cmd[0] = 0x30; cmd[1] = block;
         rx_len = RX_BUFFER_SIZE;
-        st = ptxIoTRd_Data_Exchange(iotRd, cmd, 2u, rx, &rx_len, tmo);
+        st = ptxAPP_DataExchange(cmd, 2u, rx, &rx_len);
         if ((ptxStatus_Success != st) || (rx_len < 4u))
         {
             break;
@@ -1286,17 +1417,14 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
         && (t5tComp) && (t5tInitParams) && (t2tOpComp) && (t2tOpInitParams) && (t3tOpComp) && (t3tOpInitParams) && (t4tOpComp) && (t4tOpInitParams)
         && (t5tOpComp) && (t5tOpInitParams) && (ndefComp) && (ndefInitParams))
     {
-        /* initialize the Native-Tag component for T5T */
-        (void)memset(t5tComp, 0, sizeof(ptxNativeTag_T5T_t));
-        (void)memset(t5tInitParams, 0, sizeof(ptxNativeTag_T5T_InitParams_t));
-
-        t5tInitParams->IotRd = iotRd;
-        t5tInitParams->TxBuffer = &tx_data[0];
-        t5tInitParams->TxBufferSize = TX_BUFFER_SIZE;
-        t5tInitParams->UID = NULL;
-        t5tInitParams->UIDLen = 0;
-
-        st = ptxNativeTag_T5TOpen(t5tComp, t5tInitParams);
+        /*
+         * The T5T Block-0 read is now performed via a raw ISO-15693 frame sent
+         * through the FSP data-exchange wrapper (see Prot_T5T case below), so the
+         * ra/renesas Native-Tag T5T component is no longer opened here.
+         */
+        st = ptxStatus_Success;
+        (void)t5tComp;
+        (void)t5tInitParams;
 
 #ifdef USE_NDEF
         if (ptxStatus_Success == st)
@@ -1439,24 +1567,11 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                     {
                         case Prot_T2T:
                             op_proto = "T2T";
-                            (void)memset(t2tOpComp,       0, sizeof(ptxNDEF_T2TOP_t));
-                            (void)memset(t2tOpInitParams, 0, sizeof(ptxNDEF_T2TOP_InitParams_t));
-                            t2tOpInitParams->T2TInitParams.IotRd        = iotRd;
-                            t2tOpInitParams->T2TInitParams.TxBuffer     = &tx_data[0];
-                            t2tOpInitParams->T2TInitParams.TxBufferSize = TX_BUFFER_SIZE;
-                            t2tOpInitParams->WorkBuffer                 = &work_buffer[0];
-                            t2tOpInitParams->WorkBufferSize             = NDEF_BUFFER_SIZE;
-                            t2tOpInitParams->RxBuffer                   = &rx_data[0];
-                            t2tOpInitParams->RxBufferSize               = RX_BUFFER_SIZE;
-                            op_st = ptxNDEF_T2TOpOpen(t2tOpComp, t2tOpInitParams);
-                            if (ptxStatus_Success == op_st)
+                            /* Raw T2T NDEF write/erase via the FSP data-exchange
+                             * wrapper (no ra/renesas ptxNDEF_T2TOp dependency). */
+                            if (0u == ptxIoTRdInt_WriteType2NDEF(&ndef_buf[0], ndef_len, &rx_data[0]))
                             {
-                                op_st = ptxNDEF_T2TOpCheckMessage(t2tOpComp);
-                                if (ptxStatus_Success == op_st)
-                                {
-                                    op_st = ptxNDEF_T2TOpWriteMessage(t2tOpComp, &ndef_buf[0], (uint32_t)ndef_len);
-                                }
-                                (void)ptxNDEF_T2TOpClose(t2tOpComp);
+                                op_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
                             }
                             break;
 
@@ -1641,22 +1756,25 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
 
                 case Prot_T5T:
     #ifndef USE_NDEF
-                    /* read Block-0 via raw data-exchange (3 = Flags + Command Byte + Block number, 8 = Length of UID) */
                     /*
-                    tx_data_length = 3u + 8u;
-                    memcpy(&tx_data[0], &PROT_T5T_EXAMPLE[0], 2u);
-                    memcpy(&tx_data[2], &card_registry->ActiveCard->TechParams.CardVParams.UID[0], 8u);
-                    memcpy(&tx_data[10], &PROT_T5T_EXAMPLE[2], 1u);
-                    */
-
+                     * Read Block-0 via a raw ISO-15693 READ_SINGLE_BLOCK frame sent
+                     * through the FSP data-exchange wrapper (no ra/renesas Native-Tag
+                     * dependency). Addressed mode (flags 0x22) embeds the 8-byte UID.
+                     *   [0] = 0x22  flags: high data-rate + addressed
+                     *   [1] = 0x20  READ_SINGLE_BLOCK command
+                     *   [2..9]      UID (stored LSB-first)
+                     *   [10]= 0x00  block number 0
+                     */
                     app_timeout = DEFAULT_APP_TIMEOUT_RAW;
                     rx_data_length = RX_BUFFER_SIZE;
 
-                    /* set UID if adressed-mode shall be used */
-                    (void)ptxNativeTag_T5TSetUID(t5tComp, &cardRegistry->ActiveCard->TechParams.CardVParams.UID[0], 8u);
+                    tx_data[0] = 0x22u;
+                    tx_data[1] = 0x20u;
+                    (void)memcpy(&tx_data[2], &cardRegistry->ActiveCard->TechParams.CardVParams.UID[0], 8u);
+                    tx_data[10] = 0x00u;
+                    tx_data_length = 11u;
 
-                    /* read Block-0 via Native-Tag command-set */
-                    st = ptxNativeTag_T5TReadSingleBlock (t5tComp, 0, 0, &rx_data[0], (size_t*)&rx_data_length, app_timeout);
+                    st = ptxAPP_DataExchange(&tx_data[0], tx_data_length, &rx_data[0], &rx_data_length);
                     ptxCommon_PrintStatusMessage("Execute \"READ_SINGLE_BLOCK\"-command (Block 0)", st);
                     *skipTxDataExchange = 1u;
     #else
@@ -1711,7 +1829,8 @@ data_exchange_done:
                 rx_data_length = RX_BUFFER_SIZE;
                 ptxCommon_PrintF("TX = ");
                 ptxCommon_Print_Buffer(&tx_data[0], 0, tx_data_length, 1, 0);
-                st = ptxIoTRd_Data_Exchange(iotRd, &tx_data[0], tx_data_length, &rx_data[0], &rx_data_length, app_timeout);
+                st = ptxAPP_DataExchange(&tx_data[0], tx_data_length, &rx_data[0], &rx_data_length);
+                (void)app_timeout;
             }
 
             if (0 == *skipRxProcessing)
