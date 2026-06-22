@@ -2,8 +2,6 @@
 #include "user_uart_log.h"
 #include "user_cli.h"
 
-extern int ptxAPP_Entry(void);
-
 FSP_CPP_HEADER
 void R_BSP_WarmStart(bsp_warm_start_event_t event);
 FSP_CPP_FOOTER
@@ -23,10 +21,7 @@ void hal_entry(void)
      * processed cooperatively while logs keep flowing. */
     UserCli_Init();
 
-    // ILAN: NEW ADD
-    RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
-
-    /* TODO: add your own code here */
+    /* Start the IoT Reader application. This function will not return. */
     (void) ptxAPP_Entry();
 
 #if BSP_TZ_SECURE_BUILD

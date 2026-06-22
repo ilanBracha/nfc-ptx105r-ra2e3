@@ -302,16 +302,6 @@ static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st)
  * called from those headers.
  */
 
-/**
- * Default NDEF-File
- */
-#if defined(USE_PTX_IOTRD_DEMO)
-static uint8_t NDEF_FILE_TEMPLATE[] = {
-        0xD1, 0x01, 0x10, 0x55, 0x01, 0x70, 0x61, 0x6E,
-        0x74, 0x68, 0x72, 0x6F, 0x6E, 0x69, 0x63, 0x73,
-        0x2E, 0x63, 0x6F, 0x6D};
-static uint16_t NDEF_FILE_TEMPLATE_SIZE = 20;
-#endif
 
 /*
  * ####################################################################################################################
@@ -1236,7 +1226,7 @@ static void ptxIoTRdInt_PrintNDEFMsg(const uint8_t *msg, uint32_t len, uint8_t d
 /*
  * Convenience wrapper: print an NDEF message starting at recursion depth 0.
  */
-static void ptxIoTRdInt_PrintNDEF(const uint8_t *msg, uint32_t len)
+static void ptxIoTRdInt_PrintNDEF(const uint8_t * msg, uint32_t len)
 {
     ptxIoTRdInt_PrintNDEFMsg(msg, len, 0u);
 }
@@ -1810,7 +1800,7 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
 
     /* Needed by the generic NDEF component used for the CLI 'erase' path even
      * when USE_NDEF is not defined for the normal read flow. */
-    uint8_t work_buffer[NDEF_BUFFER_SIZE];
+//    uint8_t work_buffer[NDEF_BUFFER_SIZE];
 #ifdef USE_NDEF
     /* General NDEF-exchange buffer */
     uint8_t ndef_msg_buffer[NDEF_BUFFER_SIZE];

@@ -350,7 +350,7 @@ void UserCli_PrintMenu(void)
         cli_write(s_cmds[i].help);
         cli_write(CLI_NEWLINE);
     }
-//    cli_write(CLI_PROMPT);
+
     cli_write(USER_CLI_COLOR_KNRM);
 }
 

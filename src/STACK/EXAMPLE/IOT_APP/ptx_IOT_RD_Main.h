@@ -63,6 +63,7 @@ extern "C" {
  *
  */
 void ptxIOT_READER_App(void);
+int ptxAPP_Entry(void);
 
 #ifdef __cplusplus
 }
