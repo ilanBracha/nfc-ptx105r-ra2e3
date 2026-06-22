@@ -143,10 +143,9 @@
 
 #include "user_board_utils.h"
 #include "user_cli.h"
-
 #include <string.h>
 #include "ptxCOMMON.h"
-#include "ptxIoTRd_COMMON.h"
+//#include "ptxIoTRd_COMMON.h"
 #include "ptxT4T.h"
 #include "ptx_IOT_READER.h"
 #include "ptxNativeTag_T5T.h"
@@ -155,8 +154,7 @@
 #include "ptxNDEF_T3TOP.h"
 #include "ptxNDEF_T4TOP.h"
 #include "ptxNDEF_T5TOP.h"
-#include <STACK/EXAMPLE/COMMON/ptxHCE_Loopback.h>
-#include <STACK/EXAMPLE/IOT_APP/ptx_IOT_RD_Main.h>
+#include <IOT_APP/ptx_IOT_RD_Main.h>
 
 /*
  * ####################################################################################################################
@@ -260,6 +258,17 @@ static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st)
  * DEFINES / TYPES
  * ####################################################################################################################
  */
+
+typedef enum ptxIotRdInt_Demo_State
+{
+    IoTRd_DemoState_WaitForActivation,
+    IoTRd_DemoState_DataExchange,
+    IoTRd_DemoState_SelectCard,
+    IoTRd_DemoState_DeactivateReader,
+    IoTRd_DemoState_SystemError,
+    IoTRd_DemoState_HostCardEmulation,
+    IoTRd_DemoState_Undefined
+} ptxIotRdInt_Demo_State_t;
 
 /*
  * Example Code-Delays/-Sleeps; used for better readability of exchanges RF-data on the console application
@@ -813,29 +822,6 @@ void ptxIOT_READER_App(void)
         {
             ptxCommon_PrintF("Start of RF-Discovery ... ERROR\n");
         }
-#elif defined(USE_PTX_HCE_LOOPBACK_DEMO)
-        rf_disc_config.ListenTypeA = 1u;
-        rf_disc_config.PollTypeA    = 0u;
-        rf_disc_config.PollTypeB    = 0u;
-        rf_disc_config.PollTypeF212 = 0u;
-        rf_disc_config.PollTypeF424 = 0u;
-        rf_disc_config.PollTypeV    = 0u;
-
-        rf_disc_config.IdleTime    = 100u;
-
-        fsp_err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
-        st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
-
-        if (FSP_SUCCESS == fsp_err)
-        {
-            ptxCommon_PrintF("Start of RF-Discovery ... OK\n");
-
-            ptxHce_Loopback_Demo(&iotRd->Hce);
-        } else
-        {
-            ptxCommon_PrintF("Start of RF-Discovery ... ERROR\n");
-        }
-
 #else
 #error("Neither POS, nor HCE demo activated!")
 #endif
