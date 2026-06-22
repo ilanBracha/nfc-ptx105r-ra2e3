@@ -160,6 +160,103 @@
 
 /*
  * ####################################################################################################################
+ * LOCAL LOGGING (src/ only)
+ * ####################################################################################################################
+ *
+ * The application must not call any function under ra/renesas or src/STACK/COMPS.
+ * The PTX SDK logging helpers (ptxCommon_PrintF / _Print_Buffer /
+ * _PrintStatusMessage) live under those paths, so they are reimplemented here on
+ * top of the in-tree src/SEGGER_RTT (RTT) and src/USER_BOARD_UTILS (UART) sinks.
+ * The legacy names are macro-redirected to these local versions so the many
+ * existing call sites stay unchanged while no COMPS/ra-renesas function is called.
+ */
+#include "SEGGER_RTT.h"
+#include "user_uart_log.h"
+#include <stdarg.h>
+#include <stdio.h>
+
+static void ptxAPP_Printf(const char *format, ...);
+static void ptxAPP_PrintBuffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength,
+                               uint8_t addNewLine, uint8_t printASCII);
+static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st);
+
+/* Redirect the COMPS logging names to the local src/-based versions. */
+#define ptxCommon_PrintF              ptxAPP_Printf
+#define ptxCommon_Print_Buffer        ptxAPP_PrintBuffer
+#define ptxCommon_PrintStatusMessage  ptxAPP_PrintStatus
+#define PTX_APP_PRINT_LINE_WRAP        (LINE_LENGTH - 5u)
+
+static void ptxAPP_Printf(const char *format, ...)
+{
+    va_list ap_rtt, ap_uart;
+    va_start(ap_rtt, format);
+    va_copy(ap_uart, ap_rtt);
+
+    /* RTT sink (src/SEGGER_RTT) */
+    (void)SEGGER_RTT_vprintf(0, format, &ap_rtt);
+
+    /* UART sink (src/USER_BOARD_UTILS) */
+    char buf[256];
+    int len = vsnprintf(buf, sizeof(buf), format, ap_uart);
+    if (len > 0)
+    {
+        size_t n = ((size_t)len >= sizeof(buf)) ? (sizeof(buf) - 1u) : (size_t)len;
+        UserUartLog_Write((const uint8_t *)buf, n);
+    }
+
+    va_end(ap_uart);
+    va_end(ap_rtt);
+}
+
+static void ptxAPP_PrintBuffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength,
+                               uint8_t addNewLine, uint8_t printASCII)
+{
+    if ((NULL == buffer) || (0u == bufferLength))
+    {
+        return;
+    }
+
+    for (uint32_t i = 0; (i < bufferLength) && (i < (uint32_t)TX_BUFFER_SIZE); i++)
+    {
+        if ((i > 0u) && (0u == (i % PTX_APP_PRINT_LINE_WRAP)))
+        {
+            ptxAPP_Printf("\n     ");
+        }
+
+        if (0u == printASCII)
+        {
+            ptxAPP_Printf("%02X", (uint8_t)buffer[i + bufferOffset]);
+        }
+        else
+        {
+            uint8_t c = (uint8_t)buffer[i + bufferOffset];
+            ptxAPP_Printf((c < 0x20u) ? "." : "%c", c);
+        }
+    }
+
+    if (0u != addNewLine)
+    {
+        ptxAPP_Printf("\n");
+    }
+}
+
+static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st)
+{
+    if (NULL != message)
+    {
+        if (ptxStatus_Success == st)
+        {
+            ptxAPP_Printf("%s ... OK\n", message);
+        }
+        else
+        {
+            ptxAPP_Printf("%s ... ERROR (Status-Code = %04X)\n", message, st);
+        }
+    }
+}
+
+/*
+ * ####################################################################################################################
  * DEFINES / TYPES
  * ####################################################################################################################
  */
@@ -184,37 +281,25 @@
 
 /*
  * ####################################################################################################################
- * SDK COMPATIBILITY EXCEPTIONS
+ * ra/fsp-ONLY POLICY
  * ####################################################################################################################
  *
- * The application is driven through the ra/fsp RM_NFC_READER_PTX_* wrappers.
- * The following pieces have NO equivalent in the ra/fsp API surface and are
- * therefore - by design - the only places that still touch the ra/renesas PTX
- * SDK directly. They are intentionally kept and documented here so the
- * dependency is centralized and reviewable:
+ * The application is driven exclusively through the ra/fsp RM_NFC_READER_PTX_*
+ * wrappers. No function under ra/renesas or src/STACK/COMPS is called:
  *
- *   1. Logging            : ptxCommon_PrintF / ptxCommon_Print_Buffer /
- *                           ptxCommon_PrintStatusMessage (no FSP logging API).
- *   2. Revision banner    : ptxIoTRd_Get_Revision_Info  (no FSP revision getter)
- *                           -> isolated in ptxIoTRdInt_Print_Revision_Info().
- *   3. Host Card Emulation: ptxT4T_Init / ptxT4T_DeInit and ptxHce_EmulateT4T
- *                           (no FSP HCE API) -> isolated in ptxAPP_HceT4T_Init()/
- *                           ptxAPP_HceT4T_DeInit() and the HCE demo-state helper.
- *                           Direct access to iotRd->DiscoverState and
- *                           iotRd->Hce.EventQ.NrOfEntries is part of this
- *                           exception (HCE field checks, no FSP alternative).
- *   4. Cold-boot init     : a peripheral close + second RM_NFC_READER_PTX_Open()
- *                           retry inside ptxAPP_ReaderOpen() (see that function
- *                           for details).
- *   5. Type definitions   : ptxIoTRd_CardRegistry_t, ptxIotRdInt_Demo_State_t,
- *                           ptxIoTRd_CardParams_t etc. from COMPS headers are
- *                           used for type information (no function calls).
+ *   - All NFC-Forum operations (open/close, discovery, status, card registry,
+ *     card activation, data exchange, deactivation) use RM_NFC_READER_PTX_*.
+ *   - Logging is reimplemented locally on top of src/SEGGER_RTT + src/USER_BOARD_UTILS
+ *     (see "LOCAL LOGGING" section); the ptxCommon_* names are macro-redirected.
+ *   - The cold-boot init recovery uses RM_NFC_READER_PTX_Close + Open only.
+ *   - Host Card Emulation (ptxT4T_ptxHce_EmulateT4T) and the revision banner
+ *     (ptxIoTRd_Get_Revision_Info) had NO ra/fsp equivalent and were removed.
  *
- * All NFC-Forum operations (discovery, card activation, data exchange,
- * deactivation) go exclusively through the RM_NFC_READER_PTX_* wrappers.
- *
- * If/when ra/fsp grows equivalents for the exceptions above, the wrappers
- * below are the only call sites that need updating.
+ * Only TYPE definitions from the COMPS/SDK headers are still used (e.g.
+ * ptxIoTRd_CardRegistry_t, ptxIoTRd_CardParams_t, ptxIotRdInt_Demo_State_t and
+ * the TechProt_RF_DISCOVER_STATUS_* enums) because the RM_NFC_READER_PTX_*
+ * API signatures themselves are expressed in those types. No functions are
+ * called from those headers.
  */
 
 /**
@@ -244,7 +329,7 @@ static uint16_t NDEF_FILE_TEMPLATE_SIZE = 20;
  * It is called only if stack components and NFC hardware have been successfully initialized prior to this.
  */
 #if defined(USE_PTX_IOTRD_DEMO)
-static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t);
+static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd);
 #endif
 
 /*
@@ -254,8 +339,6 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                                                ptxNativeTag_T5T_t* t5tComp, ptxNativeTag_T5T_InitParams_t* t5tInitParams, ptxNDEF_T2TOP_t* t2tOpComp, ptxNDEF_T2TOP_InitParams_t* t2tOpInitParams,
                                                ptxNDEF_T3TOP_t* t3tOpComp, ptxNDEF_T3TOP_InitParams_t* t3tOpInitParams, ptxNDEF_T4TOP_t* t4tOpComp, ptxNDEF_T4TOP_InitParams_t* t4tOpInitParams,
                                                ptxNDEF_T5TOP_t* t5tOpComp, ptxNDEF_T5TOP_InitParams_t* t5tOpInitParams, ptxNDEF_t* ndefComp, ptxNDEF_InitParams_t* ndefInitParams);
-
-static void ptxIoTRdInt_Print_Revision_Info(ptxIoTRd_t *iotRd);
 
 /*
  * Local FSP-based replacements for the COMPS demo-state helpers.
@@ -315,44 +398,20 @@ static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx,
  * not complete the NSC bring-up and Open() returns FSP_ERR_INVALID_DATA (0x25)
  * even though the peripherals and FW download succeeded.
  *
- * Recovery strategy:
- *   1. Close the peripherals that were already opened by the first attempt
- *      (SPI comms and external IRQ) so the second Open() can re-open them
- *      without hitting FSP_ERR_ALREADY_OPEN guards.
- *   2. Clear iotRd->Plat / iotRd->Nsc so the second ptxIoTRd_Init() (called
- *      internally by Open) re-runs ptxPLAT_AllocAndInit() + ptxIoTRd_InitNSC().
- *   3. Call RM_NFC_READER_PTX_Open() a second time — it re-opens everything
- *      and on success sets p_ctrl->open and state_flag automatically.
+ * Recovery is performed entirely through the ra/fsp API: RM_NFC_READER_PTX_Close()
+ * runs ptxIoTRd_Deinit() internally (resets the chip, closes SPI/IRQ and clears
+ * the platform/NSC context), after which a second RM_NFC_READER_PTX_Open()
+ * re-opens everything cleanly.
  */
-static fsp_err_t ptxAPP_ReaderOpen(ptxIoTRd_t *iotRd)
+static fsp_err_t ptxAPP_ReaderOpen(void)
 {
     fsp_err_t fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
 
     if (FSP_ERR_INVALID_DATA == fsp_err)
     {
-        ptxCommon_PrintF("[INIT] First Open returned 0x%04X – cold-boot retry\n", (unsigned)fsp_err);
+        ptxCommon_PrintF("[INIT] First Open=0x%04X - cold-boot retry\n", (unsigned)fsp_err);
 
-        /*
-         * Close peripherals opened by the first (failed) attempt so they can
-         * be re-opened cleanly by the second RM_NFC_READER_PTX_Open() call.
-         */
-
-        /* Close SPI comms (clears RM_COMMS_SPI_OPEN flag + underlying SCI driver). */
-        (void)g_nfc_reader_ptx0_cfg.p_comms_instance_ctrl->p_api->close(
-                g_nfc_reader_ptx0_cfg.p_comms_instance_ctrl->p_ctrl);
-
-        /* Close external IRQ opened during ptxPLAT_SPI_GetInitialized. */
-        (void)g_nfc_reader_ptx0_cfg.p_irq_context->p_api->close(
-                g_nfc_reader_ptx0_cfg.p_irq_context->p_ctrl);
-
-        /*
-         * Reset IoT Reader platform/NSC pointers so the next ptxIoTRd_Init()
-         * (inside RM_NFC_READER_PTX_Open) performs full re-initialization.
-         */
-        iotRd->Plat = NULL;
-        iotRd->Nsc  = NULL;
-
-        /* Second attempt — full re-open through the FSP wrapper. */
+        (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
         fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
 
         ptxCommon_PrintF("[INIT] Retry Open=0x%04X\n", (unsigned)fsp_err);
@@ -694,26 +753,6 @@ static void ptxAPP_DemoState_SystemError(uint8_t *systemState)
     }
 }
 
-#if defined(USE_PTX_IOTRD_DEMO)
-/*
- * Host Card Emulation T4T tag-object setup/teardown. ptxT4T_Init/_DeInit have
- * no ra/fsp equivalent (FSP exposes no HCE API), so these thin wrappers isolate
- * that SDK exception for the HCE branch of the demo loop.
- */
-static void ptxAPP_HceT4T_Init(ptxT4T_t *t4t)
-{
-    ptxT4T_InitParams_t params;
-    params.DefaultNDEFMessage       = NDEF_FILE_TEMPLATE;
-    params.DefaultNDEFMessageLength = NDEF_FILE_TEMPLATE_SIZE;
-    (void)ptxT4T_Init(t4t, &params);
-}
-
-static void ptxAPP_HceT4T_DeInit(ptxT4T_t *t4t)
-{
-    (void)ptxT4T_DeInit(t4t);
-}
-#endif /* USE_PTX_IOTRD_DEMO */
-
 int ptxAPP_Entry(void)
 {
     ptxIOT_READER_App();
@@ -746,9 +785,9 @@ void ptxIOT_READER_App(void)
     /*
      * Initialize low-level peripherals and the IoT-Reader system through the
      * FSP wrapper. ptxAPP_ReaderOpen() also contains the documented cold-boot
-     * recovery (peripheral close + second RM_NFC_READER_PTX_Open retry).
+     * recovery (RM_NFC_READER_PTX_Close + second RM_NFC_READER_PTX_Open).
      */
-    fsp_err = ptxAPP_ReaderOpen(iotRd);
+    fsp_err = ptxAPP_ReaderOpen();
 
     st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
 
@@ -758,9 +797,6 @@ void ptxIOT_READER_App(void)
         g_ioport.p_api->pinWrite(g_ioport.p_ctrl, LED_IOT_RD, LED_ACTIVE);
 
         ptxCommon_PrintF("System Initialization ... OK\n");
-
-        /* Print available revisions */
-        ptxIoTRdInt_Print_Revision_Info(iotRd);
 
 #if defined(USE_PTX_IOTRD_DEMO)
         /*
@@ -772,7 +808,6 @@ void ptxIOT_READER_App(void)
         rf_disc_config.PollTypeB    = 1u;
         rf_disc_config.PollTypeF212 = 1u;
         rf_disc_config.PollTypeV    = 1u;
-        rf_disc_config.ListenTypeA  = 1u;
         rf_disc_config.IdleTime     = 100u;
 
         fsp_err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
@@ -782,15 +817,8 @@ void ptxIOT_READER_App(void)
         {
             ptxCommon_PrintF("Start of RF-Discovery ... OK\n");
 
-            /* HCE T4T tag object (SDK exception - isolated in ptxAPP_HceT4T_*). */
-            ptxT4T_t t4tComp;
-            ptxAPP_HceT4T_Init(&t4tComp);
-
-
             /* Demo IoT discovery loop. */
-            ptxIoTRdInt_Run_Demo_Loop(iotRd, &t4tComp);
-
-            ptxAPP_HceT4T_DeInit(&t4tComp);
+            ptxIoTRdInt_Run_Demo_Loop(iotRd);
         } else
         {
             ptxCommon_PrintF("Start of RF-Discovery ... ERROR\n");
@@ -841,7 +869,7 @@ void ptxIOT_READER_App(void)
  */
 
 #if defined(USE_PTX_IOTRD_DEMO)
-static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
+static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
 {
     uint8_t exit_loop = 0;
 
@@ -934,10 +962,6 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
         {
             ptxCommon_PrintF("Warning - PA Overcurrent Limiter activated!\n");
         }
-        if (((RF_DISCOVER_STATUS_LISTEN_A == iotRd->DiscoverState) || (0 != iotRd->Hce.EventQ.NrOfEntries)) && (PTX_SYSTEM_STATUS_OK == system_state))
-        {
-            demo_state = IoTRd_DemoState_HostCardEmulation;
-        }
 
         switch (demo_state)
         {
@@ -960,14 +984,6 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd, ptxT4T_t *t4t)
                                                         &t2top_init_params, &t3top_comp, &t3top_init_params, &t4top_comp,
                                                         &t4top_init_params, &t5top_comp, &t5top_init_params, &ndef_comp,
                                                         &ndef_init_params);
-                break;
-
-            case IoTRd_DemoState_HostCardEmulation:
-                /*
-                 * SDK exception: HCE has no FSP equivalent. ptxHce_EmulateT4T
-                 * and the iotRd->Hce field access are unavoidable.
-                 */
-                st = ptxIoTRdInt_DemoState_HostCardEmulation(&demo_state, &iotRd->Hce, t4t);
                 break;
 
             case IoTRd_DemoState_DeactivateReader:
@@ -1611,7 +1627,7 @@ static uint8_t ptxIoTRdInt_ReadType2NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
         {
             if ((p + l) > got) { l = got - p; }
             ptxCommon_PrintF("Records        :\n");
-            ptxIoTRdInt_PrintNDEF(&tx[p], l);
+            ptxIoTRdInt_PrintNDEF(tx[p], l);
             found = 1u;
             break;
         }
@@ -2243,89 +2259,3 @@ data_exchange_done:
 
     return st;
 }
-
-static void ptxIoTRdInt_Print_Revision_Info(ptxIoTRd_t *iotRd)
-{
-    /*
-     * SDK exception: ptxIoTRd_Get_Revision_Info() has no ra/fsp equivalent
-     * (no revision getter in the RM_NFC_READER_PTX_* API). This function is the
-     * single, isolated call site - it only prints an informational banner.
-     */
-    ptxStatus_t st = ptxStatus_Success;
-    uint32_t rev_info;
-
-    ptxCommon_PrintF ("\n");
-    ptxCommon_PrintF ("Print Revision Information...\n\n");
-
-    /* get C-Stack Revision */
-    st = ptxIoTRd_Get_Revision_Info(iotRd, RevInfo_C_Stack, &rev_info);
-    if (ptxStatus_Success == st)
-    {
-        ptxCommon_PrintF ("C-Stack Revision.......: 0x%04X\n", rev_info);
-    }
-
-    /* any local modifications ? */
-    st = ptxIoTRd_Get_Revision_Info(iotRd, RevInfo_Local_Changes, &rev_info);
-    if (ptxStatus_Success == st)
-    {
-        ptxCommon_PrintF ("Local Modifications....: 0x%04X\n", rev_info);
-    }
-
-    /* get NSC (DFY)-Code Revision */
-    st = ptxIoTRd_Get_Revision_Info(iotRd, RevInfo_DFY_Code, &rev_info);
-    if (ptxStatus_Success == st)
-    {
-        ptxCommon_PrintF ("NSC-Code Revision......: %04d\n", rev_info);
-    }
-
-    /* get NSC (DFY)-Toolchain Revision */
-    st = ptxIoTRd_Get_Revision_Info(iotRd, RevInfo_DFY_Toolchain, &rev_info);
-    if (ptxStatus_Success == st)
-    {
-        ptxCommon_PrintF ("NSC-Toolchain Revision.: %04d\n", rev_info);
-    }
-
-    /* get Chip-ID/-revision */
-    st = ptxIoTRd_Get_Revision_Info(iotRd, RevInfo_ChipID, &rev_info);
-    if (ptxStatus_Success == st)
-    {
-        ptxCommon_PrintF ("Chip-ID................: 0x%02X\n", rev_info);
-    }
-
-    /* get Product-ID/-revision */
-    st = ptxIoTRd_Get_Revision_Info(iotRd, RevInfo_ProductID, &rev_info);
-    if (ptxStatus_Success == st)
-    {
-        switch ((uint8_t)rev_info)
-        {
-            case PTX_HW_PRODUCT_ID_PTX100X:
-                ptxCommon_PrintF ("Product-ID.............: 0x%02X (PTX100x)\n", rev_info);
-                break;
-
-            case PTX_HW_PRODUCT_ID_PTX105X:
-                ptxCommon_PrintF ("Product-ID.............: 0x%02X (PTX105x)\n", rev_info);
-                break;
-
-            case PTX_HW_PRODUCT_ID_PTX130X:
-                ptxCommon_PrintF ("Product-ID.............: 0x%02X (PTX130x)\n", rev_info);
-                break;
-
-            default:
-                ptxCommon_PrintF ("Product-ID.............: Unknown\n");
-                break;
-        }
-    }
-
-    ptxCommon_PrintF ("\n");
-
-    if (ptxStatus_Success == st)
-    {
-        ptxCommon_PrintF ("Print Revision Information...OK\n");
-    }
-    else
-    {
-        ptxCommon_PrintF ("Print Revision Information...FAILED (Internal Error)\n");
-    }
-}
-
-
