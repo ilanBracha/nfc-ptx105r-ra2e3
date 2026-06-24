@@ -743,10 +743,19 @@ static void ptxAPP_DemoState_SystemError(uint8_t *systemState)
     }
 }
 
-int ptxAPP_Entry(void)
+void ptxAPP_Entry(void)
 {
+    /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
+     * output is mirrored from the very first log line. */
+    UserUartLog_Init();
+
+    /* Bring up the cooperative CLI on the same UART. The menu is printed now;
+     * UserCli_Poll() will be driven from the demo main loop so commands are
+     * processed cooperatively while logs keep flowing. */
+    UserCli_Init();
+
+    /* Start the IoT Reader application. */
     ptxIOT_READER_App();
-    return 1;
 }
 
 /*

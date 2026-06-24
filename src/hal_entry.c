@@ -14,19 +14,8 @@ FSP_CPP_FOOTER
  **********************************************************************************************************************/
 void hal_entry(void)
 {
-    /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
-     * output is mirrored from the very first log line. */
-    (void)UserUartLog_Init();
-
-    /* Bring up the cooperative CLI on the same UART. The menu is printed now;
-     * UserCli_Poll() will be driven from the demo main loop so commands are
-     * processed cooperatively while logs keep flowing. */
-    UserCli_Init();
-
-    PES_NFCCardReader_Read(NULL, NULL);
-
     /* Start the IoT Reader application. This function will not return. */
-    (void) ptxAPP_Entry();
+    ptxAPP_Entry();
 
 #if BSP_TZ_SECURE_BUILD
     /* Enter non-secure code */
