@@ -43,7 +43,26 @@ static pes_nfc_card_type_t map_card_type(ptxIoTRd_CardParams_t *card,
 }
 
 /**
+ * Map PTX protocol enum to PES protocol enum.
+ */
+static pes_nfc_protocol_t map_protocol(ptxIoTRd_CardProtocol_t prot)
+{
+    switch (prot)
+    {
+        case Prot_T2T:       return PES_NFC_PROT_T2T;
+        case Prot_T3T:       return PES_NFC_PROT_T3T;
+        case Prot_ISODEP:    return PES_NFC_PROT_ISODEP;
+        case Prot_NFCDEP:    return PES_NFC_PROT_NFCDEP;
+        case Prot_T5T:       return PES_NFC_PROT_T5T;
+        case Prot_Extension: return PES_NFC_PROT_EXTENSION;
+        default:             return PES_NFC_PROT_UNDEFINED;
+    }
+}
+
+/**
  * Determine the activation protocol for the first card in the registry.
+ * Mirrors the SEL_RES/SENSB/SENSF inference logic from the old AUC
+ * ptxAPP_DemoState_SelectCard().
  */
 static ptxIoTRd_CardProtocol_t choose_protocol(ptxIoTRd_CardParams_t *card)
 {
@@ -52,6 +71,8 @@ static ptxIoTRd_CardProtocol_t choose_protocol(ptxIoTRd_CardParams_t *card)
     switch (card->TechType)
     {
         case Tech_TypeA:
+            if (0u != (card->TechParams.CardAParams.SEL_RES & 0x40u))
+                return Prot_NFCDEP;
             if (0u != (card->TechParams.CardAParams.SEL_RES & 0x20u))
                 return Prot_ISODEP;
             return Prot_T2T;
@@ -69,6 +90,9 @@ static ptxIoTRd_CardProtocol_t choose_protocol(ptxIoTRd_CardParams_t *card)
 
         case Tech_TypeV:
             return Prot_T5T;
+
+        case Tech_TypeExtension:
+            return Prot_Extension;
 
         default:
             return Prot_Undefined;
@@ -181,6 +205,7 @@ pes_status_t pes_nfc_hal_card_activate(pes_nfc_hal_card_info_t *card_info)
     if (NULL != reg->ActiveCard)
     {
         card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
+        card_info->protocol  = map_protocol(reg->ActiveCardProtType);
         extract_uid(reg->ActiveCard, card_info->uid, &card_info->uid_len);
         return PES_OK;
     }
@@ -193,6 +218,7 @@ pes_status_t pes_nfc_hal_card_activate(pes_nfc_hal_card_info_t *card_info)
     if (FSP_SUCCESS != err) { return PES_ERR_INTERNAL; }
 
     card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
+    card_info->protocol  = map_protocol(reg->ActiveCardProtType);
     extract_uid(reg->ActiveCard, card_info->uid, &card_info->uid_len);
     return PES_OK;
 }
@@ -228,6 +254,22 @@ pes_status_t pes_nfc_hal_system_check(void)
                                                  StatusType_System, &state);
     if (FSP_SUCCESS != err) { return PES_ERR_INTERNAL; }
     return (PTX_SYSTEM_STATUS_OK == state) ? PES_OK : PES_ERR_INTERNAL;
+}
+
+pes_status_t pes_nfc_hal_get_system_state(uint8_t *out_state)
+{
+    if (NULL == out_state) { return PES_ERR_INVALID_CFG; }
+    fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
+                                                 StatusType_System, out_state);
+    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+}
+
+pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err)
+{
+    if (NULL == out_err) { return PES_ERR_INVALID_CFG; }
+    fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
+                                                 StatusType_LastRFError, out_err);
+    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 pes_status_t pes_nfc_hal_close(void)

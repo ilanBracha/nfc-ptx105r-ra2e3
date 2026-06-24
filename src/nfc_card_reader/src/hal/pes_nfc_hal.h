@@ -32,6 +32,7 @@ typedef enum {
 
 typedef struct {
     pes_nfc_card_type_t card_type;
+    pes_nfc_protocol_t  protocol;
     uint8_t             uid[PES_NFC_UID_MAX_BYTES];
     uint8_t             uid_len;
 } pes_nfc_hal_card_info_t;
@@ -59,6 +60,13 @@ pes_status_t pes_nfc_hal_deactivate(void);
 
 /** Check system health. Returns PES_ERR_INTERNAL on critical error. */
 pes_status_t pes_nfc_hal_system_check(void);
+
+/** Raw system-state byte (PTX_SYSTEM_STATUS_*). Used by the orchestrator
+ *  to differentiate "ok / overcurrent / temperature" before reporting. */
+pes_status_t pes_nfc_hal_get_system_state(uint8_t *out_state);
+
+/** Last RF error byte (PTX_RF_ERROR_NTF_CODE_*). 0 means no error. */
+pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err);
 
 /** Close / de-initialize the NFC reader. */
 pes_status_t pes_nfc_hal_close(void);

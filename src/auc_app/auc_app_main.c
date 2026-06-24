@@ -141,13 +141,6 @@
 */
 
 
-#include <string.h>
-#include "user_board_utils.h"
-#include "user_cli.h"
-#include "ptxCOMMON.h"
-#include "ptx_IOT_READER.h"
-#include "auc_app_main.h"
-
 /*
  * ####################################################################################################################
  * LOCAL LOGGING (src/ only)
@@ -160,10 +153,18 @@
  * The legacy names are macro-redirected to these local versions so the many
  * existing call sites stay unchanged while no COMPS/ra-renesas function is called.
  */
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdarg.h>
+#include "user_board_utils.h"
+#include "user_cli.h"
+#include "ptxCOMMON.h"
+#include "ptx_IOT_READER.h"
+#include "auc_app_main.h"
 #include "SEGGER_RTT.h"
 #include "user_uart_log.h"
-#include <stdarg.h>
-#include <stdio.h>
+#include "pes_nfc_card_reader.h"
 
 static void ptxAPP_Printf(const char *format, ...);
 static void ptxAPP_PrintBuffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength,
@@ -316,25 +317,28 @@ typedef enum ptxIotRdInt_Demo_State
 /*
  * Main demo application loop. Implements NFC-Forum polling and example data exchanges.
  * It is called only if stack components and NFC hardware have been successfully initialized prior to this.
+ *
+ * NOTE: Replaced by PES_NFCCardReader_Read() event-loop. Kept for reference.
  */
+#if 0
 #if defined(USE_PTX_IOTRD_DEMO)
 static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd);
 #endif
+#endif
 
 /*
- * Function representing demo state "data exchange" when NDEF should be used
+ * Function representing demo state "data exchange" when NDEF should be used.
+ * Refactored to take a PES result struct (no longer a PTX card registry).
  */
-static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
-                                                      ptxIoTRd_CardRegistry_t *cardRegistry,
-                                                      ptxIotRdInt_Demo_State_t *demoState,
+static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(const pes_nfc_card_result_t *result,
                                                       uint8_t *skipTxDataExchange,
                                                       uint8_t *skipRxProcessing);
 
 /*
- * Local FSP-based replacements for the COMPS demo-state helpers.
- * These reimplement the logic from ptxIoTRd_COMMON.c using only the
- * RM_NFC_READER_PTX_* API surface.
+ * Legacy FSP-based demo-state helpers replaced by the PES orchestrator
+ * (PES_NFCCardReader_Read). Kept #if 0'd for reference.
  */
+#if 0
 static void ptxAPP_PrintCardDetails(ptxIoTRd_CardRegistry_t *cardRegistry,
                                     ptxIoTRd_CardParams_t *cardParams, uint8_t nr);
 static void ptxAPP_DemoState_WaitForActivation(ptxIoTRd_CardRegistry_t *cardRegistry,
@@ -345,6 +349,7 @@ static fsp_err_t ptxAPP_DemoState_SelectCard(ptxIoTRd_CardRegistry_t *cardRegist
 static fsp_err_t ptxAPP_DemoState_DeactivateReader(ptxIotRdInt_Demo_State_t *demoState,
                                                    uint8_t *exitLoop);
 static void ptxAPP_DemoState_SystemError(uint8_t *systemState);
+#endif
 
 /*
  * ####################################################################################################################
@@ -353,30 +358,22 @@ static void ptxAPP_DemoState_SystemError(uint8_t *systemState);
  */
 
 /*
- * Thin wrapper around the FSP RM_NFC_READER_PTX_DataExchange() so the rest of
- * the application no longer calls the ra/renesas SDK ptxIoTRd_Data_Exchange()
- * directly. The FSP wrapper uses a fixed (RAW) timeout internally, so the
- * per-call timeout argument used by the legacy SDK API is intentionally
- * dropped here. *rxLen is in/out: pass the rx buffer size in, get the received
- * length back.
+ * Thin wrapper around PES_NFCCardReader_DataExchange() so the rest of the
+ * application no longer calls the ra/fsp RM_NFC_READER_PTX_* API directly.
+ * *rxLen is in/out: pass the rx buffer size in, get the received length back.
  */
 static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx, uint32_t *rxLen)
 {
-    nfc_reader_ptx_data_info_t data_info;
-    data_info.p_tx_buf  = tx;
-    data_info.tx_length = txLen;
-    data_info.p_rx_buf  = rx;
-    data_info.rx_length = (NULL != rxLen) ? *rxLen : 0u;
-
-    fsp_err_t fsp_err = RM_NFC_READER_PTX_DataExchange(&g_nfc_reader_ptx0_ctrl, &data_info);
+    uint32_t rx_capacity = (NULL != rxLen) ? *rxLen : 0u;
+    pes_status_t st = PES_NFCCardReader_DataExchange(tx, txLen, rx, &rx_capacity);
 
     if (NULL != rxLen)
     {
-        *rxLen = data_info.rx_length;
+        *rxLen = rx_capacity;
     }
 
-    return (FSP_SUCCESS == fsp_err) ? ptxStatus_Success
-                                    : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
+    return (PES_OK == st) ? ptxStatus_Success
+                          : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
 }
 
 /*
@@ -392,7 +389,10 @@ static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx,
  * runs ptxIoTRd_Deinit() internally (resets the chip, closes SPI/IRQ and clears
  * the platform/NSC context), after which a second RM_NFC_READER_PTX_Open()
  * re-opens everything cleanly.
+ *
+ * NOTE: now lives in the PES HAL (pes_nfc_hal_open). Kept #if 0'd for reference.
  */
+#if 0
 static fsp_err_t ptxAPP_ReaderOpen(void)
 {
     fsp_err_t fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
@@ -409,6 +409,7 @@ static fsp_err_t ptxAPP_ReaderOpen(void)
 
     return fsp_err;
 }
+#endif
 
 /*
  * Lightweight sleep using the BSP software delay instead of the SDK's
@@ -423,7 +424,12 @@ static void ptxAPP_Sleep(uint32_t ms)
  * Print discovered card details. Reimplements the printing logic from
  * ptxIoTRdInt_Get_Card_Details (ptxIoTRd_COMMON.c) using only shared
  * type definitions and the ptxCommon_PrintF logging exception.
+ *
+ * NOTE: Replaced by the PES summary builder (pes_card_summary_build) and
+ *       ptxIoTRdInt_PrintCardInfo() which now consumes pes_nfc_card_result_t.
+ *       Kept #if 0'd for reference.
  */
+#if 0
 static void ptxAPP_PrintCardDetails(ptxIoTRd_CardRegistry_t *cardRegistry,
                                     ptxIoTRd_CardParams_t *cardParams, uint8_t nr)
 {
@@ -742,6 +748,7 @@ static void ptxAPP_DemoState_SystemError(uint8_t *systemState)
         }
     }
 }
+#endif /* #if 0 (legacy ptxAPP_PrintCardDetails .. ptxAPP_DemoState_SystemError) */
 
 void ptxAPP_Entry(void)
 {
@@ -761,80 +768,75 @@ void ptxAPP_Entry(void)
 /*
  * \brief   Start of IoT Reader application.
  *
+ * The application no longer drives the NFC reader directly; control of the
+ * reader (open/init, discovery, activation, deactivation, close, system-error
+ * handling, FSP RM_NFC_READER_PTX_* calls) now lives inside the PES NFC
+ * Card Reader module. The application supplies a per-card callback to render
+ * each detected card to the local sinks (RTT + UART) and toggle status LEDs.
+ *
  * \return      none
  */
-void ptxIOT_READER_App(void)
+static void on_nfc_read_done(pes_status_t status,
+                             const pes_nfc_card_result_t *result,
+                             const char *summary,
+                             void *p_context)
 {
-    ptxStatus_t st = ptxStatus_Success;
-    fsp_err_t   fsp_err;
+    (void)p_context;
 
-    /*
-     * IoT Reader context now lives in the FSP layer (ptx_nfc_context, wired via
-     * g_nfc_reader_ptx0_cfg.iot_reader_context). The application drives the
-     * stack exclusively through the RM_NFC_READER_PTX_* FSP wrappers, so it no
-     * longer owns a local ptxIoTRd_t nor builds the init/temperature/interface
-     * parameters by hand (those come from g_nfc_reader_ptx0_cfg).
-     */
-    ptxIoTRd_t *iotRd = g_nfc_reader_ptx0_cfg.iot_reader_context;
+    /* Status LED ON during processing; OFF afterwards. */
+    UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_HIGH);
 
-    /* RF-Discover configuration (poll-flags are taken from g_nfc_reader_ptx0_cfg) */
-    ptxIoTRd_DiscConfig_t rf_disc_config;
-    (void)memset(&rf_disc_config, 0, sizeof(ptxIoTRd_DiscConfig_t));
-
-    /*
-     * Initialize low-level peripherals and the IoT-Reader system through the
-     * FSP wrapper. ptxAPP_ReaderOpen() also contains the documented cold-boot
-     * recovery (RM_NFC_READER_PTX_Close + second RM_NFC_READER_PTX_Open).
-     */
-    fsp_err = ptxAPP_ReaderOpen();
-
-    st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
-
-    if (FSP_SUCCESS == fsp_err)
+    /* Informational / warning / fatal events arrive with result == NULL. */
+    if (NULL == result)
     {
-        /* Initialization complete */
-        g_ioport.p_api->pinWrite(g_ioport.p_ctrl, USER_BOARD_LED_IOT_RD, USER_BOARD_LED_ACTIVE);
-
-        ptxCommon_PrintF("System Initialization ... OK\n");
-
-#if defined(USE_PTX_IOTRD_DEMO)
-        /*
-         * Initiate polling for Type-A, -B, -F and -V cards.
-         * The actual poll-flags are configured in g_nfc_reader_ptx0_cfg and
-         * applied by RM_NFC_READER_PTX_DiscoveryStart().
-         */
-        rf_disc_config.PollTypeA    = 1u;
-        rf_disc_config.PollTypeB    = 1u;
-        rf_disc_config.PollTypeF212 = 1u;
-        rf_disc_config.PollTypeV    = 1u;
-        rf_disc_config.IdleTime     = 100u;
-
-        fsp_err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
-        st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : st;
-
-        if (FSP_SUCCESS == fsp_err)
+        if (NULL != summary)
         {
-            ptxCommon_PrintF("Start of RF-Discovery ... OK\n");
-
-            /* Demo IoT discovery loop. */
-            ptxIoTRdInt_Run_Demo_Loop(iotRd);
-        } else
-        {
-            ptxCommon_PrintF("Start of RF-Discovery ... ERROR\n");
+            ptxCommon_PrintF("%s\n", summary);
         }
-#else
-#error("Neither POS, nor HCE demo activated!")
-#endif
-
-        /* Deactivate the Reader. */
-        (void) RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl, NFC_READER_PTX_RETURN_IDLE);
-    } else
-    {
-        ptxCommon_PrintF("System Initialization ... ERROR (FSP Error-Code = 0x%04X)\n", (unsigned)fsp_err);
+        UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
+        return;
     }
 
-    /* Clean up: de-initialize IOT Reader L1 System. */
-    (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
+    /* Banner + one-line summary built by PES (no NDEF decoders involved). */
+    ptxCommon_PrintF(RTT_CTRL_TEXT_BRIGHT_GREEN "\n\n%s" RTT_CTRL_RESET "\n",
+                     (NULL != summary) ? summary : "CARD DETECTED!");
+
+    /* Rich card-info + record decoding + CLI write/erase + raw protocol
+     * example exchange all run from inside DemoState_DataExchange so the
+     * user-visible experience matches the legacy demo loop. */
+    uint8_t skip_tx = 0u;
+    uint8_t skip_rx = 0u;
+    (void)ptxIoTRdInt_DemoState_DataExchange(result, &skip_tx, &skip_rx);
+    (void)status;
+
+    UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
+}
+
+void ptxIOT_READER_App(void)
+{
+    /* IoT Reader LED on as soon as we are about to start the orchestrator. */
+    g_ioport.p_api->pinWrite(g_ioport.p_ctrl, USER_BOARD_LED_IOT_RD, USER_BOARD_LED_ACTIVE);
+
+    ptxCommon_PrintF("System Initialization (PES NFC Card Reader) ... starting\n");
+
+    pes_nfc_card_reader_cfg_t cfg;
+    (void)memset(&cfg, 0, sizeof(cfg));
+    cfg.reader                = PES_NFC_READER_PTX105R;
+    cfg.tech_mask             = PES_NFC_TECH_ALL;
+    cfg.timeout_ms            = UINT32_MAX;     /* loop forever */
+    cfg.retry_count           = 0u;
+    cfg.read_ndef             = true;
+    cfg.callback              = NULL;            /* operation-end cb unused */
+    cfg.p_context             = NULL;
+    cfg.on_card_event         = on_nfc_read_done;
+    cfg.p_card_event_context  = NULL;
+    cfg.validate_dependencies = false;
+
+    pes_nfc_card_result_t result;
+    (void)memset(&result, 0, sizeof(result));
+
+    pes_status_t st = PES_NFCCardReader_Read(&cfg, &result);
+    ptxCommon_PrintF("PES_NFCCardReader_Read returned status=%d\n", (int)st);
 }
 
 
@@ -842,8 +844,13 @@ void ptxIOT_READER_App(void)
  * ####################################################################################################################
  * MAIN DEMO LOOP
  * ####################################################################################################################
+ *
+ * The whole state machine (WaitForActivation → SelectCard → DataExchange →
+ * DeactivateReader → SystemError) now lives inside PES_NFCCardReader_Read().
+ * The legacy implementation is kept #if 0'd for reference.
  */
 
+#if 0
 #if defined(USE_PTX_IOTRD_DEMO)
 static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
 {
@@ -948,6 +955,7 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
     }
 }
 #endif
+#endif /* #if 0 (legacy ptxIoTRdInt_Run_Demo_Loop) */
 
 
 /*
@@ -1583,26 +1591,34 @@ static uint8_t ptxIoTRdInt_ReadType2NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
  * Print structured card information.
  * Uses the CALLER's tx/rx buffers (already on the stack in the data-exchange function).
  */
-static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
-                                      ptxIoTRd_CardRegistry_t *reg,
+static void ptxIoTRdInt_PrintCardInfo(const pes_nfc_card_result_t *result,
                                       uint8_t *tx, uint8_t *rx)
 {
-    ptxIoTRd_CardParams_t *card = reg->ActiveCard;
-    ptxStatus_t st;
-    uint32_t tx_len, rx_len;
-    const uint8_t *val = NULL;
-    uint32_t val_len = 0;
-    const uint32_t tmo = DEFAULT_APP_TIMEOUT_PROT;
+    if (NULL == result)
+    {
+        return;
+    }
 
-    /* Blink LEDs based on card technology type. */
+    /* Blink LEDs based on the card-type family. */
     {
         UserBoardUtils_CardType_t led_ct;
-        switch (card->TechType)
+        switch (result->card_type)
         {
-            case Tech_TypeB: led_ct = UserBoardUtils_CardType_B; break;
-            case Tech_TypeF: led_ct = UserBoardUtils_CardType_F; break;
-            case Tech_TypeV: led_ct = UserBoardUtils_CardType_V; break;
-            default:         led_ct = UserBoardUtils_CardType_A; break; /* Type-A and any other */
+            case PES_NFC_CARD_TYPE_ISO14443B:
+            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
+                led_ct = UserBoardUtils_CardType_B;
+                break;
+            case PES_NFC_CARD_TYPE_FELICA:
+            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
+                led_ct = UserBoardUtils_CardType_F;
+                break;
+            case PES_NFC_CARD_TYPE_ISO15693:
+            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
+                led_ct = UserBoardUtils_CardType_V;
+                break;
+            default:
+                led_ct = UserBoardUtils_CardType_A;  /* Type-A and any other */
+                break;
         }
         UserBoardUtils_BlinkForCardType(led_ct);
     }
@@ -1611,63 +1627,39 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
 
     /* ---- Tag Type ---- */
     const char *tag_type = "Unknown";
-    switch (reg->ActiveCardProtType)
+    switch (result->protocol)
     {
-        case Prot_T2T:    tag_type = "NFC Forum Type 2 Tag (T2T)";        break;
-        case Prot_T3T:    tag_type = "NFC Forum Type 3 Tag (T3T/FeliCa)"; break;
-        case Prot_ISODEP: tag_type = "ISO-DEP (Type 4 Tag / ISO 14443-4)"; break;
-        case Prot_NFCDEP: tag_type = "NFC-DEP (Peer-to-Peer)";            break;
-        case Prot_T5T:    tag_type = "NFC Forum Type 5 Tag (T5T/ISO 15693)"; break;
-        default:          break;
+        case PES_NFC_PROT_T2T:    tag_type = "NFC Forum Type 2 Tag (T2T)";        break;
+        case PES_NFC_PROT_T3T:    tag_type = "NFC Forum Type 3 Tag (T3T/FeliCa)"; break;
+        case PES_NFC_PROT_ISODEP: tag_type = "ISO-DEP (Type 4 Tag / ISO 14443-4)"; break;
+        case PES_NFC_PROT_NFCDEP: tag_type = "NFC-DEP (Peer-to-Peer)";            break;
+        case PES_NFC_PROT_T5T:    tag_type = "NFC Forum Type 5 Tag (T5T/ISO 15693)"; break;
+        default:                  break;
     }
     ptxCommon_PrintF("Tag Type       : %s\n", tag_type);
 
-    /* ---- Serial Number ---- */
+    /* ---- Serial Number (UID is already MSB-first in pes_nfc_card_result_t) ---- */
     ptxCommon_PrintF("Serial Number  : ");
-    switch (card->TechType)
+    if (0u == result->uid_len)
     {
-        case Tech_TypeA:
-            for (uint8_t i = 0; i < card->TechParams.CardAParams.NFCID1_LEN; i++)
-            {
-                if (i) ptxCommon_PrintF(":");
-                ptxCommon_PrintF("%02X", card->TechParams.CardAParams.NFCID1[i]);
-            }
-            break;
-        case Tech_TypeB:
-            /* PUPI is bytes 1-4 of SENSB_RES */
-            for (uint8_t i = 1; i <= 4; i++)
-            {
-                if (i > 1) ptxCommon_PrintF(":");
-                ptxCommon_PrintF("%02X", card->TechParams.CardBParams.SENSB_RES[i]);
-            }
-            break;
-        case Tech_TypeF:
-            /* NFCID2 is bytes 2..9 of SENSF_RES */
-            for (uint8_t i = 2; i < 10; i++)
-            {
-                if (i > 2) ptxCommon_PrintF(":");
-                ptxCommon_PrintF("%02X", card->TechParams.CardFParams.SENSF_RES[i]);
-            }
-            break;
-        case Tech_TypeV:
-            for (uint8_t i = 0; i < 8; i++)
-            {
-                if (i) ptxCommon_PrintF(":");
-                ptxCommon_PrintF("%02X", card->TechParams.CardVParams.UID[7u - i]);
-            }
-            break;
-        default:
-            ptxCommon_PrintF("N/A");
-            break;
+        ptxCommon_PrintF("N/A");
+    }
+    else
+    {
+        for (uint8_t i = 0; i < result->uid_len; i++)
+        {
+            if (i) ptxCommon_PrintF(":");
+            ptxCommon_PrintF("%02X", result->uid[i]);
+        }
     }
     ptxCommon_PrintF("\n");
 
     /* ---- ISO-DEP: try Type 4 NDEF; otherwise just report as non-NDEF ---- */
-    if (Prot_ISODEP == reg->ActiveCardProtType)
+    if (PES_NFC_PROT_ISODEP == result->protocol)
     {
         /* Try NFC Forum Type 4 Tag NDEF reading (covers most NDEF T4T tags
          * and Android HCE apps that implement the T4T NDEF protocol). */
-        if (!ptxIoTRdInt_ReadType4NDEF(iotRd, tx, rx))
+        if (!ptxIoTRdInt_ReadType4NDEF(NULL, tx, rx))
         {
             /* EMV PPSE/AID/GPO/AFL decoding was stripped to free flash for the
              * CLI 'erase' path; non-NDEF ISO-DEP cards (e.g. payment cards,
@@ -1675,15 +1667,14 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
             ptxCommon_PrintF("Info           : Non-NDEF ISO-DEP card\n");
             ptxCommon_PrintF("Records        : (EMV decoder disabled in this build)\n");
         }
-        (void)tmo; (void)val; (void)val_len; (void)tx_len; (void)rx_len; (void)st;
         ptxCommon_PrintF("==============================================\n");
         return;
     }
 
     /* ---- T2T: read NDEF directly ---- */
-    if (Prot_T2T == reg->ActiveCardProtType)
+    if (PES_NFC_PROT_T2T == result->protocol)
     {
-        if (!ptxIoTRdInt_ReadType2NDEF(iotRd, tx, rx))
+        if (!ptxIoTRdInt_ReadType2NDEF(NULL, tx, rx))
         {
             ptxCommon_PrintF("Info           : NFC Tag (not NDEF formatted)\n");
             ptxCommon_PrintF("Size           : N/A\n");
@@ -1692,7 +1683,7 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
         }
     }
     /* ---- T5T: NDEF-style info (if applicable) ---- */
-    else if (Prot_T5T == reg->ActiveCardProtType)
+    else if (PES_NFC_PROT_T5T == result->protocol)
     {
         ptxCommon_PrintF("Info           : NFC Tag\n");
         ptxCommon_PrintF("Size           : (read CC for details)\n");
@@ -1719,9 +1710,7 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
  * DATA EXCHANGE FUNCTION
  * ####################################################################################################################
  */
-static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
-                                                      ptxIoTRd_CardRegistry_t *cardRegistry,
-                                                      ptxIotRdInt_Demo_State_t *demoState,
+static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(const pes_nfc_card_result_t *result,
                                                       uint8_t *skipTxDataExchange,
                                                       uint8_t *skipRxProcessing)
 {
@@ -1743,7 +1732,7 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
     /* P2P/NFC-DEP Protocol Example => LLCP - SYMM-Packet = 0x0000 */
     const uint8_t PROT_NFC_DEP_EXAMPLE[] = {0x00, 0x00};
 
-    if ((NULL != iotRd) && (NULL != cardRegistry) && (NULL != demoState) && (NULL != skipTxDataExchange) && (NULL != skipRxProcessing))
+    if ((NULL != result) && (NULL != skipTxDataExchange) && (NULL != skipRxProcessing))
     {
 
         if (ptxStatus_Success == st)
@@ -1753,8 +1742,8 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
              * (cmd_erase), ndef_len is 0 and the operation collapses to "set
              * NLEN=0 / write empty NDEF", i.e. an erase. T2T uses local raw
              * WRITE commands; T4T uses a raw-APDU helper. Both go through the
-             * FSP data-exchange wrapper. T3T/T5T are intentionally not
-             * supported so their code is dropped by --gc-sections to stay
+             * PES_NFCCardReader_DataExchange() wrapper. T3T/T5T are intentionally
+             * not supported so their code is dropped by --gc-sections to stay
              * inside the 63 KB flash budget. */
             if ((0u != UserCli_IsWriteArmed()) || (0u != UserCli_IsEraseArmed()))
             {
@@ -1785,21 +1774,21 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
 
                 if (ptxStatus_Success == op_st)
                 {
-                    switch (cardRegistry->ActiveCardProtType)
+                    switch (result->protocol)
                     {
-                        case Prot_T2T:
+                        case PES_NFC_PROT_T2T:
                             op_proto = "T2T";
-                            /* Raw T2T NDEF write/erase via the FSP data-exchange
-                             * wrapper (no ra/renesas ptxNDEF_T2TOp dependency). */
+                            /* Raw T2T NDEF write/erase via PES data-exchange
+                             * (no ra/renesas ptxNDEF_T2TOp dependency). */
                             if (0u == ptxIoTRdInt_WriteType2NDEF(&ndef_buf[0], ndef_len, &rx_data[0]))
                             {
                                 op_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
                             }
                             break;
 
-                        case Prot_ISODEP:
+                        case PES_NFC_PROT_ISODEP:
                             op_proto = "T4T";
-                            if (0u == ptxIoTRdInt_WriteType4NDEF(iotRd, ndef_buf, ndef_len, &rx_data[0]))
+                            if (0u == ptxIoTRdInt_WriteType4NDEF(NULL, ndef_buf, ndef_len, &rx_data[0]))
                             {
                                 op_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
                             }
@@ -1820,7 +1809,7 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
                 else
                 {
                     ptxCommon_PrintF("%s: proto 0x%02X not supported\n",
-                                     op_name, (unsigned)cardRegistry->ActiveCardProtType);
+                                     op_name, (unsigned)result->protocol);
                 }
 
                 UserCli_ClearWriteArmed();
@@ -1831,51 +1820,52 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
             }
 
             /* Print structured card info and read records (ISO-DEP: EMV flow). */
-            ptxIoTRdInt_PrintCardInfo(iotRd, cardRegistry, &tx_data[0], &rx_data[0]);
+            ptxIoTRdInt_PrintCardInfo(result, &tx_data[0], &rx_data[0]);
             /* Card info already performed all relevant reads; skip the raw
              * protocol example exchange (TX=/RX=) to keep the output clean. */
             *skipTxDataExchange = 1u;
             *skipRxProcessing   = 1u;
 
-            switch (cardRegistry->ActiveCardProtType)
+            switch (result->protocol)
             {
-                case Prot_T2T:
+                case PES_NFC_PROT_T2T:
                     tx_data_length = sizeof(PROT_T2T_EXAMPLE);
                     memcpy(&tx_data[0], &PROT_T2T_EXAMPLE[0], tx_data_length);
                     app_timeout = DEFAULT_APP_TIMEOUT_RAW;
                     break;
 
-                case Prot_T3T:
+                case PES_NFC_PROT_T3T:
                     /*  7 = 1x Command-Code + 1x Number of Services + 2x Service Code List + 1 Number of Blocks + 2x Block List */
-                    /* 8 = Length of NFCID2 */
+                    /* 8 = Length of NFCID2 (taken from result->uid, populated by PES HAL from SENSF_RES[2..9]) */
                     /* Note: LEN-byte managed internally! */
                     tx_data_length = 7u + 8u;
                     memcpy(&tx_data[0], &PROT_T3T_EXAMPLE[0], 1u);
-                    memcpy(&tx_data[1], &cardRegistry->ActiveCard->TechParams.CardFParams.SENSF_RES[2], 8u);
+                    memcpy(&tx_data[1], &result->uid[0], 8u);
                     memcpy(&tx_data[9], &PROT_T3T_EXAMPLE[1], 6u);
                     app_timeout = DEFAULT_APP_TIMEOUT_RAW;
                     break;
 
-                case Prot_ISODEP:
+                case PES_NFC_PROT_ISODEP:
                     /* Card info + EMV records already printed above by ptxIoTRdInt_PrintCardInfo. */
                     *skipRxProcessing = 1u;
                     *skipTxDataExchange = 1u;
                     break;
 
-                case Prot_NFCDEP:
+                case PES_NFC_PROT_NFCDEP:
                     tx_data_length = sizeof(PROT_NFC_DEP_EXAMPLE);
                     memcpy(&tx_data[0], &PROT_NFC_DEP_EXAMPLE[0], tx_data_length);
                     app_timeout = DEFAULT_APP_TIMEOUT_PROT;
                     break;
 
-                case Prot_T5T:
+                case PES_NFC_PROT_T5T:
                     /*
                      * Read Block-0 via a raw ISO-15693 READ_SINGLE_BLOCK frame sent
-                     * through the FSP data-exchange wrapper (no ra/renesas Native-Tag
-                     * dependency). Addressed mode (flags 0x22) embeds the 8-byte UID.
+                     * through PES_NFCCardReader_DataExchange (no ra/renesas Native-Tag
+                     * dependency). Addressed mode (flags 0x22) embeds the 8-byte UID
+                     * LSB-first. PES exposes UID MSB-first; reverse it here.
                      *   [0] = 0x22  flags: high data-rate + addressed
                      *   [1] = 0x20  READ_SINGLE_BLOCK command
-                     *   [2..9]      UID (stored LSB-first)
+                     *   [2..9]      UID (LSB-first)
                      *   [10]= 0x00  block number 0
                      */
                     app_timeout = DEFAULT_APP_TIMEOUT_RAW;
@@ -1883,7 +1873,10 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
 
                     tx_data[0] = 0x22u;
                     tx_data[1] = 0x20u;
-                    (void)memcpy(&tx_data[2], &cardRegistry->ActiveCard->TechParams.CardVParams.UID[0], 8u);
+                    for (uint8_t i = 0; i < 8u; i++)
+                    {
+                        tx_data[2u + i] = result->uid[7u - i];
+                    }
                     tx_data[10] = 0x00u;
                     tx_data_length = 11u;
 
@@ -1893,7 +1886,7 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
                     break;
 
                 default:
-                    /* Undefined Protocol - Restart RF-Discovery */
+                    /* Undefined Protocol - PES orchestrator will restart RF-Discovery */
                     *skipTxDataExchange = 1u;
                     break;
             }
@@ -1926,8 +1919,6 @@ data_exchange_done:
         {
             ptxCommon_PrintF("ERROR - Module initialization failed! (Error-Code = %04X, RF)\n", st);
         }
-
-        *demoState = IoTRd_DemoState_DeactivateReader;
     }
 
     return st;
