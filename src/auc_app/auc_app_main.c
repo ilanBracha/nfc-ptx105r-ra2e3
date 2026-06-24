@@ -35,7 +35,7 @@
 
     Project     : PTX1K
     Module      : IOT_READER Demo
-    File        : ptx_IOT_RD_Main.c
+    File        : auc_app_main.c
 
     Description : IoT Reader demo application for PTX1xxR NFC Platform.
 
@@ -146,7 +146,7 @@
 #include "user_cli.h"
 #include "ptxCOMMON.h"
 #include "ptx_IOT_READER.h"
-#include "ptx_IOT_RD_Main.h"
+#include "auc_app_main.h"
 
 /*
  * ####################################################################################################################

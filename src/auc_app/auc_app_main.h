@@ -35,13 +35,13 @@
 
     Project     : PTX1K
     Module      : IOT_READER Demo
-    File        : ptx_IOT_RD_Main.h
+    File        : auc_app_main.h
 
     Description :
 */
 
-#ifndef APIS_IOT_RD_PTX_MAIN_H_
-#define APIS_IOT_RD_PTX_MAIN_H_
+#ifndef AUC_APP_MAIN_H_
+#define AUC_APP_MAIN_H_
 
 #include "SEGGER_RTT.h" /* Import RTT Library */
 

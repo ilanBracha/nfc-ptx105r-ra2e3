@@ -1,7 +1,8 @@
 #include "hal_data.h"
 #include "user_uart_log.h"
 #include "user_cli.h"
-#include "ptx_IOT_RD_Main.h"
+#include "auc_app_main.h"
+#include "pes_nfc_card_reader.h"
 
 FSP_CPP_HEADER
 void R_BSP_WarmStart(bsp_warm_start_event_t event);
