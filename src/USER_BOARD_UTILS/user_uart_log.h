@@ -18,11 +18,25 @@ extern "C" {
 #endif
 
 /**
+ * Signature of an optional RX byte callback. When registered, the UART ISR
+ * forwards each received byte to this function instead of (in addition to)
+ * the internal RX ring buffer. The callback runs in ISR context.
+ */
+typedef void (*UserUartLog_RxCallback_t)(uint8_t byte);
+
+/**
  * Open g_uart0 and register the internal TX/RX callback.
  * Safe to call multiple times: the second and later calls are no-ops.
  * Returns 0 on success, non-zero on FSP error.
  */
 int  UserUartLog_Init(void);
+
+/**
+ * Register a callback that will be invoked from the UART RX ISR for every
+ * received byte. Pass NULL to unregister. Only one callback is supported.
+ * The callback runs in interrupt context — keep it short.
+ */
+void UserUartLog_RegisterRxCallback(UserUartLog_RxCallback_t cb);
 
 /**
  * Blocking write of `len` bytes through g_uart0.

@@ -68,6 +68,9 @@ extern baud_setting_t g_uart0_baud_setting;
  */
 static volatile uint8_t s_uart_initialized = 0u;
 
+/* Optional per-byte RX callback (registered by CLI layer). */
+static UserUartLog_RxCallback_t s_rx_callback = NULL;
+
 /* RX ring buffer (ISR producer / main consumer). Size MUST be a power of 2. */
 #define USER_UART_RX_BUF_SIZE   128u
 #define USER_UART_RX_BUF_MASK   (USER_UART_RX_BUF_SIZE - 1u)
@@ -119,11 +122,19 @@ static void user_uart_cb(uart_callback_args_t *p_args)
 
         case UART_EVENT_RX_CHAR:
         {
-            /* p_args->data carries the received byte when no DTC is used. */
+            uint8_t rxb = (uint8_t)p_args->data;
+
+            /* Forward to registered callback (e.g. CLI) if present. */
+            if (NULL != s_rx_callback)
+            {
+                s_rx_callback(rxb);
+            }
+
+            /* Always store in ring buffer for UserUartLog_RxGet() consumers. */
             uint16_t next = (uint16_t)((s_rx_head + 1u) & USER_UART_RX_BUF_MASK);
             if (next != s_rx_tail)
             {
-                s_rx_buf[s_rx_head] = (uint8_t)p_args->data;
+                s_rx_buf[s_rx_head] = rxb;
                 s_rx_head = next;
             }
             /* If full, byte is dropped silently (CLI lines are short). */
@@ -319,4 +330,9 @@ int UserUartLog_RxGet(uint8_t *out)
     *out = s_rx_buf[tail];
     s_rx_tail = (uint16_t)((tail + 1u) & USER_UART_RX_BUF_MASK);
     return 1;
+}
+
+void UserUartLog_RegisterRxCallback(UserUartLog_RxCallback_t cb)
+{
+    s_rx_callback = cb;
 }

@@ -879,9 +879,6 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
      */
     while (0 == exit_loop)
     {
-        /* Service the cooperative UART CLI between every demo iteration. */
-        UserCli_Poll();
-
         /* check regularly for critical system errors */
         fsp_err_t fsp_err = RM_NFC_READER_PTX_StatusGet (&g_nfc_reader_ptx0_ctrl, StatusType_System, &system_state);
         st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);

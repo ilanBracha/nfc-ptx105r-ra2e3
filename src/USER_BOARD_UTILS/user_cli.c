@@ -1,7 +1,14 @@
 /*
  * user_cli.c
  *
- * Tiny cooperative line-based CLI on g_uart0. See user_cli.h.
+ * Tiny interrupt-driven line-based CLI on g_uart0. See user_cli.h.
+ *
+ * Character reception (echo, backspace, line editing) AND command dispatch are
+ * handled entirely inside the UART RX ISR via a callback registered with
+ * UserUartLog_RegisterRxCallback(). When a full line is received (CR/LF),
+ * the ISR parses and executes the command immediately — no main-loop polling
+ * is required. Command handlers are kept simple (set flags, print text) so
+ * they are safe to run at ISR priority.
  *
  * Adding a new command:
  *   1. Implement a `static void cmd_xxx(const char *args)` handler.
@@ -56,10 +63,17 @@ typedef struct
     const char   *help;
 } cli_cmd_t;
 
-static char     s_line[USER_CLI_LINE_MAX + 1u];
-static uint16_t s_line_len;
+/* Line buffer filled by the ISR callback (echo + line editing in ISR). */
+static volatile char     s_line[USER_CLI_LINE_MAX + 1u];
+static volatile uint16_t s_line_len;
+static volatile uint8_t  s_prev_was_cr = 0u; /* swallow LF that follows CR (CRLF) */
+
+/* Deferred dispatch: when ISR sees CR/LF it copies the completed line here
+ * and sets s_line_ready. Main-context UserCli_Process() picks it up. */
+static char              s_pending_line[USER_CLI_LINE_MAX + 1u];
+static volatile uint8_t  s_line_ready = 0u;
+
 static uint8_t  s_initialized = 0u;
-static uint8_t  s_prev_was_cr = 0u; /* swallow LF that follows CR (CRLF) */
 
 /* One-shot "erase the next activated tag" request. Set by the `erase` CLI
  * command; consumed by the NFC main loop once it has an active tag. */
@@ -295,10 +309,19 @@ static void cli_handle_byte(uint8_t b)
         s_line[s_line_len] = '\0';
         if (s_line_len > 0u)
         {
-            cli_dispatch(s_line);
+            /* Dispatch the command directly in ISR context. All command handlers
+             * only set flags or call UserUartLog_Write (which is ISR-safe), so
+             * no deferral to the main loop is required. */
+            (void)memcpy(s_pending_line, (const char *)s_line, s_line_len + 1u);
+            cli_dispatch(s_pending_line);
+            cli_write(USER_CLI_COLOR_KGRN USER_CLI_PROMPT);
+        }
+        else
+        {
+            /* Empty line — just reprint the prompt. */
+            cli_write(USER_CLI_COLOR_KGRN USER_CLI_PROMPT);
         }
         s_line_len = 0u;
-        cli_write(USER_CLI_COLOR_KGRN USER_CLI_PROMPT);
         return;
     }
 
@@ -334,6 +357,17 @@ static void cli_handle_byte(uint8_t b)
 
 /*
  * ####################################################################################################################
+ * ISR CALLBACK (registered with UserUartLog_RegisterRxCallback)
+ * ####################################################################################################################
+ */
+static void cli_rx_isr_callback(uint8_t byte)
+{
+    if (0u == s_initialized) { return; }
+    cli_handle_byte(byte);
+}
+
+/*
+ * ####################################################################################################################
  * PUBLIC API
  * ####################################################################################################################
  */
@@ -361,24 +395,26 @@ void UserCli_Init(void)
 {
     s_line_len    = 0u;
     s_prev_was_cr = 0u;
+    s_line_ready  = 0u;
     s_initialized = 1u;
+
+    /* Register our byte handler so the UART RX ISR feeds us directly. */
+    UserUartLog_RegisterRxCallback(cli_rx_isr_callback);
+
     UserCli_PrintMenu();
+}
+
+void UserCli_Process(void)
+{
+    /* Command dispatch now happens directly in the UART RX ISR, so this
+     * function is a no-op. Kept for backward compatibility. */
+    (void)0;
 }
 
 void UserCli_Poll(void)
 {
-    if (0u == s_initialized) { return; }
-
-    uint8_t b;
-    /* Drain whatever is available; CLI output uses the same TX path so this
-     * naturally yields between bytes. Bound the burst to avoid starving the
-     * caller if someone pastes a huge blob. */
-    uint16_t budget = 64u;
-
-    while ((budget-- > 0u) && (0 != UserUartLog_RxGet(&b)))
-    {
-        cli_handle_byte(b);
-    }
+    /* Legacy API kept for backward compatibility. Equivalent to Process(). */
+    UserCli_Process();
 }
 
 void UserCli_ArmEraseNext(void)
