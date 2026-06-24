@@ -374,6 +374,7 @@ void UserCli_Poll(void)
      * naturally yields between bytes. Bound the burst to avoid starving the
      * caller if someone pastes a huge blob. */
     uint16_t budget = 64u;
+
     while ((budget-- > 0u) && (0 != UserUartLog_RxGet(&b)))
     {
         cli_handle_byte(b);

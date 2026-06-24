@@ -141,20 +141,12 @@
 */
 
 
+#include <string.h>
 #include "user_board_utils.h"
 #include "user_cli.h"
-#include <string.h>
 #include "ptxCOMMON.h"
-//#include "ptxIoTRd_COMMON.h"
-#include "ptxT4T.h"
 #include "ptx_IOT_READER.h"
-#include "ptxNativeTag_T5T.h"
-#include "ptxNDEF.h"
-#include "ptxNDEF_T2TOP.h"
-#include "ptxNDEF_T3TOP.h"
-#include "ptxNDEF_T4TOP.h"
-#include "ptxNDEF_T5TOP.h"
-#include <IOT_APP/ptx_IOT_RD_Main.h>
+#include "ptx_IOT_RD_Main.h"
 
 /*
  * ####################################################################################################################
@@ -280,8 +272,6 @@ typedef enum ptxIotRdInt_Demo_State
  * Comment/Uncomment the following line to use NDEF-operations instead of the raw RF data-exchanges or commands from the NativeTag-API
  */
 
-#define NDEF_BUFFER_SIZE                        (256u)                          /**< NDEF-Buffer. Length */
-
 /**
  * Default timeout-values for for RAW-protocols (e.g. T2T, T3T, ...) and standard-protocols (ISO-/NFC-DEP)
  */
@@ -334,10 +324,11 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd);
 /*
  * Function representing demo state "data exchange" when NDEF should be used
  */
-ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardRegistry_t *cardRegistry, ptxIotRdInt_Demo_State_t *demoState, uint8_t *skipTxDataExchange, uint8_t *skipRxProcessing,
-                                               ptxNativeTag_T5T_t* t5tComp, ptxNativeTag_T5T_InitParams_t* t5tInitParams, ptxNDEF_T2TOP_t* t2tOpComp, ptxNDEF_T2TOP_InitParams_t* t2tOpInitParams,
-                                               ptxNDEF_T3TOP_t* t3tOpComp, ptxNDEF_T3TOP_InitParams_t* t3tOpInitParams, ptxNDEF_T4TOP_t* t4tOpComp, ptxNDEF_T4TOP_InitParams_t* t4tOpInitParams,
-                                               ptxNDEF_T5TOP_t* t5tOpComp, ptxNDEF_T5TOP_InitParams_t* t5tOpInitParams, ptxNDEF_t* ndefComp, ptxNDEF_InitParams_t* ndefInitParams);
+static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
+                                                      ptxIoTRd_CardRegistry_t *cardRegistry,
+                                                      ptxIotRdInt_Demo_State_t *demoState,
+                                                      uint8_t *skipTxDataExchange,
+                                                      uint8_t *skipRxProcessing);
 
 /*
  * Local FSP-based replacements for the COMPS demo-state helpers.
@@ -860,30 +851,6 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
     uint8_t skip_tx_data_exchange;
     uint8_t skip_rx_processing;
 
-    /* Native-Tag Component for T5T */
-    ptxNativeTag_T5T_t t5t_comp;
-    ptxNativeTag_T5T_InitParams_t t5t_init_params;
-
-    /* NDEF-OP Component T2T */
-    ptxNDEF_T2TOP_t t2top_comp;
-    ptxNDEF_T2TOP_InitParams_t t2top_init_params;
-
-    /* NDEF-OP Component T3T */
-    ptxNDEF_T3TOP_t t3top_comp;
-    ptxNDEF_T3TOP_InitParams_t t3top_init_params;
-
-    /* NDEF-OP Component T4T */
-    ptxNDEF_T4TOP_t t4top_comp;
-    ptxNDEF_T4TOP_InitParams_t t4top_init_params;
-
-    /* NDEF-OP Component T5T */
-    ptxNDEF_T5TOP_t t5top_comp;
-    ptxNDEF_T5TOP_InitParams_t t5top_init_params;
-
-    /* Generic NDEF-OP Component (Tag-independent) */
-    ptxNDEF_t ndef_comp;
-    ptxNDEF_InitParams_t ndef_init_params;
-
     if (ptxStatus_Success == st)
     {
         /* get reference to the internal card registry */
@@ -955,11 +922,8 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
                 skip_tx_data_exchange = 0;
                 skip_rx_processing = 0;
 
-                st = ptxIoTRdInt_DemoState_DataExchange(iotRd, card_registry, &demo_state, &skip_tx_data_exchange,
-                                                        &skip_rx_processing, &t5t_comp, &t5t_init_params, &t2top_comp,
-                                                        &t2top_init_params, &t3top_comp, &t3top_init_params, &t4top_comp,
-                                                        &t4top_init_params, &t5top_comp, &t5top_init_params, &ndef_comp,
-                                                        &ndef_init_params);
+                st = ptxIoTRdInt_DemoState_DataExchange(iotRd, card_registry, &demo_state,
+                                                        &skip_tx_data_exchange, &skip_rx_processing);
                 break;
 
             case IoTRd_DemoState_DeactivateReader:
@@ -976,16 +940,6 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
                 break;
         }
     }
-
-    /* T5T Native-Tag component is no longer opened (raw FSP data-exchange is used). */
-    (void)t5t_comp;
-#ifdef USE_NDEF
-    (void)ptxNDEF_T2TOpClose(&t2top_comp);
-    (void)ptxNDEF_T3TOpClose(&t3top_comp);
-    (void)ptxNDEF_T4TOpClose(&t4top_comp);
-    (void)ptxNDEF_T5TOpClose(&t5top_comp);
-    (void)ptxNDEF_Close(&ndef_comp);
-#endif
 }
 #endif
 
@@ -995,7 +949,7 @@ static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
  * CARD INFO & RECORD READER
  * ####################################################################################################################
  */
-#if defined(USE_PTX_IOTRD_DEMO) && !defined(USE_NDEF)
+#if defined(USE_PTX_IOTRD_DEMO)
 
 /* Lightweight BER-TLV search (1- or 2-byte tags, multi-byte length, recursive into constructed). */
 static inline uint8_t ptxIoTRdInt_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
@@ -1751,7 +1705,7 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
     ptxCommon_PrintF("==============================================\n");
 }
 
-#endif /* USE_PTX_IOTRD_DEMO && !USE_NDEF */
+#endif /* USE_PTX_IOTRD_DEMO */
 
 
 /*
@@ -1759,10 +1713,11 @@ static void ptxIoTRdInt_PrintCardInfo(ptxIoTRd_t *iotRd,
  * DATA EXCHANGE FUNCTION
  * ####################################################################################################################
  */
-ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardRegistry_t *cardRegistry, ptxIotRdInt_Demo_State_t *demoState, uint8_t *skipTxDataExchange, uint8_t *skipRxProcessing,
-                                               ptxNativeTag_T5T_t* t5tComp, ptxNativeTag_T5T_InitParams_t* t5tInitParams, ptxNDEF_T2TOP_t* t2tOpComp, ptxNDEF_T2TOP_InitParams_t* t2tOpInitParams,
-                                               ptxNDEF_T3TOP_t* t3tOpComp, ptxNDEF_T3TOP_InitParams_t* t3tOpInitParams, ptxNDEF_T4TOP_t* t4tOpComp, ptxNDEF_T4TOP_InitParams_t* t4tOpInitParams,
-                                               ptxNDEF_T5TOP_t* t5tOpComp, ptxNDEF_T5TOP_InitParams_t* t5tOpInitParams, ptxNDEF_t* ndefComp, ptxNDEF_InitParams_t* ndefInitParams)
+static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd,
+                                                      ptxIoTRd_CardRegistry_t *cardRegistry,
+                                                      ptxIotRdInt_Demo_State_t *demoState,
+                                                      uint8_t *skipTxDataExchange,
+                                                      uint8_t *skipRxProcessing)
 {
     ptxStatus_t st = ptxStatus_Success;
     uint8_t tx_data[TX_BUFFER_SIZE];
@@ -1773,7 +1728,6 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
 
     uint32_t app_timeout = DEFAULT_APP_TIMEOUT_RAW;
 
-#ifndef USE_NDEF
     /* T2T Protocol Example => READ BLOCK 0 */
     const uint8_t PROT_T2T_EXAMPLE[] = {0x30, 0x00};
 
@@ -1782,138 +1736,20 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
 
     /* P2P/NFC-DEP Protocol Example => LLCP - SYMM-Packet = 0x0000 */
     const uint8_t PROT_NFC_DEP_EXAMPLE[] = {0x00, 0x00};
-#endif
 
-    /* Needed by the generic NDEF component used for the CLI 'erase' path even
-     * when USE_NDEF is not defined for the normal read flow. */
-//    uint8_t work_buffer[NDEF_BUFFER_SIZE];
-#ifdef USE_NDEF
-    /* General NDEF-exchange buffer */
-    uint8_t ndef_msg_buffer[NDEF_BUFFER_SIZE];
-    uint32_t ndef_msg_buffer_len;
-#endif
-
-    if ((NULL != iotRd) && (NULL != cardRegistry) && (NULL != demoState) && (NULL != skipTxDataExchange) && (NULL != skipRxProcessing)
-        && (t5tComp) && (t5tInitParams) && (t2tOpComp) && (t2tOpInitParams) && (t3tOpComp) && (t3tOpInitParams) && (t4tOpComp) && (t4tOpInitParams)
-        && (t5tOpComp) && (t5tOpInitParams) && (ndefComp) && (ndefInitParams))
+    if ((NULL != iotRd) && (NULL != cardRegistry) && (NULL != demoState) && (NULL != skipTxDataExchange) && (NULL != skipRxProcessing))
     {
-        /*
-         * The T5T Block-0 read is now performed via a raw ISO-15693 frame sent
-         * through the FSP data-exchange wrapper (see Prot_T5T case below), so the
-         * ra/renesas Native-Tag T5T component is no longer opened here.
-         */
-        st = ptxStatus_Success;
-        (void)t5tComp;
-        (void)t5tInitParams;
-
-#ifdef USE_NDEF
-        if (ptxStatus_Success == st)
-        {
-            /* initialize the NDEF-OP component for T2T */
-            (void)memset(t2tOpComp, 0, sizeof(ptxNDEF_T2TOP_t));
-            (void)memset(t2tOpInitParams, 0, sizeof(ptxNDEF_T2TOP_InitParams_t));
-
-            t2tOpInitParams->T2TInitParams.IotRd = iotRd;
-            t2tOpInitParams->T2TInitParams.TxBuffer = &tx_data[0];
-            t2tOpInitParams->T2TInitParams.TxBufferSize = TX_BUFFER_SIZE;
-            t2tOpInitParams->WorkBuffer = &work_buffer[0];
-            t2tOpInitParams->WorkBufferSize = NDEF_BUFFER_SIZE;
-            t2tOpInitParams->RxBuffer = &rx_data[0];
-            t2tOpInitParams->RxBufferSize = RX_BUFFER_SIZE;
-
-            st = ptxNDEF_T2TOpOpen (t2tOpComp, t2tOpInitParams);
-        }
-
-        if (ptxStatus_Success == st)
-        {
-            /* initialize the NDEF-OP component for T3T */
-            (void)memset(t3tOpComp, 0, sizeof(ptxNDEF_T3TOP_t));
-            (void)memset(t3tOpInitParams, 0, sizeof(ptxNDEF_T3TOP_InitParams_t));
-
-            t3tOpInitParams->T3TInitParams.IotRd = iotRd;
-            t3tOpInitParams->T3TInitParams.NFCID2 = &cardRegistry->ActiveCard->TechParams.CardFParams.SENSF_RES[2];
-            t3tOpInitParams->T3TInitParams.NFCID2Len = PTX_T3T_NFCID2_SIZE;
-            t3tOpInitParams->T3TInitParams.MRTI_Check = cardRegistry->ActiveCard->TechParams.CardFParams.SENSF_RES[15];
-            t3tOpInitParams->T3TInitParams.MRTI_Update = cardRegistry->ActiveCard->TechParams.CardFParams.SENSF_RES[16];
-            t3tOpInitParams->T3TInitParams.TxBuffer = &tx_data[0];
-            t3tOpInitParams->T3TInitParams.TxBufferSize = TX_BUFFER_SIZE;
-            t3tOpInitParams->RxBuffer = &rx_data[0];
-            t3tOpInitParams->RxBufferSize = RX_BUFFER_SIZE;
-
-            st = ptxNDEF_T3TOpOpen (t3tOpComp, t3tOpInitParams);
-        }
-
-        if (ptxStatus_Success == st)
-        {
-            /* initialize the NDEF-OP component for T4T */
-            (void)memset(t4tOpComp, 0, sizeof(ptxNDEF_T4TOP_t));
-            (void)memset(t4tOpInitParams, 0, sizeof(ptxNDEF_T4TOP_InitParams_t));
-
-            t4tOpInitParams->T4TInitParams.IotRd = iotRd;
-            t4tOpInitParams->T4TInitParams.TxBuffer = &tx_data[0];
-            t4tOpInitParams->T4TInitParams.TxBufferSize = TX_BUFFER_SIZE;
-            t4tOpInitParams->RxBuffer = &rx_data[0];
-            t4tOpInitParams->RxBufferSize = RX_BUFFER_SIZE;
-
-            st = ptxNDEF_T4TOpOpen (t4tOpComp, t4tOpInitParams);
-        }
-
-        if (ptxStatus_Success == st)
-        {
-            /* initialize the NDEF-OP component for T5T */
-            (void)memset(t5tOpComp, 0, sizeof(ptxNDEF_T5TOP_t));
-            (void)memset(t5tOpInitParams, 0, sizeof(ptxNDEF_T5TOP_InitParams_t));
-
-            t5tOpInitParams->T5TInitParams.IotRd = iotRd;
-            t5tOpInitParams->T5TInitParams.TxBuffer = &tx_data[0];
-            t5tOpInitParams->T5TInitParams.TxBufferSize = TX_BUFFER_SIZE;
-            t5tOpInitParams->RxBuffer = &rx_data[0];
-            t5tOpInitParams->RxBufferSize = RX_BUFFER_SIZE;
-            t5tOpInitParams->WorkBuffer = &work_buffer[0];
-            t5tOpInitParams->WorkBufferSize = NDEF_BUFFER_SIZE;
-            t5tOpInitParams->T5TInitParams.UID = NULL;
-            t5tOpInitParams->T5TInitParams.UIDLen = 0;
-
-            st = ptxNDEF_T5TOpOpen (t5tOpComp, t5tOpInitParams);
-
-            /* Note: The usage of the Tag-specific NDEF-operation API or the generic NDEF-API is treated equally.
-             *       The only difference is that the generic NDEF-API takes internally care which Tag / RF-protocol
-             *       is currently active and then calls the specific Tag NDEF-operation function(s).
-             *       Both APIs work completely independent of each other.
-             *
-             *       Using both APIs in this application is for demonstration purposes only.
-             *
-             **/
-        }
-
-        if (ptxStatus_Success == st)
-        {
-                /* initialize generic NDEF-OP component */
-                (void)memset(ndefComp, 0, sizeof(ptxNDEF_t));
-                (void)memset(ndefInitParams, 0, sizeof(ptxNDEF_InitParams_t));
-
-                ndefInitParams->IotRd = iotRd;
-                ndefInitParams->TxBuffer = &tx_data[0];
-                ndefInitParams->TxBufferSize = TX_BUFFER_SIZE;
-                ndefInitParams->RxBuffer = &rx_data[0];
-                ndefInitParams->RxBufferSize = RX_BUFFER_SIZE;
-                ndefInitParams->WorkBuffer = &work_buffer[0];
-                ndefInitParams->WorkBufferSize = NDEF_BUFFER_SIZE;
-
-                st = ptxNDEF_Open (ndefComp, ndefInitParams);
-        }
-#endif
 
         if (ptxStatus_Success == st)
         {
             /* CLI: one-shot "erase / write" hook. A single armed flag triggers
              * a Write of the CLI-supplied NDEF message - when no text was set
              * (cmd_erase), ndef_len is 0 and the operation collapses to "set
-             * NLEN=0 / write empty NDEF", i.e. an erase. T2T uses the
-             * ptxNDEF_T2TOp layer; T4T uses a raw-APDU helper (the full T4T
-             * Op layer costs ~3 KB which won't fit on the RA2E3). T3T/T5T are
-             * intentionally not supported so their Op code is dropped by
-             * --gc-sections to stay inside the 63 KB flash budget. */
+             * NLEN=0 / write empty NDEF", i.e. an erase. T2T uses local raw
+             * WRITE commands; T4T uses a raw-APDU helper. Both go through the
+             * FSP data-exchange wrapper. T3T/T5T are intentionally not
+             * supported so their code is dropped by --gc-sections to stay
+             * inside the 63 KB flash budget. */
             if ((0u != UserCli_IsWriteArmed()) || (0u != UserCli_IsEraseArmed()))
             {
                 ptxStatus_t  op_st        = ptxStatus_Success;
@@ -1955,7 +1791,6 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                             }
                             break;
 
-#ifndef USE_NDEF
                         case Prot_ISODEP:
                             op_proto = "T4T";
                             if (0u == ptxIoTRdInt_WriteType4NDEF(iotRd, ndef_buf, ndef_len, &rx_data[0]))
@@ -1963,7 +1798,6 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                                 op_st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
                             }
                             break;
-#endif
 
                         default:
                             op_supported = 0u;
@@ -1990,59 +1824,22 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                 goto data_exchange_done;
             }
 
-#ifndef USE_NDEF
             /* Print structured card info and read records (ISO-DEP: EMV flow). */
             ptxIoTRdInt_PrintCardInfo(iotRd, cardRegistry, &tx_data[0], &rx_data[0]);
             /* Card info already performed all relevant reads; skip the raw
              * protocol example exchange (TX=/RX=) to keep the output clean. */
             *skipTxDataExchange = 1u;
             *skipRxProcessing   = 1u;
-#endif
 
             switch (cardRegistry->ActiveCardProtType)
             {
                 case Prot_T2T:
-    #ifndef USE_NDEF
                     tx_data_length = sizeof(PROT_T2T_EXAMPLE);
                     memcpy(&tx_data[0], &PROT_T2T_EXAMPLE[0], tx_data_length);
                     app_timeout = DEFAULT_APP_TIMEOUT_RAW;
-    #else
-                    /* check if the Tag supports NDEF */
-                    ptxCommon_PrintF("Check NDEF-compatibility via T2T-OP API ... ");
-                    st = ptxNDEF_T2TOpCheckMessage (t2tOpComp);
-
-                    if (ptxStatus_Success == st)
-                    {
-                        ptxCommon_PrintF("OK\n");
-
-                        ptxCommon_PrintF("Read NDEF-message via T2T-OP API ... ");
-                        ndef_msg_buffer_len = NDEF_BUFFER_SIZE;
-                        st = ptxNDEF_T2TOpReadMessage (t2tOpComp, &ndef_msg_buffer[0], &ndef_msg_buffer_len);
-
-                        if ((ptxStatus_Success == st) && (0 != ndef_msg_buffer_len))
-                        {
-                            ptxCommon_PrintF("OK, NDEF-Message Length = %04d Byte(s)\n", ndef_msg_buffer_len);
-                            ptxCommon_PrintF("NDEF-Message Content = \n");
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 0);
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 1);
-
-                        } else
-                        {
-                            ptxCommon_PrintF("Error (Status-Code = %04X)\n", st);
-                        }
-
-                    } else
-                    {
-                        ptxCommon_PrintF("Error (Status-Code = %04X)\n", st);
-                    }
-
-                    *skipRxProcessing = 1u;
-                    *skipTxDataExchange = 1u;
-    #endif
                     break;
 
                 case Prot_T3T:
-    #ifndef USE_NDEF
                     /*  7 = 1x Command-Code + 1x Number of Services + 2x Service Code List + 1 Number of Blocks + 2x Block List */
                     /* 8 = Length of NFCID2 */
                     /* Note: LEN-byte managed internally! */
@@ -2051,91 +1848,21 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                     memcpy(&tx_data[1], &cardRegistry->ActiveCard->TechParams.CardFParams.SENSF_RES[2], 8u);
                     memcpy(&tx_data[9], &PROT_T3T_EXAMPLE[1], 6u);
                     app_timeout = DEFAULT_APP_TIMEOUT_RAW;
-    #else
-                    /* check if the Tag supports NDEF */
-                    ptxCommon_PrintF("Check NDEF-compatibility via T3T-OP API ... ");
-                    st = ptxNDEF_T3TOpCheckMessage (t3tOpComp);
-
-                    if (ptxStatus_Success == st)
-                    {
-                        ptxCommon_PrintF("OK\n");
-
-                        ptxCommon_PrintF("Read NDEF-message via T3T-OP API ... ");
-                        ndef_msg_buffer_len = NDEF_BUFFER_SIZE;
-                        st = ptxNDEF_T3TOpReadMessage (t3tOpComp, &ndef_msg_buffer[0], &ndef_msg_buffer_len);
-
-                        if ((ptxStatus_Success == st) && (0 != ndef_msg_buffer_len))
-                        {
-                            ptxCommon_PrintF("OK, NDEF-Message Length = %04d Byte(s)\n", ndef_msg_buffer_len);
-                            ptxCommon_PrintF("NDEF-Message Content = \n");
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 0);
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 1);
-
-                        } else
-                        {
-                            ptxCommon_PrintF("Error (Status-Code = %04X)\n", st);
-                        }
-
-                    } else
-                    {
-                        ptxCommon_PrintF("Error (Status-Code = %04X)\n", st);
-                    }
-
-                    *skipRxProcessing = 1u;
-                    *skipTxDataExchange = 1u;
-    #endif
                     break;
 
                 case Prot_ISODEP:
-    #ifndef USE_NDEF
                     /* Card info + EMV records already printed above by ptxIoTRdInt_PrintCardInfo. */
                     *skipRxProcessing = 1u;
                     *skipTxDataExchange = 1u;
-    #else
-                    /* check if the Tag supports NDEF */
-                    ptxCommon_PrintF("Check NDEF-compatibility via T4T-OP API ... ");
-                    st = ptxNDEF_T4TOpCheckMessage (t4tOpComp);
-
-                    if (ptxStatus_Success == st)
-                    {
-                        ptxCommon_PrintF("OK\n");
-
-                        ptxCommon_PrintF("Read NDEF-message via T4T-OP API ... ");
-                        ndef_msg_buffer_len = NDEF_BUFFER_SIZE;
-                        st = ptxNDEF_T4TOpReadMessage (t4tOpComp, &ndef_msg_buffer[0], &ndef_msg_buffer_len);
-
-                        if ((ptxStatus_Success == st) && (0 != ndef_msg_buffer_len))
-                        {
-                            ptxCommon_PrintF("OK, NDEF-Message Length = %04d Byte(s)\n", ndef_msg_buffer_len);
-                            ptxCommon_PrintF("NDEF-Message Content = \n");
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 0);
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 1);
-
-                        } else
-                        {
-                            ptxCommon_PrintF("Error (Status-Code = %04X)\n", st);
-                        }
-
-                    } else
-                    {
-                        ptxCommon_PrintF("Error (Status-Code = %04X)\n", st);
-                    }
-
-                    *skipRxProcessing = 1u;
-                    *skipTxDataExchange = 1u;
-    #endif
                     break;
 
                 case Prot_NFCDEP:
-    #ifndef USE_NDEF
                     tx_data_length = sizeof(PROT_NFC_DEP_EXAMPLE);
                     memcpy(&tx_data[0], &PROT_NFC_DEP_EXAMPLE[0], tx_data_length);
                     app_timeout = DEFAULT_APP_TIMEOUT_PROT;
-    #endif
                     break;
 
                 case Prot_T5T:
-    #ifndef USE_NDEF
                     /*
                      * Read Block-0 via a raw ISO-15693 READ_SINGLE_BLOCK frame sent
                      * through the FSP data-exchange wrapper (no ra/renesas Native-Tag
@@ -2157,42 +1884,6 @@ ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(ptxIoTRd_t *iotRd, ptxIoTRd_CardR
                     st = ptxAPP_DataExchange(&tx_data[0], tx_data_length, &rx_data[0], &rx_data_length);
                     ptxCommon_PrintStatusMessage("Execute \"READ_SINGLE_BLOCK\"-command (Block 0)", st);
                     *skipTxDataExchange = 1u;
-    #else
-                    /* check if the Tag supports NDEF */
-                    st = ptxNDEF_T5TOpCheckMessage (t5tOpComp);
-                    ptxCommon_PrintF("Check NDEF-compatibility via T5T-OP API", st);
-
-                    if (ptxStatus_Success == st)
-                    {
-                        ndef_msg_buffer_len = NDEF_BUFFER_SIZE;
-                        st = ptxNDEF_T5TOpReadMessage (t5tOpComp, &ndef_msg_buffer[0], &ndef_msg_buffer_len);
-                        ptxCommon_PrintF("Read NDEF-message via T5T-OP API", st);
-                        ptxCommon_PrintF("OK, NDEF-Message Length = %04d Byte(s)\n", ndef_msg_buffer_len);
-                        ptxCommon_PrintF("NDEF-Message Content = \n");
-                        ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 0);
-                        ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 1);
-                    }
-
-                    if (ptxStatus_Success == st)
-                    {
-                        /* check if the Tag supports NDEF */
-                        st = ptxNDEF_CheckMessage (ndefComp);
-
-                        if (ptxStatus_Success == st)
-                        {
-                            ndef_msg_buffer_len = NDEF_BUFFER_SIZE;
-                            st = ptxNDEF_ReadMessage (ndefComp, &ndef_msg_buffer[0], &ndef_msg_buffer_len);
-                            ptxCommon_PrintF("Read NDEF-message via NDEF-OP API", st);
-                            ptxCommon_PrintF("OK, NDEF-Message Length = %04d Byte(s)\n", ndef_msg_buffer_len);
-                            ptxCommon_PrintF("NDEF-Message Content = \n");
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 0);
-                            ptxCommon_Print_Buffer(&ndef_msg_buffer[0], 0, ndef_msg_buffer_len, 1, 1);
-                        }
-                    }
-
-                    *skipRxProcessing = 1u;
-                    *skipTxDataExchange = 1u;
-    #endif
                     break;
 
                 default:
