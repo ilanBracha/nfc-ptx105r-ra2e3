@@ -10,11 +10,13 @@
 
 #include "hal_data.h"
 
-#define BTN_IOT_RD   IOPORT_PORT_00_PIN_04 // S1
-#define LED_IOT_RD   BSP_IO_PORT_09_PIN_15 // LED1
-#define LED_STATUS   BSP_IO_PORT_09_PIN_13 // LED3
-#define LED_ACTIVE   BSP_IO_LEVEL_HIGH
-#define LED_INACTIVE BSP_IO_LEVEL_LOW
+#define USER_BOARD_BTN_IOT_RD   IOPORT_PORT_00_PIN_04 // S1
+#define USER_BOARD_LED_IOT_RD   BSP_IO_PORT_09_PIN_15 // LED1
+#define USER_BOARD_LED_STATUS   BSP_IO_PORT_09_PIN_13 // LED3
+#define USER_BOARD_LED_ACTIVE   BSP_IO_LEVEL_HIGH
+#define USER_BOARD_LED_INACTIVE BSP_IO_LEVEL_LOW
+
+#define USER_BOARD_LED_FUNC_EN  0
 
 /**
  * Selects which LEDs light up and for how long on card detection.

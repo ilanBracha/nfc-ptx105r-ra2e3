@@ -38,10 +38,9 @@ extern void ptxCommon_PrintF(const char *format, ...);
 #define USER_CLI_COLOR_KCYN  "\x1B[36m"
 #define USER_CLI_COLOR_KWHT  "\x1B[37m"
 
-#define CLI_LINE_MAX         120u
-#define CLI_PROMPT           "$ "
-#define CLI_NEWLINE          "\r\n"
-
+#define USER_CLI_LINE_MAX    120u
+#define USER_CLI_PROMPT      "$ "
+#define USER_CLI_NEWLINE     "\r\n"
 
 /*
  * ####################################################################################################################
@@ -57,7 +56,7 @@ typedef struct
     const char   *help;
 } cli_cmd_t;
 
-static char     s_line[CLI_LINE_MAX + 1u];
+static char     s_line[USER_CLI_LINE_MAX + 1u];
 static uint16_t s_line_len;
 static uint8_t  s_initialized = 0u;
 static uint8_t  s_prev_was_cr = 0u; /* swallow LF that follows CR (CRLF) */
@@ -91,7 +90,7 @@ static void cli_write_byte (uint8_t b)
 
 void cli_prompt (void)
 {
-    cli_write(CLI_NEWLINE CLI_PROMPT);
+    cli_write(USER_CLI_NEWLINE USER_CLI_PROMPT);
 }
 
 static int cli_streq_ci(const char *a, const char *b)
@@ -118,7 +117,7 @@ static void cmd_help (const char *args);
 static void cmd_version (const char *args)
 {
     (void)args;
-    cli_write("PTX IoT Reader (RA2E3 FPB) - CLI v1.0" CLI_NEWLINE);
+    cli_write("PTX IoT Reader (RA2E3 FPB) - CLI v1.0" USER_CLI_NEWLINE);
 }
 
 static void cmd_write (const char *args)
@@ -130,7 +129,7 @@ static void cmd_write (const char *args)
     while ((*p == ' ') || (*p == '\t')) { p++; }
     if (*p != '"')
     {
-        cli_write("usage: write \"text to write\"" CLI_NEWLINE);
+        cli_write("usage: write \"text to write\"" USER_CLI_NEWLINE);
         return;
     }
     p++;
@@ -138,19 +137,19 @@ static void cmd_write (const char *args)
     while ((*p != '\0') && (*p != '"')) { p++; }
     if (*p != '"')
     {
-        cli_write("write: missing closing '\"'" CLI_NEWLINE);
+        cli_write("write: missing closing '\"'" USER_CLI_NEWLINE);
         return;
     }
     size_t len = (size_t)(p - start);
     if (0u == len)
     {
         UserCli_ClearWriteArmed();
-        cli_write("write: disarmed" CLI_NEWLINE);
+        cli_write("write: disarmed" USER_CLI_NEWLINE);
         return;
     }
     if (len > USER_CLI_WRITE_TEXT_MAX)
     {
-        cli_write("write: text too long (max 96 bytes)" CLI_NEWLINE);
+        cli_write("write: text too long (max 96 bytes)" USER_CLI_NEWLINE);
         return;
     }
 
@@ -158,8 +157,8 @@ static void cmd_write (const char *args)
     /* Arming write supersedes any pending erase. */
     s_erase_armed = 0u;
 
-    cli_write("write: armed - present a TAG to write the NDEF Text record" CLI_NEWLINE);
-    cli_write("       (type 'write \"\"' to cancel)" CLI_NEWLINE);
+    cli_write("write: armed - present a TAG to write the NDEF Text record" USER_CLI_NEWLINE);
+    cli_write("       (type 'write \"\"' to cancel)" USER_CLI_NEWLINE);
 }
 
 static void cmd_erase (const char *args)
@@ -173,36 +172,38 @@ static void cmd_erase (const char *args)
         s_erase_armed    = 0u;
         s_write_armed    = 0u;
         s_write_text_len = 0u;
-        cli_write("erase: disarmed (no tag will be erased)" CLI_NEWLINE);
+        cli_write("erase: disarmed (no tag will be erased)" USER_CLI_NEWLINE);
     }
     else
     {
         s_erase_armed = 1u;
-        cli_write("erase: armed - present a TAG to erase its NDEF content" CLI_NEWLINE);
-        cli_write("       (type 'erase' again to cancel)" CLI_NEWLINE);
+        cli_write("erase: armed - present a TAG to erase its NDEF content" USER_CLI_NEWLINE);
+        cli_write("       (type 'erase' again to cancel)" USER_CLI_NEWLINE);
     }
 }
 
-//static void cmd_ledon (const char *args)
-//{
-//    (void)args;
-//    UserBoardUtils_SetStatusLed(LED_ACTIVE);
-//    cli_write("status LED: ON" CLI_NEWLINE);
-//}
-//
-//static void cmd_ledoff (const char *args)
-//{
-//    (void)args;
-//    UserBoardUtils_SetStatusLed(LED_INACTIVE);
-//    cli_write("status LED: OFF" CLI_NEWLINE);
-//}
-//
-//static void cmd_blink (const char *args)
-//{
-//    (void)args;
-//    UserBoardUtils_BlinkAllLeds();
-//    cli_write("blink: done" CLI_NEWLINE);
-//}
+#if (USER_BOARD_LED_FUNC_EN == 1)
+static void cmd_ledon (const char *args)
+{
+    (void)args;
+    UserBoardUtils_SetStatusLed(LED_ACTIVE);
+    cli_write("status LED: ON" USER_CLI_NEWLINE);
+}
+
+static void cmd_ledoff (const char *args)
+{
+    (void)args;
+    UserBoardUtils_SetStatusLed(LED_INACTIVE);
+    cli_write("status LED: OFF" USER_CLI_NEWLINE);
+}
+
+static void cmd_blink (const char *args)
+{
+    (void)args;
+    UserBoardUtils_BlinkAllLeds();
+    cli_write("blink: done" USER_CLI_NEWLINE);
+}
+#endif
 
 static void cmd_menu (const char *args)
 {
@@ -213,7 +214,7 @@ static void cmd_menu (const char *args)
 static void cmd_reboot (const char *args)
 {
     (void)args;
-    cli_write("rebooting..." CLI_NEWLINE);
+    cli_write("rebooting..." USER_CLI_NEWLINE);
     /* Drain TX by waiting a moment, then issue an AIRCR system reset. */
     for (volatile uint32_t i = 0; i < 200000u; i++) { __asm volatile ("nop"); }
     NVIC_SystemReset();
@@ -227,9 +228,11 @@ static const cli_cmd_t s_cmds[] =
     { "version", cmd_version, "firmware identification"        },
     { "write",   cmd_write,   "write \"text\" to next tag"     },
     { "erase",   cmd_erase,   "arm: erase NDEF of the next tag"},
-//    { "lon",     cmd_ledon,   "turn the status LED on"         },
-//    { "loff",    cmd_ledoff,  "turn the status LED off"        },
-//    { "blink",   cmd_blink,   "blink all board LEDs once"      },
+#if (USER_BOARD_LED_FUNC_EN == 1)
+    { "lon",     cmd_ledon,   "turn the status LED on"         },
+    { "loff",    cmd_ledoff,  "turn the status LED off"        },
+    { "blink",   cmd_blink,   "blink all board LEDs once"      },
+#endif
     { "reboot",  cmd_reboot,  "soft-reset the MCU"             },
 };
 #define CLI_CMD_COUNT (sizeof(s_cmds) / sizeof(s_cmds[0]))
@@ -273,7 +276,7 @@ static void cli_dispatch(char *line)
 
     cli_write("unknown command: '");
     cli_write(line);
-    cli_write("'  (type 'help')" CLI_NEWLINE);
+    cli_write("'  (type 'help')" USER_CLI_NEWLINE);
 }
 
 static void cli_handle_byte(uint8_t b)
@@ -288,14 +291,14 @@ static void cli_handle_byte(uint8_t b)
 
     if ((b == '\r') || (b == '\n'))
     {
-        cli_write(CLI_NEWLINE);
+        cli_write(USER_CLI_NEWLINE);
         s_line[s_line_len] = '\0';
         if (s_line_len > 0u)
         {
             cli_dispatch(s_line);
         }
         s_line_len = 0u;
-        cli_write(USER_CLI_COLOR_KGRN CLI_PROMPT);
+        cli_write(USER_CLI_COLOR_KGRN USER_CLI_PROMPT);
         return;
     }
 
@@ -317,7 +320,7 @@ static void cli_handle_byte(uint8_t b)
         return;
     }
 
-    if (s_line_len < CLI_LINE_MAX)
+    if (s_line_len < USER_CLI_LINE_MAX)
     {
         s_line[s_line_len++] = (char)b;
         cli_write_byte(b); /* local echo */
@@ -337,8 +340,8 @@ static void cli_handle_byte(uint8_t b)
 void UserCli_PrintMenu(void)
 {
     cli_write(USER_CLI_COLOR_KCYN);
-    cli_write(CLI_NEWLINE);
-    cli_write("=== PTX IoT Reader CLI ===" CLI_NEWLINE);
+    cli_write(USER_CLI_NEWLINE);
+    cli_write("=== PTX IoT Reader CLI ===" USER_CLI_NEWLINE);
     for (size_t i = 0u; i < CLI_CMD_COUNT; i++)
     {
         /* Format: "  name        - help" with a simple fixed-width pad. */
@@ -348,7 +351,7 @@ void UserCli_PrintMenu(void)
         while (n < 10u) { cli_write_byte((uint8_t)' '); n++; }
         cli_write(" - ");
         cli_write(s_cmds[i].help);
-        cli_write(CLI_NEWLINE);
+        cli_write(USER_CLI_NEWLINE);
     }
 
     cli_write(USER_CLI_COLOR_KNRM);

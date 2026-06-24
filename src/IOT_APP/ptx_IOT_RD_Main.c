@@ -793,7 +793,7 @@ void ptxIOT_READER_App(void)
     if (FSP_SUCCESS == fsp_err)
     {
         /* Initialization complete */
-        g_ioport.p_api->pinWrite(g_ioport.p_ctrl, LED_IOT_RD, LED_ACTIVE);
+        g_ioport.p_api->pinWrite(g_ioport.p_ctrl, USER_BOARD_LED_IOT_RD, USER_BOARD_LED_ACTIVE);
 
         ptxCommon_PrintF("System Initialization ... OK\n");
 
