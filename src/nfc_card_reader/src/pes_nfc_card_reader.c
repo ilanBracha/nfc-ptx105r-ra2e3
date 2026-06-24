@@ -30,7 +30,14 @@
  * @return PES_OK on success, or on non-blocking start,
  *         otherwise PES_ERR_*.
  */
-pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg, pes_nfc_card_result_t *result_out)
+pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t * cfg, pes_nfc_card_result_t * result_out)
 {
-        /* TODO: Implement NFC card reading logic */
+    pes_status_t status = PES_OK;
+
+    PES_COMMON_UNUSED(cfg);
+    PES_COMMON_UNUSED(result_out);
+
+    /* TODO: Implement NFC card reading logic */
+
+    return status;
 }

@@ -22,6 +22,8 @@ void hal_entry(void)
      * processed cooperatively while logs keep flowing. */
     UserCli_Init();
 
+    PES_NFCCardReader_Read(NULL, NULL);
+
     /* Start the IoT Reader application. This function will not return. */
     (void) ptxAPP_Entry();
 
