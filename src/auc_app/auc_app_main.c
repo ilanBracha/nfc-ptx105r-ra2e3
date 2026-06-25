@@ -413,6 +413,7 @@ void ptxIOT_READER_App(void)
     cfg.timeout_ms            = UINT32_MAX;     /* loop forever */
     cfg.retry_count           = 0u;
     cfg.read_ndef             = true;
+    cfg.max_ndef_bytes        = PES_NFC_NDEF_MAX_BYTES;
     cfg.callback              = NULL;            /* operation-end cb unused */
     cfg.p_context             = NULL;
     cfg.on_card_event         = on_nfc_read_done;

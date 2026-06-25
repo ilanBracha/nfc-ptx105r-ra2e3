@@ -154,6 +154,31 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t * cfg, pes_n
  * Returns PES_OK on success, PES_ERR_* on failure. */
 pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len, uint8_t *rx, uint32_t *rx_len);
 
+/**
+ * Validates NFC card reader configuration and optional dependency state.
+ *
+ * Does not start polling, activate RF field, or acquire card resources.
+ * Safe to call multiple times.
+ *
+ * Checks performed always:
+ *   - cfg is non-NULL
+ *   - reader is a valid enum value
+ *   - tech_mask is non-zero
+ *   - timeout_ms > 0
+ *   - if read_ndef = true: max_ndef_bytes > 0 and <= PES_NFC_NDEF_MAX_BYTES
+ *   - callback != NULL is rejected (non-blocking not yet supported)
+ *
+ * Additional checks when cfg->validate_dependencies = true:
+ *   - PTX105R lower-level stack is initialized (FSP ctrl block open)
+ *
+ * @param cfg [in] Configuration to validate. Must not be NULL.
+ *
+ * @return PES_OK if all checks pass.
+ *         PES_ERR_INVALID_CFG if configuration is incomplete or invalid.
+ *         PES_ERR_DEPENDENCY if a runtime dependency check fails.
+ */
+pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg);
+
 #ifdef __cplusplus
 }
 #endif

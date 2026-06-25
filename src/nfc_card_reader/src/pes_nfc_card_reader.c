@@ -230,24 +230,55 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
 }
 
 /* ── Public API ────────────────────────────────────────────────────── */
+
+pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg)
+{
+    /* --- NULL check --- */
+    if (NULL == cfg) { return PES_ERR_INVALID_CFG; }
+
+    /* --- Reader device enum --- */
+    if ((int)cfg->reader != (int)PES_NFC_READER_PTX105R)
+    {
+        return PES_ERR_INVALID_CFG;
+    }
+
+    /* --- tech_mask must select at least one technology --- */
+    if (0u == cfg->tech_mask) { return PES_ERR_INVALID_CFG; }
+
+    /* --- timeout_ms must be > 0 --- */
+    if (0u == cfg->timeout_ms) { return PES_ERR_INVALID_CFG; }
+
+    /* --- NDEF read options --- */
+    if (cfg->read_ndef)
+    {
+        if ((0u == cfg->max_ndef_bytes) ||
+            (cfg->max_ndef_bytes > PES_NFC_NDEF_MAX_BYTES))
+        {
+            return PES_ERR_INVALID_CFG;
+        }
+    }
+
+    /* --- Non-blocking callback path not yet supported --- */
+    if (NULL != cfg->callback) { return PES_ERR_INVALID_CFG; }
+
+    /* --- Optional runtime dependency validation --- */
+    if (cfg->validate_dependencies)
+    {
+        pes_status_t dep_st = pes_nfc_card_reader_validate_deps();
+        if (PES_OK != dep_st) { return dep_st; }
+    }
+
+    return PES_OK;
+}
+
 pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
                                     pes_nfc_card_result_t *result_out)
 {
     pes_status_t st;
 
-    if (NULL == cfg) { return PES_ERR_INVALID_CFG; }
-
-    /* Non-blocking (operation-end callback) path not yet supported. */
-    if (NULL != cfg->callback)
-    {
-        return PES_ERR_INVALID_CFG;
-    }
-
-    if (cfg->validate_dependencies)
-    {
-        st = pes_nfc_card_reader_validate_deps();
-        if (PES_OK != st) { return st; }
-    }
+    /* Validate configuration (covers NULL, enum, mask, timeout, deps). */
+    st = PES_NFCCardReader_Validate(cfg);
+    if (PES_OK != st) { return st; }
 
     if (NULL != result_out)
     {
