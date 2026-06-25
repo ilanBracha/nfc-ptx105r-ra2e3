@@ -140,7 +140,6 @@
      6) Exit the loop and the application by ....
 */
 
-
 /*
  * ####################################################################################################################
  * LOCAL LOGGING (src/ only)
@@ -166,17 +165,49 @@
 #include "user_uart_log.h"
 #include "pes_nfc_card_reader.h"
 
-static void ptxAPP_Printf(const char *format, ...);
-static void ptxAPP_PrintBuffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength,
-                               uint8_t addNewLine, uint8_t printASCII);
-static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st);
+/*
+ * ####################################################################################################################
+ * DEFINES / TYPES
+ * ####################################################################################################################
+ */
+/*
+ * Example Code-Delays/-Sleeps; used for better readability of exchanges RF-data on the console application
+ * Can be disabled by defining/setting compile-switch "PTX_DISABLE_EXAMPLE_DELAYS" globally
+ */
+#define PTX_IOTRD_EXCHANGE_WAIT_TIME  (10u)
+#define DEFAULT_APP_TIMEOUT_RAW       (uint32_t)200                 /**< Application-timeout for raw-protocols */
+#define DEFAULT_APP_TIMEOUT_PROT      (uint32_t)50000               /**< Application-timeout for standard-protocols */
 
 /* Redirect the COMPS logging names to the local src/-based versions. */
 #define ptxCommon_PrintF              ptxAPP_Printf
 #define ptxCommon_Print_Buffer        ptxAPP_PrintBuffer
 #define ptxCommon_PrintStatusMessage  ptxAPP_PrintStatus
-#define PTX_APP_PRINT_LINE_WRAP        (LINE_LENGTH - 5u)
+#define PTX_APP_PRINT_LINE_WRAP       (LINE_LENGTH - 5u)
 
+typedef enum ptxIotRdInt_Demo_State
+{
+    IoTRd_DemoState_WaitForActivation,
+    IoTRd_DemoState_DataExchange,
+    IoTRd_DemoState_SelectCard,
+    IoTRd_DemoState_DeactivateReader,
+    IoTRd_DemoState_SystemError,
+    IoTRd_DemoState_HostCardEmulation,
+    IoTRd_DemoState_Undefined
+} ptxIotRdInt_Demo_State_t;
+
+
+static void ptxAPP_Printf(const char *format, ...);
+static void ptxAPP_PrintBuffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength, uint8_t addNewLine, uint8_t printASCII);
+static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st);
+static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(const pes_nfc_card_result_t *result,
+                                                      uint8_t *skipTxDataExchange,
+                                                      uint8_t *skipRxProcessing);
+
+/*
+ * ####################################################################################################################
+ * LOCAL INTEGRATION FUNCTIONS / HELPERS
+ * ####################################################################################################################
+ */
 static void ptxAPP_Printf(const char *format, ...)
 {
     va_list ap_rtt, ap_uart;
@@ -248,42 +279,10 @@ static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st)
 
 /*
  * ####################################################################################################################
- * DEFINES / TYPES
+ * APPLICATION MAIN
  * ####################################################################################################################
  */
-
-typedef enum ptxIotRdInt_Demo_State
-{
-    IoTRd_DemoState_WaitForActivation,
-    IoTRd_DemoState_DataExchange,
-    IoTRd_DemoState_SelectCard,
-    IoTRd_DemoState_DeactivateReader,
-    IoTRd_DemoState_SystemError,
-    IoTRd_DemoState_HostCardEmulation,
-    IoTRd_DemoState_Undefined
-} ptxIotRdInt_Demo_State_t;
-
 /*
- * Example Code-Delays/-Sleeps; used for better readability of exchanges RF-data on the console application
- * Can be disabled by defining/setting compile-switch "PTX_DISABLE_EXAMPLE_DELAYS" globally
- */
-#define PTX_IOTRD_EXCHANGE_WAIT_TIME            (10u)
-
-/**
- * Comment/Uncomment the following line to use NDEF-operations instead of the raw RF data-exchanges or commands from the NativeTag-API
- */
-
-/**
- * Default timeout-values for for RAW-protocols (e.g. T2T, T3T, ...) and standard-protocols (ISO-/NFC-DEP)
- */
-#define DEFAULT_APP_TIMEOUT_RAW                 (uint32_t)200                 /**< Application-timeout for raw-protocols */
-#define DEFAULT_APP_TIMEOUT_PROT                (uint32_t)50000               /**< Application-timeout for standard-protocols */
-
-/*
- * ####################################################################################################################
- * ra/fsp-ONLY POLICY
- * ####################################################################################################################
- *
  * The application is driven exclusively through the ra/fsp RM_NFC_READER_PTX_*
  * wrappers. No function under ra/renesas or src/STACK/COMPS is called:
  *
@@ -302,60 +301,6 @@ typedef enum ptxIotRdInt_Demo_State
  * called from those headers.
  */
 
-
-/*
- * ####################################################################################################################
- * INTERNALS
- * ####################################################################################################################
- */
-
-/*
- * ####################################################################################################################
- * LOCAL INTEGRATION FUNCTIONS / HELPERS
- * ####################################################################################################################
- */
-/*
- * Main demo application loop. Implements NFC-Forum polling and example data exchanges.
- * It is called only if stack components and NFC hardware have been successfully initialized prior to this.
- *
- * NOTE: Replaced by PES_NFCCardReader_Read() event-loop. Kept for reference.
- */
-#if 0
-#if defined(USE_PTX_IOTRD_DEMO)
-static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd);
-#endif
-#endif
-
-/*
- * Function representing demo state "data exchange" when NDEF should be used.
- * Refactored to take a PES result struct (no longer a PTX card registry).
- */
-static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(const pes_nfc_card_result_t *result,
-                                                      uint8_t *skipTxDataExchange,
-                                                      uint8_t *skipRxProcessing);
-
-/*
- * Legacy FSP-based demo-state helpers replaced by the PES orchestrator
- * (PES_NFCCardReader_Read). Kept #if 0'd for reference.
- */
-#if 0
-static void ptxAPP_PrintCardDetails(ptxIoTRd_CardRegistry_t *cardRegistry,
-                                    ptxIoTRd_CardParams_t *cardParams, uint8_t nr);
-static void ptxAPP_DemoState_WaitForActivation(ptxIoTRd_CardRegistry_t *cardRegistry,
-                                               ptxIotRdInt_Demo_State_t *demoState);
-static fsp_err_t ptxAPP_DemoState_SelectCard(ptxIoTRd_CardRegistry_t *cardRegistry,
-                                             ptxIotRdInt_Demo_State_t *demoState,
-                                             uint8_t *exitLoop);
-static fsp_err_t ptxAPP_DemoState_DeactivateReader(ptxIotRdInt_Demo_State_t *demoState,
-                                                   uint8_t *exitLoop);
-static void ptxAPP_DemoState_SystemError(uint8_t *systemState);
-#endif
-
-/*
- * ####################################################################################################################
- * APPLICATION MAIN
- * ####################################################################################################################
- */
 
 /*
  * Thin wrapper around PES_NFCCardReader_DataExchange() so the rest of the
@@ -377,41 +322,6 @@ static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx,
 }
 
 /*
- * Open the IoT-Reader through the FSP wrapper, with the documented cold-boot
- * recovery isolated here.
- *
- * RM_NFC_READER_PTX_Open() opens the peripherals, downloads the NSC firmware
- * and performs a FIRST ptxIoTRd_Init(). On a cold boot that first init does
- * not complete the NSC bring-up and Open() returns FSP_ERR_INVALID_DATA (0x25)
- * even though the peripherals and FW download succeeded.
- *
- * Recovery is performed entirely through the ra/fsp API: RM_NFC_READER_PTX_Close()
- * runs ptxIoTRd_Deinit() internally (resets the chip, closes SPI/IRQ and clears
- * the platform/NSC context), after which a second RM_NFC_READER_PTX_Open()
- * re-opens everything cleanly.
- *
- * NOTE: now lives in the PES HAL (pes_nfc_hal_open). Kept #if 0'd for reference.
- */
-#if 0
-static fsp_err_t ptxAPP_ReaderOpen(void)
-{
-    fsp_err_t fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
-
-    if (FSP_ERR_INVALID_DATA == fsp_err)
-    {
-        ptxCommon_PrintF("[INIT] First Open=0x%04X - cold-boot retry\n", (unsigned)fsp_err);
-
-        (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
-        fsp_err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
-
-        ptxCommon_PrintF("[INIT] Retry Open=0x%04X\n", (unsigned)fsp_err);
-    }
-
-    return fsp_err;
-}
-#endif
-
-/*
  * Lightweight sleep using the BSP software delay instead of the SDK's
  * ptxIoTRdInt_Sleep -> ptxPLAT_Sleep path (which lives under COMPS).
  */
@@ -420,336 +330,13 @@ static void ptxAPP_Sleep(uint32_t ms)
     R_BSP_SoftwareDelay(ms, BSP_DELAY_UNITS_MILLISECONDS);
 }
 
-/*
- * Print discovered card details. Reimplements the printing logic from
- * ptxIoTRdInt_Get_Card_Details (ptxIoTRd_COMMON.c) using only shared
- * type definitions and the ptxCommon_PrintF logging exception.
+
+/* ####################################################################################################################
+ * APPLICATION ENTRY POINT
+ * ####################################################################################################################
  *
- * NOTE: Replaced by the PES summary builder (pes_card_summary_build) and
- *       ptxIoTRdInt_PrintCardInfo() which now consumes pes_nfc_card_result_t.
- *       Kept #if 0'd for reference.
- */
-#if 0
-static void ptxAPP_PrintCardDetails(ptxIoTRd_CardRegistry_t *cardRegistry,
-                                    ptxIoTRd_CardParams_t *cardParams, uint8_t nr)
-{
-    if ((NULL == cardRegistry) || (NULL == cardParams))
-    {
-        return;
-    }
-
-    switch (cardParams->TechType)
-    {
-        case Tech_TypeA:
-            ptxCommon_PrintF("%02d. RF-Technology = Type-A", nr);
-            ptxCommon_PrintF("; SENS_RES: ");
-            ptxCommon_Print_Buffer(&cardParams->TechParams.CardAParams.SENS_RES[0], 0u, PTX_IOTRD_TECH_A_SENSRES_MAX_SIZE, 0, 0);
-            ptxCommon_PrintF("; NFCID1_LEN: %02X", cardParams->TechParams.CardAParams.NFCID1_LEN);
-            ptxCommon_PrintF("; NFCID1: ");
-            for (uint8_t i = 0; i < cardParams->TechParams.CardAParams.NFCID1_LEN; i++)
-            {
-                if (0 != i) { ptxCommon_PrintF(":"); }
-                ptxCommon_PrintF("%02X", cardParams->TechParams.CardAParams.NFCID1[i]);
-            }
-            if (0 != cardParams->TechParams.CardAParams.SEL_RES_LEN)
-            {
-                ptxCommon_PrintF("; SEL_RES: %02X", cardParams->TechParams.CardAParams.SEL_RES);
-            }
-            break;
-
-        case Tech_TypeB:
-            ptxCommon_PrintF("%02d. RF-Technology = Type-B", nr);
-            ptxCommon_PrintF("; SENSB_RES: ");
-            ptxCommon_Print_Buffer(&cardParams->TechParams.CardBParams.SENSB_RES[0], 0u, PTX_IOTRD_TECH_B_SENSB_MAX_SIZE, 0, 0);
-            break;
-
-        case Tech_TypeF:
-            ptxCommon_PrintF("%02d. RF-Technology = Type-F", nr);
-            ptxCommon_PrintF("; SENSF_RES: ");
-            ptxCommon_Print_Buffer(&cardParams->TechParams.CardFParams.SENSF_RES[0], 0u, cardParams->TechParams.CardFParams.SENSF_RES_LEN, 0, 0);
-            break;
-
-        case Tech_TypeV:
-            ptxCommon_PrintF("%02d. RF-Technology = Type-V", nr);
-            ptxCommon_PrintF("; DSFID: %02X", cardParams->TechParams.CardVParams.DSFID);
-            ptxCommon_PrintF("; RES_FLAGS: %02X", cardParams->TechParams.CardVParams.RES_FLAG);
-            ptxCommon_PrintF("; UID: ");
-            for (uint8_t i = 0; i < PTX_IOTRD_TECH_V_UID_MAX_SIZE; i++)
-            {
-                ptxCommon_PrintF("%02X ", cardParams->TechParams.CardVParams.UID[PTX_IOTRD_TECH_V_UID_MAX_SIZE - 1u - i]);
-            }
-            break;
-
-        case Tech_TypeExtension:
-            ptxCommon_PrintF("%02d. RF-Technology = Type-Extension", nr);
-            ptxCommon_PrintF("; Extension Flags: %04X", cardParams->TechParams.CardExtParams.Flags);
-            ptxCommon_PrintF("; Extension Technology Parameters: ");
-            ptxCommon_Print_Buffer(&cardParams->TechParams.CardExtParams.Param[0], 0u, cardParams->TechParams.CardExtParams.ParamLength, 0, 0);
-            break;
-
-        default:
-            break;
-    }
-
-    if (cardRegistry->ActiveCard == cardParams)
-    {
-        switch (cardRegistry->ActiveCardProtType)
-        {
-            case Prot_T2T:    ptxCommon_PrintF("; Protocol: T2T");      break;
-            case Prot_T3T:    ptxCommon_PrintF("; Protocol....: T3T");  break;
-            case Prot_ISODEP:
-                ptxCommon_PrintF("; Protocol....: ISO-DEP");
-                if (0 != cardRegistry->ActiveCardProtInfoLen)
-                {
-                    if (Tech_TypeA == cardParams->TechType)
-                    {
-                        ptxCommon_PrintF("; PPS1: %02X; ATS: ", cardRegistry->ActiveCardProtSpeed);
-                        ptxCommon_Print_Buffer(&cardRegistry->ActiveCardProtInfo[0], 0u, cardRegistry->ActiveCardProtInfoLen, 0, 0);
-                    }
-                    else if (Tech_TypeB == cardParams->TechType)
-                    {
-                        ptxCommon_PrintF("; ATTRIB2: %02X; ATTRIB_RES: ", cardRegistry->ActiveCardProtSpeed);
-                        ptxCommon_Print_Buffer(&cardRegistry->ActiveCardProtInfo[0], 0u, cardRegistry->ActiveCardProtInfoLen, 0, 0);
-                    }
-                }
-                break;
-            case Prot_NFCDEP:
-                ptxCommon_PrintF("; Protocol: NFC-DEP");
-                if (0 != cardRegistry->ActiveCardProtInfoLen)
-                {
-                    if ((Tech_TypeA == cardParams->TechType) || (Tech_TypeF == cardParams->TechType))
-                    {
-                        ptxCommon_PrintF("; ATR_RES: ");
-                        ptxCommon_Print_Buffer(&cardRegistry->ActiveCardProtInfo[0], 0u, cardRegistry->ActiveCardProtInfoLen, 0, 0);
-                    }
-                }
-                break;
-            case Prot_T5T:       ptxCommon_PrintF("; Protocol: T5T");       break;
-            case Prot_Extension:
-                ptxCommon_PrintF("; Protocol: Extension; Activation Parameters: ");
-                ptxCommon_Print_Buffer(&cardRegistry->ActiveCardProtInfo[0], 0u, cardRegistry->ActiveCardProtInfoLen, 0, 0);
-                break;
-            default:             ptxCommon_PrintF("; Protocol: Undefined"); break;
-        }
-    }
-
-    ptxCommon_PrintF("\n");
-}
-
-/*
- * WaitForActivation state — polls the discovery status via the FSP wrapper.
- * Replaces ptxIoTRdInt_DemoState_WaitForActivation (ptxIoTRd_COMMON.c).
- */
-static void ptxAPP_DemoState_WaitForActivation(ptxIoTRd_CardRegistry_t *cardRegistry,
-                                               ptxIotRdInt_Demo_State_t *demoState)
-{
-    if ((NULL == cardRegistry) || (NULL == demoState))
-    {
-        return;
-    }
-
-    uint8_t discover_status = RF_DISCOVER_STATUS_NO_CARD;
-
-    fsp_err_t fsp_err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
-                                                     StatusType_Discover,
-                                                     &discover_status);
-    if (FSP_SUCCESS != fsp_err)
-    {
-        *demoState = IoTRd_DemoState_DeactivateReader;
-    }
-    else
-    {
-        switch (discover_status)
-        {
-            case RF_DISCOVER_STATUS_NO_CARD:
-                ptxAPP_Sleep(5u);
-                break;
-
-            case RF_DISCOVER_STATUS_CARD_ACTIVE:
-                ptxCommon_PrintF(RTT_CTRL_TEXT_BRIGHT_GREEN "\n\nCARD DETECTED!" RTT_CTRL_RESET "\n");
-                ptxAPP_PrintCardDetails(cardRegistry, cardRegistry->ActiveCard, 1);
-                *demoState = IoTRd_DemoState_DataExchange;
-                break;
-
-            case RF_DISCOVER_STATUS_DISCOVER_RUNNING:
-                /* Wait for discovery to finish */
-                break;
-
-            case RF_DISCOVER_STATUS_DISCOVER_DONE:
-                ptxCommon_PrintF("Multiple Card(s) detected - resolved ... OK!\n");
-                for (uint8_t i = 0; i < cardRegistry->NrCards; i++)
-                {
-                    ptxAPP_PrintCardDetails(cardRegistry, &cardRegistry->Cards[i], (uint8_t)(1u + i));
-                }
-                *demoState = IoTRd_DemoState_SelectCard;
-                break;
-
-            default:
-                break;
-        }
-    }
-}
-
-/*
- * SelectCard state — activates the first discovered card via the FSP wrapper.
- * Replaces ptxIoTRdInt_DemoState_SelectCard (ptxIoTRd_COMMON.c).
- */
-static fsp_err_t ptxAPP_DemoState_SelectCard(ptxIoTRd_CardRegistry_t *cardRegistry,
-                                             ptxIotRdInt_Demo_State_t *demoState,
-                                             uint8_t *exitLoop)
-{
-    if ((NULL == cardRegistry) || (NULL == demoState) || (NULL == exitLoop))
-    {
-        return FSP_ERR_ASSERTION;
-    }
-
-    ptxIoTRd_CardProtocol_t protocol = Prot_Undefined;
-
-    switch (cardRegistry->Cards[0].TechType)
-    {
-        case Tech_TypeA:
-            if (0 != (cardRegistry->Cards[0].TechParams.CardAParams.SEL_RES & 0x40u))
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == NFC_DEP)... ");
-                protocol = Prot_NFCDEP;
-            }
-            else if (0 != (cardRegistry->Cards[0].TechParams.CardAParams.SEL_RES & 0x20u))
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == ISO_DEP)... ");
-                protocol = Prot_ISODEP;
-            }
-            else
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == T2T)... ");
-                protocol = Prot_T2T;
-            }
-            break;
-
-        case Tech_TypeB:
-            if (0 != (cardRegistry->Cards[0].TechParams.CardBParams.SENSB_RES[10] & 0x01u))
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == ISO_DEP)... ");
-                protocol = Prot_ISODEP;
-            }
-            else
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == Undefined)... ");
-                protocol = Prot_Undefined;
-            }
-            break;
-
-        case Tech_TypeF:
-            if ((0x01u == cardRegistry->Cards[0].TechParams.CardFParams.SENSF_RES[0]) &&
-                (0xFEu == cardRegistry->Cards[0].TechParams.CardFParams.SENSF_RES[1]))
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == NFC_DEP)... ");
-                protocol = Prot_NFCDEP;
-            }
-            else
-            {
-                ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == T3T)... ");
-                protocol = Prot_T3T;
-            }
-            break;
-
-        case Tech_TypeV:
-            ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == T5T)... ");
-            protocol = Prot_T5T;
-            break;
-
-        case Tech_TypeExtension:
-            ptxCommon_PrintF("Selecting first detected card/protocol (RF-Protocol == Extension)... ");
-            protocol = Prot_Extension;
-            break;
-
-        default:
-            *exitLoop = 1u;
-            return FSP_ERR_INVALID_ARGUMENT;
-    }
-
-    fsp_err_t fsp_err = RM_NFC_READER_PTX_CardActivate(&g_nfc_reader_ptx0_ctrl,
-                                                        &cardRegistry->Cards[0],
-                                                        protocol);
-    if (FSP_SUCCESS == fsp_err)
-    {
-        ptxCommon_PrintF(" ... OK!\n");
-        ptxAPP_PrintCardDetails(cardRegistry, cardRegistry->ActiveCard, 1);
-        *demoState = IoTRd_DemoState_DataExchange;
-    }
-    else
-    {
-        ptxCommon_PrintF(" ... ERROR!\n");
-        *demoState = IoTRd_DemoState_DeactivateReader;
-    }
-
-    return fsp_err;
-}
-
-/*
- * DeactivateReader state — deactivates the reader and restarts discovery
- * via the FSP wrapper.
- * Replaces ptxIoTRdInt_DemoState_DeactivateReader (ptxIoTRd_COMMON.c).
- */
-static fsp_err_t ptxAPP_DemoState_DeactivateReader(ptxIotRdInt_Demo_State_t *demoState,
-                                                   uint8_t *exitLoop)
-{
-    if ((NULL == demoState) || (NULL == exitLoop))
-    {
-        return FSP_ERR_ASSERTION;
-    }
-
-    fsp_err_t fsp_err = RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl,
-                                                              NFC_READER_PTX_RETURN_DISCOVER);
-    ptxCommon_PrintStatusMessage("Restarting RF-Discovery",
-                                (FSP_SUCCESS == fsp_err) ? ptxStatus_Success
-                                                         : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InternalError));
-    if (FSP_SUCCESS == fsp_err)
-    {
-        ptxCommon_PrintF("Waiting for discovered Cards ...\n");
-        *demoState = IoTRd_DemoState_WaitForActivation;
-    }
-    else
-    {
-        *exitLoop = 1u;
-    }
-
-    return fsp_err;
-}
-
-/*
- * SystemError state — print the error and halt. No FSP equivalent for
- * ptxIoTRd_SWReset exists; the original code also enters an infinite loop.
- * Replaces ptxIoTRdInt_DemoState_SystemError (ptxIoTRd_COMMON.c).
- */
-static void ptxAPP_DemoState_SystemError(uint8_t *systemState)
-{
-    if (NULL != systemState)
-    {
-        switch (*systemState)
-        {
-            case PTX_SYSTEM_STATUS_ERR_OVERCURRENT:
-                ptxCommon_PrintF("Error - Critical System-Error (Overcurrent) occurred - Quit Application\n");
-                break;
-
-            case PTX_SYSTEM_STATUS_ERR_TEMPERATURE:
-                ptxCommon_PrintF("Error - Critical System-Error (Temperature) occurred - Quit Application\n");
-                break;
-
-            default:
-                break;
-        }
-
-        /* Close the reader through the FSP wrapper to clean up, then halt. */
-        (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
-
-        while (1)
-        {
-            /* halt */
-        }
-    }
-}
-#endif /* #if 0 (legacy ptxAPP_PrintCardDetails .. ptxAPP_DemoState_SystemError) */
-
+ * The demo application is started from the BSP main() after the FSP has been
+ * initialized. The demo runs in a cooperative loop and never returns. */
 void ptxAPP_Entry(void)
 {
     /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
@@ -838,125 +425,6 @@ void ptxIOT_READER_App(void)
     pes_status_t st = PES_NFCCardReader_Read(&cfg, &result);
     ptxCommon_PrintF("PES_NFCCardReader_Read returned status=%d\n", (int)st);
 }
-
-
-/*
- * ####################################################################################################################
- * MAIN DEMO LOOP
- * ####################################################################################################################
- *
- * The whole state machine (WaitForActivation → SelectCard → DataExchange →
- * DeactivateReader → SystemError) now lives inside PES_NFCCardReader_Read().
- * The legacy implementation is kept #if 0'd for reference.
- */
-
-#if 0
-#if defined(USE_PTX_IOTRD_DEMO)
-static void ptxIoTRdInt_Run_Demo_Loop(ptxIoTRd_t *iotRd)
-{
-    uint8_t exit_loop = 0;
-
-    ptxIotRdInt_Demo_State_t demo_state = IoTRd_DemoState_WaitForActivation;
-
-    uint8_t system_state = PTX_SYSTEM_STATUS_OK;
-    uint8_t last_rf_error = PTX_RF_ERROR_NTF_CODE_NO_ERROR;
-
-    ptxIoTRd_CardRegistry_t *card_registry = NULL;
-
-    ptxStatus_t st = ptxStatus_Success;
-    uint8_t skip_tx_data_exchange;
-    uint8_t skip_rx_processing;
-
-    if (ptxStatus_Success == st)
-    {
-        /* get reference to the internal card registry */
-        (void)RM_NFC_READER_PTX_CardRegistryGet (&g_nfc_reader_ptx0_ctrl, &card_registry);
-
-        if (NULL == card_registry)
-        {
-            exit_loop = 1u;
-        }
-    } else
-    {
-        exit_loop = 1u;
-    }
-
-    if (0 == exit_loop)
-    {
-        ptxCommon_PrintF("Entering Application-Mode ... OK\n");
-        ptxCommon_PrintF("Waiting for discovered Cards or external Fields ...\n");
-    } else
-    {
-        ptxCommon_PrintF("Entering Application-Mode ... ERROR\n");
-    }
-
-    /*
-     * Perform loop endlessly
-     */
-    while (0 == exit_loop)
-    {
-        /* check regularly for critical system errors */
-        fsp_err_t fsp_err = RM_NFC_READER_PTX_StatusGet (&g_nfc_reader_ptx0_ctrl, StatusType_System, &system_state);
-        st = (FSP_SUCCESS == fsp_err) ? ptxStatus_Success : PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
-
-        if (PTX_SYSTEM_STATUS_OK != system_state)
-        {
-            /* Handle system-error */
-            demo_state = IoTRd_DemoState_SystemError;
-        } else
-        {
-            if (ptxStatus_Success != st)
-            {
-                demo_state = IoTRd_DemoState_DeactivateReader;
-            }
-        }
-
-        /* check optionally if PA current-limiter got activated */
-        (void)RM_NFC_READER_PTX_StatusGet (&g_nfc_reader_ptx0_ctrl, StatusType_LastRFError, &last_rf_error);
-
-        if (PTX_RF_ERROR_NTF_CODE_WARNING_PA_OVERCURRENT_LIMIT == last_rf_error)
-        {
-            ptxCommon_PrintF("Warning - PA Overcurrent Limiter activated!\n");
-        }
-
-        switch (demo_state)
-        {
-            case IoTRd_DemoState_WaitForActivation:
-                ptxAPP_DemoState_WaitForActivation(card_registry, &demo_state);
-                break;
-
-            case IoTRd_DemoState_SelectCard:
-                UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_HIGH);
-                (void)ptxAPP_DemoState_SelectCard(card_registry, &demo_state, &exit_loop);
-                break;
-
-            case IoTRd_DemoState_DataExchange:
-                UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_HIGH);
-                skip_tx_data_exchange = 0;
-                skip_rx_processing = 0;
-
-                st = ptxIoTRdInt_DemoState_DataExchange(iotRd, card_registry, &demo_state,
-                                                        &skip_tx_data_exchange, &skip_rx_processing);
-                break;
-
-            case IoTRd_DemoState_DeactivateReader:
-                UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
-                (void)ptxAPP_DemoState_DeactivateReader(&demo_state, &exit_loop);
-                break;
-
-            case IoTRd_DemoState_SystemError:
-                UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
-                ptxAPP_DemoState_SystemError(&system_state);
-                break;
-
-            default:
-                break;
-        }
-    }
-}
-#endif
-#endif /* #if 0 (legacy ptxIoTRdInt_Run_Demo_Loop) */
-
 
 /*
  * ####################################################################################################################
@@ -1709,6 +1177,10 @@ static void ptxIoTRdInt_PrintCardInfo(const pes_nfc_card_result_t *result,
  * ####################################################################################################################
  * DATA EXCHANGE FUNCTION
  * ####################################################################################################################
+ */
+/*
+ * Function representing demo state "data exchange" when NDEF should be used.
+ * Refactored to take a PES result struct (no longer a PTX card registry).
  */
 static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(const pes_nfc_card_result_t *result,
                                                       uint8_t *skipTxDataExchange,

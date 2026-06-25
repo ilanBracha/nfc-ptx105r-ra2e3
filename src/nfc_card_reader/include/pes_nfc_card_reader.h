@@ -127,6 +127,18 @@ struct pes_nfc_card_result_s {
 };
 
 /* ── API ───────────────────────────────────────────────────────────── */
+
+/* ss
+ * Read NFC cards according to the supplied configuration. The function blocks
+ * until either timeout_ms elapses or a fatal error occurs. If on_card_event is
+ * set, the function loops continuously and fires one event per detected card.
+ * If on_card_event is NULL, the function returns after the first card is read
+ * (or after timeout_ms if no card was detected). 
+
+ * cfg        : pointer to the configuration structure
+ * result_out : optional pointer to a caller-supplied result structure. If
+ *              NULL, a local result is used and discarded. If non-NULL, the
+ *              structure is filled with the last card's details before returning. */
 pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t * cfg, pes_nfc_card_result_t * result_out);
 
 /* Raw data exchange with the currently-activated card. Use this from inside
@@ -140,8 +152,7 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t * cfg, pes_n
  *            OUT = number of bytes received
  *
  * Returns PES_OK on success, PES_ERR_* on failure. */
-pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len,
-                                            uint8_t *rx, uint32_t *rx_len);
+pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len, uint8_t *rx, uint32_t *rx_len);
 
 #ifdef __cplusplus
 }
