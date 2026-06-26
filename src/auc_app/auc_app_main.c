@@ -1040,7 +1040,7 @@ static uint8_t ptxIoTRdInt_ReadType2NDEF(ptxIoTRd_t *iotRd, uint8_t *tx, uint8_t
         {
             if ((p + l) > got) { l = got - p; }
             ptxCommon_PrintF("Records        :\n");
-            ptxIoTRdInt_PrintNDEF(tx[p], l);
+            ptxIoTRdInt_PrintNDEF((const uint8_t *)&tx[p], l);
             found = 1u;
             break;
         }
