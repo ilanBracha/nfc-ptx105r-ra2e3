@@ -1,7 +1,7 @@
 #include "hal_data.h"
 #include "user_uart_log.h"
 #include "user_cli.h"
-#include "auc_app_main.h"
+#include "auc_nfc_card_reader.h"
 #include "pes_nfc_card_reader.h"
 
 FSP_CPP_HEADER

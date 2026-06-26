@@ -35,13 +35,13 @@
 
     Project     : PTX1K
     Module      : IOT_READER Demo
-    File        : auc_app_main.h
+    File        : auc_nfc_card_reader.h
 
     Description :
 */
 
-#ifndef AUC_APP_MAIN_H_
-#define AUC_APP_MAIN_H_
+#ifndef AUC_NFC_CARD_READER_H_
+#define AUC_NFC_CARD_READER_H_
 
 #include "SEGGER_RTT.h" /* Import RTT Library */
 
