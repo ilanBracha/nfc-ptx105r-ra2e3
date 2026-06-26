@@ -20,7 +20,7 @@
  *    -- the generated g_bsp_pin_cfg does not include those pins.
  */
 
-#include "user_uart_log.h"
+#include "auc_nfc_card_reader_log.h"
 #include "hal_data.h"
 #include "r_ioport.h"
 #include "r_sci_uart.h"

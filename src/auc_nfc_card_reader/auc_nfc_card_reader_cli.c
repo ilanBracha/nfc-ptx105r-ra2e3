@@ -18,9 +18,9 @@
  * UserUartLog_Puts/Write or ptxCommon_PrintF.
  */
 
-#include "user_cli.h"
-#include "user_uart_log.h"
-#include "user_board_utils.h"
+#include "auc_nfc_card_reader_cli.h"
+#include "auc_nfc_card_reader_log.h"
+#include "auc_nfc_card_reader_utils.h"
 #include "hal_data.h"
 
 #include <stdint.h>

@@ -156,13 +156,13 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
-#include "user_board_utils.h"
-#include "user_cli.h"
+#include "auc_nfc_card_reader_utils.h"
+#include "auc_nfc_card_reader_cli.h"
 #include "ptxCOMMON.h"
 #include "ptx_IOT_READER.h"
 #include "auc_nfc_card_reader.h"
 #include "SEGGER_RTT.h"
-#include "user_uart_log.h"
+#include "auc_nfc_card_reader_log.h"
 #include "pes_nfc_card_reader.h"
 
 /*

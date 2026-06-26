@@ -62,7 +62,7 @@
  */
 #include <stdarg.h>
 #include "SEGGER_RTT.h"
-#include "user_uart_log.h"
+#include "auc_nfc_card_reader_log.h"
 
 /* Minimal format-to-buffer: supports %s %c %d %u %x %X %02X %04X %02d %04d %p %% and width/zero-pad for integers */
 static int ptxCommon_mini_vsnprintf(char *buf, unsigned max, const char *fmt, va_list ap)
