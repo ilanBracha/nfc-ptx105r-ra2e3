@@ -8,6 +8,8 @@
 #include "pes_nfc_hal.h"
 #include "hal_data.h"          /* g_nfc_reader_ptx0_ctrl/cfg, FSP types */
 #include <string.h>
+#include "FreeRTOS.h"
+#include "task.h"
 
 /* ── Internal helpers ──────────────────────────────────────────────── */
 
@@ -280,5 +282,15 @@ pes_status_t pes_nfc_hal_close(void)
 
 void pes_nfc_hal_sleep_ms(uint32_t ms)
 {
-    R_BSP_SoftwareDelay(ms, BSP_DELAY_UNITS_MILLISECONDS);
+    /* Yield the CPU to other FreeRTOS tasks instead of busy-waiting.
+     * Falls back to BSP delay if called before the scheduler is running
+     * (e.g. during pes_nfc_hal_open cold-boot recovery). */
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+    {
+        vTaskDelay(pdMS_TO_TICKS(ms));
+    }
+    else
+    {
+        R_BSP_SoftwareDelay(ms, BSP_DELAY_UNITS_MILLISECONDS);
+    }
 }

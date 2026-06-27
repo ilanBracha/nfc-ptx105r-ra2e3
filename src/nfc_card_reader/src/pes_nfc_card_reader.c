@@ -26,6 +26,8 @@
 #include "pes_nfc_internal.h"
 #include <string.h>
 #include <stdint.h>
+#include "FreeRTOS.h"
+#include "task.h"
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 #define DEFAULT_TIMEOUT_MS       5000U
@@ -258,7 +260,7 @@ pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg)
         }
     }
 
-    /* --- Non-blocking callback path not yet supported --- */
+    /* --- Non-blocking callback path disabled on RA2E3 to save flash --- */
     if (NULL != cfg->callback) { return PES_ERR_INVALID_CFG; }
 
     /* --- Optional runtime dependency validation --- */

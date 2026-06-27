@@ -93,9 +93,10 @@ typedef struct {
     bool read_ndef;
     uint16_t max_ndef_bytes;
 
-    /* Non-blocking support
-     * callback = NULL  -> blocking opt-in
-     * callback != NULL -> non-blocking, fires when complete
+    /* Non-blocking support (disabled on RA2E3 to save flash)
+     * callback = NULL  -> blocking: Read() blocks until complete
+     * callback != NULL -> rejected with PES_ERR_INVALID_CFG
+     * Note: Use on_card_event for per-card notifications in event-loop mode.
      */
     pes_nfc_callback_t callback;
     void *p_context;
@@ -166,7 +167,7 @@ pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len, 
  *   - tech_mask is non-zero
  *   - timeout_ms > 0
  *   - if read_ndef = true: max_ndef_bytes > 0 and <= PES_NFC_NDEF_MAX_BYTES
- *   - callback != NULL is rejected (non-blocking not yet supported)
+ *   - callback != NULL is rejected (disabled on RA2E3 to save flash)
  *
  * Additional checks when cfg->validate_dependencies = true:
  *   - PTX105R lower-level stack is initialized (FSP ctrl block open)

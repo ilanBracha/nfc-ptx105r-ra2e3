@@ -22,6 +22,8 @@
 #include "auc_nfc_card_reader_log.h"
 #include "auc_nfc_card_reader_utils.h"
 #include "hal_data.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -181,16 +183,19 @@ static void cmd_erase (const char *args)
     /* Toggle: a second `erase` cancels a pending arm. Arming erase also clears
      * any pending write since the unified NFC hook treats write as the
      * dominant op. */
+    taskENTER_CRITICAL();
     if ((0u != s_erase_armed) || (0u != s_write_armed))
     {
         s_erase_armed    = 0u;
         s_write_armed    = 0u;
         s_write_text_len = 0u;
+        taskEXIT_CRITICAL();
         cli_write("erase: disarmed (no tag will be erased)" USER_CLI_NEWLINE);
     }
     else
     {
         s_erase_armed = 1u;
+        taskEXIT_CRITICAL();
         cli_write("erase: armed - present a TAG to erase its NDEF content" USER_CLI_NEWLINE);
         cli_write("       (type 'erase' again to cancel)" USER_CLI_NEWLINE);
     }
@@ -434,16 +439,19 @@ void UserCli_ClearEraseArmed(void)
 
 void UserCli_ArmWriteNext(const char *text, uint16_t text_len)
 {
+    taskENTER_CRITICAL();
     if ((NULL == text) || (0u == text_len) || (text_len > USER_CLI_WRITE_TEXT_MAX))
     {
         s_write_armed    = 0u;
         s_write_text_len = 0u;
+        taskEXIT_CRITICAL();
         return;
     }
     (void)memcpy(s_write_text, text, text_len);
     s_write_text[text_len] = '\0';
     s_write_text_len       = text_len;
     s_write_armed          = 1u;
+    taskEXIT_CRITICAL();
 }
 
 uint8_t UserCli_IsWriteArmed(void)
@@ -453,12 +461,17 @@ uint8_t UserCli_IsWriteArmed(void)
 
 const char *UserCli_GetWriteText(uint16_t *out_len)
 {
+    taskENTER_CRITICAL();
     if (NULL != out_len) { *out_len = s_write_text_len; }
-    return s_write_text;
+    const char *p = s_write_text;
+    taskEXIT_CRITICAL();
+    return p;
 }
 
 void UserCli_ClearWriteArmed(void)
 {
+    taskENTER_CRITICAL();
     s_write_armed    = 0u;
     s_write_text_len = 0u;
+    taskEXIT_CRITICAL();
 }

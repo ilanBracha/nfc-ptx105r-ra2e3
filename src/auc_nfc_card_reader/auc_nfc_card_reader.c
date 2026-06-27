@@ -156,6 +156,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+#include "FreeRTOS.h"
+#include "task.h"
 #include "auc_nfc_card_reader_utils.h"
 #include "auc_nfc_card_reader_cli.h"
 #include "ptxCOMMON.h"
@@ -322,12 +324,12 @@ static ptxStatus_t ptxAPP_DataExchange(uint8_t *tx, uint32_t txLen, uint8_t *rx,
 }
 
 /*
- * Lightweight sleep using the BSP software delay instead of the SDK's
- * ptxIoTRdInt_Sleep -> ptxPLAT_Sleep path (which lives under COMPS).
+ * Lightweight sleep using FreeRTOS vTaskDelay so the CPU yields to other
+ * tasks instead of busy-waiting.
  */
 static void ptxAPP_Sleep(uint32_t ms)
 {
-    R_BSP_SoftwareDelay(ms, BSP_DELAY_UNITS_MILLISECONDS);
+    vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
 
@@ -335,8 +337,11 @@ static void ptxAPP_Sleep(uint32_t ms)
  * APPLICATION ENTRY POINT
  * ####################################################################################################################
  *
- * The demo application is started from the BSP main() after the FSP has been
- * initialized. The demo runs in a cooperative loop and never returns. */
+ * The demo application runs inside an FSP-generated FreeRTOS thread (new_thread0).
+ * The scheduler is already started by FSP's main.c; this function is called from
+ * new_thread0_entry() and runs the NFC reader loop. vTaskDelay() can be used to
+ * yield the CPU during poll sleeps. */
+
 void ptxAPP_Entry(void)
 {
     /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
@@ -344,11 +349,11 @@ void ptxAPP_Entry(void)
     UserUartLog_Init();
 
     /* Bring up the cooperative CLI on the same UART. The menu is printed now;
-     * UserCli_Poll() will be driven from the demo main loop so commands are
-     * processed cooperatively while logs keep flowing. */
+     * command dispatch is fully ISR-driven (no main-loop polling needed). */
     UserCli_Init();
 
-    /* Start the IoT Reader application. */
+    /* Start the IoT Reader application (blocking event loop).
+     * We're already in new_thread0, so just call directly. */
     ptxIOT_READER_App();
 }
 
