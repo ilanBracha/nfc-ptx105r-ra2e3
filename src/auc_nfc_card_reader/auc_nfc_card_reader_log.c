@@ -83,7 +83,7 @@ static volatile uint16_t s_rx_tail; /* written by main (consumer) */
 /* TX ring buffer (main producer / ISR consumer). Size MUST be a power of 2.
  * Big enough to hold a full ptxCommon_PrintF line (~256 B) plus some CLI echo
  * so logging never blocks the main loop. Increase if you see drops. */
-#define USER_UART_TX_BUF_SIZE   1024u
+#define USER_UART_TX_BUF_SIZE   512u
 #define USER_UART_TX_BUF_MASK   (USER_UART_TX_BUF_SIZE - 1u)
 static volatile uint8_t  s_tx_buf[USER_UART_TX_BUF_SIZE];
 static volatile uint16_t s_tx_head;     /* next write index (main)  */
@@ -457,7 +457,7 @@ void ptxCommon_PrintF(const char *format, ...)
     (void)SEGGER_RTT_vprintf(0, format, &ap1);
 
     /* UART: format into stack buffer and send */
-    char buf[256];
+    char buf[128];
     int len = ptxCommon_mini_vsnprintf(buf, sizeof(buf), format, ap2);
     if (len > 0)
     {

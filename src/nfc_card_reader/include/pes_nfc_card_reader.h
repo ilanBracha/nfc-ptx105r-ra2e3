@@ -58,7 +58,11 @@ typedef enum {
     PES_NFC_PROT_EXTENSION,
 } pes_nfc_protocol_t;
 
-/* ── Operation-end callback (legacy) ───────────────────────────────── */
+/* ── Operation-end callback (non-blocking mode) ────────────────────── */
+/**
+ * Fired once when a non-blocking PES_NFCCardReader_Read() completes
+ * (timeout, fatal error, or PES_NFCCardReader_Stop() was called).
+ */
 typedef void (*pes_nfc_callback_t)(pes_status_t status, void *p_context);
 
 /* ── Result (forward-declared so the per-card event cb can reference it) */
@@ -93,17 +97,20 @@ typedef struct {
     bool read_ndef;
     uint16_t max_ndef_bytes;
 
-    /* Non-blocking support (disabled on RA2E3 to save flash)
-     * callback = NULL  -> blocking: Read() blocks until complete
-     * callback != NULL -> rejected with PES_ERR_INVALID_CFG
-     * Note: Use on_card_event for per-card notifications in event-loop mode.
+    /* Non-blocking support:
+     * callback == NULL -> blocking (Read blocks until done)
+     * callback != NULL -> non-blocking (Read returns immediately,
+     *                     spawns a static FreeRTOS task; callback fires
+     *                     on completion). Only one non-blocking Read may
+     *                     be active at a time.
      */
     pes_nfc_callback_t callback;
     void *p_context;
 
     /* Per-card event (fires once per detected/activated card during Read()).
      * When set, the orchestrator runs in continuous-loop mode and emits one
-     * event per card until timeout_ms elapses. */
+     * event per card until timeout_ms elapses. Works in both blocking and
+     * non-blocking modes. */
     pes_nfc_card_event_cb_t on_card_event;
     void                   *p_card_event_context;
 
@@ -129,18 +136,30 @@ struct pes_nfc_card_result_s {
 
 /* ── API ───────────────────────────────────────────────────────────── */
 
-/* ss
- * Read NFC cards according to the supplied configuration. The function blocks
- * until either timeout_ms elapses or a fatal error occurs. If on_card_event is
- * set, the function loops continuously and fires one event per detected card.
- * If on_card_event is NULL, the function returns after the first card is read
- * (or after timeout_ms if no card was detected). 
-
- * cfg        : pointer to the configuration structure
- * result_out : optional pointer to a caller-supplied result structure. If
- *              NULL, a local result is used and discarded. If non-NULL, the
- *              structure is filled with the last card's details before returning. */
+/**
+ * Read NFC cards according to the supplied configuration.
+ *
+ * Blocking mode (cfg->callback == NULL):
+ *   Blocks until timeout_ms elapses or a fatal error occurs.
+ *
+ * Non-blocking mode (cfg->callback != NULL):
+ *   Spawns a dedicated static FreeRTOS task, returns PES_OK immediately.
+ *   The callback fires once when the operation completes. Only one
+ *   non-blocking Read() may be active at a time; a second call while
+ *   a task is running returns PES_ERR_INTERNAL.
+ *
+ * In both modes, if on_card_event is set the orchestrator runs in
+ * continuous-loop mode and fires one event per detected card.
+ */
 pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t * cfg, pes_nfc_card_result_t * result_out);
+
+/**
+ * Request graceful stop of a running Read (blocking or non-blocking).
+ * The loop exits cleanly; the operation-end callback fires with PES_OK.
+ * Safe to call even when no operation is in flight.
+ * @return PES_OK always.
+ */
+pes_status_t PES_NFCCardReader_Stop(void);
 
 /* Raw data exchange with the currently-activated card. Use this from inside
  * an on_card_event callback to issue protocol-specific frames (T2T READ,
@@ -167,7 +186,6 @@ pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len, 
  *   - tech_mask is non-zero
  *   - timeout_ms > 0
  *   - if read_ndef = true: max_ndef_bytes > 0 and <= PES_NFC_NDEF_MAX_BYTES
- *   - callback != NULL is rejected (disabled on RA2E3 to save flash)
  *
  * Additional checks when cfg->validate_dependencies = true:
  *   - PTX105R lower-level stack is initialized (FSP ctrl block open)

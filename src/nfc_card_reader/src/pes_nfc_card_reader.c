@@ -1,23 +1,21 @@
 /**
  * pes_nfc_card_reader.c
  *
- * PES NFC Card Reader — main orchestrator.
+ * PES NFC Card Reader — main orchestrator (blocking + non-blocking).
  *
  * Owns the full FSP-driven discovery/activation/read state machine. The
  * application interacts exclusively through the PES public API:
  *
  *   - PES_NFCCardReader_Read()         : run the polling loop
  *   - PES_NFCCardReader_DataExchange() : raw exchange with the active card
+ *   - PES_NFCCardReader_Stop()         : request graceful stop
  *
- * Two operating modes are selected by the caller via the cfg:
+ * Operating modes (selected via cfg fields):
  *
- *   1. Event-loop mode (cfg->on_card_event != NULL):
- *        runs a continuous detect -> activate -> NDEF read -> notify ->
- *        deactivate -> restart-discovery loop for cfg->timeout_ms.
- *        timeout_ms == UINT32_MAX => loop forever (never returns).
- *
- *   2. Single-shot mode (cfg->on_card_event == NULL):
- *        legacy behavior: detect/activate one card, fill result_out, return.
+ *   1. Blocking event-loop (callback==NULL, on_card_event!=NULL)
+ *   2. Blocking single-shot (callback==NULL, on_card_event==NULL)
+ *   3. Non-blocking (callback!=NULL): spawns a static FreeRTOS task that
+ *      runs mode 1 or 2 internally. Read() returns PES_OK immediately.
  */
 
 #include "pes_nfc_card_reader.h"
@@ -35,8 +33,12 @@
 #define LOOP_TICK_MS             5U       /* discovery poll cadence */
 #define SUMMARY_BUF_SIZE         128U
 
-/* PTX system/RF status raw codes the orchestrator differentiates.
- * Mirrors values exposed by RM_NFC_READER_PTX_StatusGet(). */
+/* Async worker task configuration (static allocation — no heap) */
+#define ASYNC_TASK_STACK_WORDS   (4096U / sizeof(StackType_t))
+#define ASYNC_TASK_PRIORITY      1U
+#define ASYNC_TASK_NAME          "PES_NFC"
+
+/* PTX system/RF status raw codes */
 #define PTX_SYS_STATUS_OK                       0x00u
 #define PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT 0x06u
 
@@ -48,7 +50,33 @@ typedef enum {
     LOOP_SYSTEM_ERROR,
 } loop_state_t;
 
-/* ── Single-attempt implementation (used by retry wrapper & single-shot) ── */
+/* ── Stop-requested flag ──────────────────────────────────────────── */
+static volatile bool g_stop_requested = false;
+
+bool pes_nfc_card_reader_is_stop_requested(void)
+{
+    return g_stop_requested;
+}
+
+/* ── Non-blocking async context (static allocation) ───────────────── */
+typedef struct {
+    pes_nfc_card_reader_cfg_t  cfg;          /* deep copy of caller cfg  */
+    pes_nfc_card_result_t     *p_result_out; /* caller's result pointer  */
+    volatile bool              active;       /* re-entrancy guard        */
+} pes_nfc_async_ctx_t;
+
+static pes_nfc_async_ctx_t  g_async_ctx;
+static StaticTask_t         g_async_task_tcb;
+static StackType_t          g_async_task_stack[ASYNC_TASK_STACK_WORDS];
+static TaskHandle_t         g_async_task_handle = NULL;
+
+/* ── Forward declarations ─────────────────────────────────────────── */
+static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
+                                           pes_nfc_card_result_t *result_out);
+static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
+                                   pes_nfc_card_result_t *result_out);
+
+/* ── Single-attempt (used by retry wrapper & single-shot) ─────────── */
 pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
 {
     const pes_nfc_card_reader_cfg_t *cfg = (const pes_nfc_card_reader_cfg_t *)cfg_raw;
@@ -61,6 +89,13 @@ pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
     pes_nfc_disc_status_t disc = PES_NFC_DISC_NO_CARD;
     st = pes_nfc_detect_poll(timeout, &disc);
     if (PES_OK != st) { return st; }
+
+    /* If stop was requested during poll, detect_poll returns PES_OK with
+     * NO_CARD — treat as a clean exit. */
+    if (g_stop_requested || (PES_NFC_DISC_NO_CARD == disc))
+    { 
+        return PES_OK;
+    }
 
     /* 2. Activate the card */
     pes_nfc_hal_card_info_t card_info;
@@ -95,7 +130,6 @@ pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
                     break;
 
                 default:
-                    /* NDEF reading not supported for this card type yet */
                     break;
             }
         }
@@ -117,6 +151,9 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
 
     while (loop_forever || (elapsed_ms < cfg->timeout_ms))
     {
+        /* Stop requested? Exit cleanly. */
+        if (g_stop_requested) { return PES_OK; }
+
         /* Critical system-error watchdog */
         uint8_t sys_state = PTX_SYS_STATUS_OK;
         if (PES_OK == pes_nfc_hal_get_system_state(&sys_state))
@@ -124,7 +161,7 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
             if (PTX_SYS_STATUS_OK != sys_state) { state = LOOP_SYSTEM_ERROR; }
         }
 
-        /* PA overcurrent / other RF warning notifications (informational only) */
+        /* PA overcurrent / other RF warning notifications */
         uint8_t last_rf_err = 0u;
         (void)pes_nfc_hal_get_last_rf_error(&last_rf_err);
         if ((PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT == last_rf_err) &&
@@ -182,7 +219,7 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
                         }
                     }
 
-                    /* Build summary string and fire the per-card event */
+                    /* Build summary string and fire per-card event */
                     (void)pes_card_summary_build(res, summary, sizeof(summary));
                     if (NULL != cfg->on_card_event)
                     {
@@ -231,56 +268,11 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
     return PES_OK; /* timed out without a fatal error */
 }
 
-/* ── Public API ────────────────────────────────────────────────────── */
-
-pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg)
-{
-    /* --- NULL check --- */
-    if (NULL == cfg) { return PES_ERR_INVALID_CFG; }
-
-    /* --- Reader device enum --- */
-    if ((int)cfg->reader != (int)PES_NFC_READER_PTX105R)
-    {
-        return PES_ERR_INVALID_CFG;
-    }
-
-    /* --- tech_mask must select at least one technology --- */
-    if (0u == cfg->tech_mask) { return PES_ERR_INVALID_CFG; }
-
-    /* --- timeout_ms must be > 0 --- */
-    if (0u == cfg->timeout_ms) { return PES_ERR_INVALID_CFG; }
-
-    /* --- NDEF read options --- */
-    if (cfg->read_ndef)
-    {
-        if ((0u == cfg->max_ndef_bytes) ||
-            (cfg->max_ndef_bytes > PES_NFC_NDEF_MAX_BYTES))
-        {
-            return PES_ERR_INVALID_CFG;
-        }
-    }
-
-    /* --- Non-blocking callback path disabled on RA2E3 to save flash --- */
-    if (NULL != cfg->callback) { return PES_ERR_INVALID_CFG; }
-
-    /* --- Optional runtime dependency validation --- */
-    if (cfg->validate_dependencies)
-    {
-        pes_status_t dep_st = pes_nfc_card_reader_validate_deps();
-        if (PES_OK != dep_st) { return dep_st; }
-    }
-
-    return PES_OK;
-}
-
-pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
-                                    pes_nfc_card_result_t *result_out)
+/* ── Blocking core (open → discover → loop/shot → cleanup) ────────── */
+static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
+                                           pes_nfc_card_result_t *result_out)
 {
     pes_status_t st;
-
-    /* Validate configuration (covers NULL, enum, mask, timeout, deps). */
-    st = PES_NFCCardReader_Validate(cfg);
-    if (PES_OK != st) { return st; }
 
     if (NULL != result_out)
     {
@@ -297,8 +289,7 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
         return st;
     }
 
-    /* Mode selection: event-loop if a per-card callback was supplied,
-     * single-shot/retry otherwise. */
+    /* Mode selection */
     if (NULL != cfg->on_card_event)
     {
         st = run_event_loop(cfg, result_out);
@@ -315,6 +306,113 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
     (void)pes_nfc_hal_deactivate();
     (void)pes_nfc_hal_close();
     return st;
+}
+
+/* ── Async worker task function ───────────────────────────────────── */
+static void pes_nfc_async_worker(void *pvParameters)
+{
+    (void)pvParameters;
+    pes_nfc_async_ctx_t *ctx = &g_async_ctx;
+
+    /* Run full blocking flow inside this dedicated task. */
+    pes_status_t st = pes_nfc_read_blocking(&ctx->cfg, ctx->p_result_out);
+
+    /* Fire the operation-end callback. */
+    if (NULL != ctx->cfg.callback)
+    {
+        ctx->cfg.callback(st, ctx->cfg.p_context);
+    }
+
+    /* Mark context inactive and self-delete. */
+    ctx->active = false;
+    g_async_task_handle = NULL;
+    vTaskDelete(NULL);
+}
+
+/* ── Public API ────────────────────────────────────────────────────── */
+
+pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg)
+{
+    if (NULL == cfg) { return PES_ERR_INVALID_CFG; }
+
+    if ((int)cfg->reader != (int)PES_NFC_READER_PTX105R)
+    {
+        return PES_ERR_INVALID_CFG;
+    }
+
+    if (0u == cfg->tech_mask) { return PES_ERR_INVALID_CFG; }
+    if (0u == cfg->timeout_ms) { return PES_ERR_INVALID_CFG; }
+
+    if (cfg->read_ndef)
+    {
+        if ((0u == cfg->max_ndef_bytes) ||
+            (cfg->max_ndef_bytes > PES_NFC_NDEF_MAX_BYTES))
+        {
+            return PES_ERR_INVALID_CFG;
+        }
+    }
+
+    /* Non-blocking callback is now accepted (no longer rejected). */
+
+    if (cfg->validate_dependencies)
+    {
+        pes_status_t dep_st = pes_nfc_card_reader_validate_deps();
+        if (PES_OK != dep_st) { return dep_st; }
+    }
+
+    return PES_OK;
+}
+
+pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
+                                    pes_nfc_card_result_t *result_out)
+{
+    pes_status_t st;
+
+    /* Validate configuration */
+    st = PES_NFCCardReader_Validate(cfg);
+    if (PES_OK != st) { return st; }
+
+    /* ── Non-blocking path ─────────────────────────────────────────── */
+    if (NULL != cfg->callback)
+    {
+        /* Re-entrancy guard: only one async Read() at a time. */
+        if (g_async_ctx.active) { return PES_ERR_INTERNAL; }
+
+        /* Deep-copy config into static context. */
+        (void)memcpy(&g_async_ctx.cfg, cfg, sizeof(*cfg));
+        g_async_ctx.p_result_out = result_out;
+        g_async_ctx.active       = true;
+        g_stop_requested         = false;
+
+        /* Create async worker (static allocation — no heap). */
+        g_async_task_handle = xTaskCreateStatic(
+            pes_nfc_async_worker,
+            ASYNC_TASK_NAME,
+            ASYNC_TASK_STACK_WORDS,
+            NULL,
+            ASYNC_TASK_PRIORITY,
+            g_async_task_stack,
+            &g_async_task_tcb
+        );
+
+        if (NULL == g_async_task_handle)
+        {
+            g_async_ctx.active = false;
+            return PES_ERR_INTERNAL;
+        }
+
+        return PES_OK;  /* returns immediately */
+    }
+
+    /* ── Blocking path ─────────────────────────────────────────────── */
+    g_stop_requested = false;
+    return pes_nfc_read_blocking(cfg, result_out);
+}
+
+pes_status_t PES_NFCCardReader_Stop(void)
+{
+    g_stop_requested = true;
+    return PES_OK;
 }
 
 pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len,

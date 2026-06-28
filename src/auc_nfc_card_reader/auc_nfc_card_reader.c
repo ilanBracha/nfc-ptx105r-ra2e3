@@ -220,7 +220,7 @@ static void ptxAPP_Printf(const char *format, ...)
     (void)SEGGER_RTT_vprintf(0, format, &ap_rtt);
 
     /* UART sink (src/USER_BOARD_UTILS) */
-    char buf[256];
+    char buf[128];
     int len = vsnprintf(buf, sizeof(buf), format, ap_uart);
     if (len > 0)
     {
@@ -404,6 +404,15 @@ static void on_nfc_read_done(pes_status_t status,
     UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
 }
 
+/* Completion callback — fires once when the non-blocking Read() finishes
+ * (timeout elapsed, fatal error, or PES_NFCCardReader_Stop() called). */
+static void on_nfc_operation_done(pes_status_t status, void *p_context)
+{
+    (void)p_context;
+    ptxCommon_PrintF("PES_NFCCardReader_Read completed (status=%d)\n", (int)status);
+    g_ioport.p_api->pinWrite(g_ioport.p_ctrl, USER_BOARD_LED_IOT_RD, USER_BOARD_LED_INACTIVE);
+}
+
 void ptxIOT_READER_App(void)
 {
     /* IoT Reader LED on as soon as we are about to start the orchestrator. */
@@ -419,17 +428,27 @@ void ptxIOT_READER_App(void)
     cfg.retry_count           = 0u;
     cfg.read_ndef             = true;
     cfg.max_ndef_bytes        = PES_NFC_NDEF_MAX_BYTES;
-    cfg.callback              = NULL;            /* operation-end cb unused */
+    cfg.callback              = on_nfc_operation_done;  /* NON-BLOCKING */
     cfg.p_context             = NULL;
     cfg.on_card_event         = on_nfc_read_done;
     cfg.p_card_event_context  = NULL;
     cfg.validate_dependencies = false;
 
-    pes_nfc_card_result_t result;
+    /* Must be static: the async task accesses it after this function returns. */
+    static pes_nfc_card_result_t result;
     (void)memset(&result, 0, sizeof(result));
 
     pes_status_t st = PES_NFCCardReader_Read(&cfg, &result);
-    ptxCommon_PrintF("PES_NFCCardReader_Read returned status=%d\n", (int)st);
+    if (PES_OK != st)
+    {
+        ptxCommon_PrintF("PES_NFCCardReader_Read launch FAILED (status=%d)\n", (int)st);
+    }
+    else
+    {
+        ptxCommon_PrintF("PES NFC Card Reader launched (non-blocking)\n");
+    }
+    /* Returns immediately — NFC reader runs in its own FreeRTOS task.
+     * new_thread0 is now free for other work or can suspend. */
 }
 
 /*
@@ -1193,10 +1212,10 @@ static ptxStatus_t ptxIoTRdInt_DemoState_DataExchange(const pes_nfc_card_result_
                                                       uint8_t *skipRxProcessing)
 {
     ptxStatus_t st = ptxStatus_Success;
-    uint8_t tx_data[TX_BUFFER_SIZE];
+    static uint8_t tx_data[TX_BUFFER_SIZE];
     uint32_t tx_data_length = 0;
 
-    uint8_t rx_data[RX_BUFFER_SIZE];
+    static uint8_t rx_data[RX_BUFFER_SIZE];
     uint32_t rx_data_length = 0;
 
     uint32_t app_timeout = DEFAULT_APP_TIMEOUT_RAW;

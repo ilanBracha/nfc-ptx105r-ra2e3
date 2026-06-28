@@ -33,6 +33,9 @@ void pes_timeout_sleep_ms(uint32_t ms);
 /* pes_nfc_card_reader.c  (used by retry) */
 pes_status_t pes_nfc_card_reader_try_once(const void *cfg, void *result_out);
 
+/* pes_nfc_card_reader.c — stop flag (checked by detect_poll & event loop) */
+bool pes_nfc_card_reader_is_stop_requested(void);
+
 /* ndef/pes_card_summary.c — Builds a one-line human-readable summary of
  * the activated card into a caller-supplied buffer (no printing). Returns
  * the number of bytes written (excluding the trailing NUL). */
