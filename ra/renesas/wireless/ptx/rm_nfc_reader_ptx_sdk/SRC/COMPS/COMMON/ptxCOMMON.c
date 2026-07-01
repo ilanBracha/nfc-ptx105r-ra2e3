@@ -54,8 +54,16 @@
  * DEFINES / TYPES
  * ####################################################################################################################
  */
-#include <stdarg.h>
-#include "SEGGER_RTT.h"
+/*
+ * Comment / Uncomment this #define to enable output via printf
+ */
+//#define ENABLE_PRINTF_OPTION
+
+#ifdef ENABLE_PRINTF_OPTION
+    #include "ptxDBG_PORT.h"
+    #include <stdarg.h>
+    #include <stdio.h>
+#endif
 
 /*
  * ####################################################################################################################
@@ -65,15 +73,28 @@
 
 void ptxCommon_PrintF(const char *format, ...)
 {
-    va_list ap;
-    va_start(ap, format);
-    (void)SEGGER_RTT_vprintf(0, format, &ap);
-    va_end(ap);
+#ifdef ENABLE_PRINTF_OPTION
+    va_list argptr;
+    va_start(argptr, format);
+
+    const size_t max_len = 256u;
+    char buffer[max_len];
+    buffer[max_len-1] = '\0';
+
+    (void)vsnprintf(buffer, max_len, format, argptr);
+
+    (void)ptxDBGPORT_Write(buffer);
+
+    va_end(argptr);
+#else
+    (void)format;
+#endif
 }
 
 void ptxCommon_Print_Buffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength, uint8_t addNewLine, uint8_t printASCII)
 {
     uint32_t i;
+    uint32_t lineIdx = 0;
     uint8_t character_to_print;
 
     if (NULL != buffer)
@@ -84,6 +105,7 @@ void ptxCommon_Print_Buffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t buf
             {
                 if ((i > 0) && ((i % (LINE_LENGTH - 5) == 0)))
                 {
+                    lineIdx++;
                     ptxCommon_PrintF("\n     ");
                 }
 

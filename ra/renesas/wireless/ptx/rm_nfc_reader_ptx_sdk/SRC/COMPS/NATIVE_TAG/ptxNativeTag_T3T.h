@@ -56,8 +56,8 @@
  */
 
 #include <stdint.h>
-#include "ptx_IOT_READER.h"
 #include "ptxStatus.h"
+#include "ptx_IOT_READER.h"
 
 #ifdef __cplusplus
 extern "C" {

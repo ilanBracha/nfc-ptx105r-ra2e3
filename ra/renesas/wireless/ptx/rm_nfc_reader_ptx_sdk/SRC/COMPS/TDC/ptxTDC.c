@@ -48,8 +48,8 @@
  */
 #include "ptxTDC.h"
 #include "ptxTDC_Timer.h"
-#include <string.h>
 #include "ptx_IOT_READER.h"
+#include <string.h>
 
 /*
  * ####################################################################################################################

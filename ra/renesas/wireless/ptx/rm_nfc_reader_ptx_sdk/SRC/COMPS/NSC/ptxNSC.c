@@ -46,19 +46,18 @@
  * ####################################################################################################################
  */
 
+#include "ptxStatus.h"
 #include "ptxNSC.h"
 #include "ptxNSC_System.h"
+#include "ptxPLAT.h"
 #include "ptxNSC_Hal.h"
 #include "ptxNSC_Registers.h"
 #include "ptxNSC_Notifications.h"
 #include "ptxNSC_uCODE.h"
 #include "ptxNSC_Intf.h"
-#include <string.h>
-#include "SEGGER_RTT.h"
-#include <stdlib.h>
 #include "ptxPlatform_Revision.h"
-#include "ptxStatus.h"
-#include "ptxPLAT.h"
+#include <string.h>
+#include <stdlib.h>
 
 /*
  * ####################################################################################################################
@@ -232,13 +231,11 @@ ptxStatus_t ptxNSC_FwDownloader(ptxNSC_t *nscCtx)
 
             /* Make sure DFY is reset.*/
             status = ptxNSC_HAL_Rra(nscCtx, SYS_CONTROL_REG, &value);
-            if (ptxStatus_Success != status) { SEGGER_RTT_printf(0, "[FwDL] HAL_Rra SYS_CONTROL_REG FAILED st=0x%04X\n", status); }
             if (ptxStatus_Success == status)
             {
                 if (SYS_CONTROL_REG_DFY_ENABLE_MASK == (value & SYS_CONTROL_REG_DFY_ENABLE_MASK))
                 {
                     status = ptxNSC_SoftReset(nscCtx);
-                    if (ptxStatus_Success != status) { SEGGER_RTT_printf(0, "[FwDL] SoftReset FAILED st=0x%04X\n", status); }
                 }
 
                 if (ptxStatus_Success == status)
@@ -248,16 +245,11 @@ ptxStatus_t ptxNSC_FwDownloader(ptxNSC_t *nscCtx)
                         status = ptxNSC_Hal_WriteInstruction_Framing (nscCtx, (uint16_t)ptxNSC_uCODE_init_adds[i], (uint8_t *)ptxNSC_uCODE_sections[i], ptxNSC_uCODE_sections_size[i]);
                         if(ptxStatus_Success != status)
                         {
-                            SEGGER_RTT_printf(0, "[FwDL] WriteInstruction section %d FAILED st=0x%04X\n", i, status);
                             break;
                         }
                     }
-                    if (ptxStatus_Success == status) { SEGGER_RTT_printf(0, "[FwDL] All %d sections written OK\n", NUM_OF_SECTIONS); }
                 }
             }
-        } else
-        {
-            SEGGER_RTT_printf(0, "[FwDL] CheckHWVersion FAILED st=0x%04X\n", status);
         }
     }
     return status;
@@ -1858,9 +1850,6 @@ static ptxStatus_t ptxNSC_WaitForRsp(ptxNSC_t *nscCtx, uint8_t **rsp, size_t *rs
                     uint8_t is_timer_elapsed = 0;
                     uint8_t rx_is_ongoing = 0;
                     uint8_t is_rx_pending = 0;
-                    uint32_t dbg_loop_cnt = 0;
-
-                    SEGGER_RTT_printf(0, "[WaitRsp] entering wait loop, timeout=%u\n", (unsigned)timeOut);
 
                     do
                     {
@@ -1884,17 +1873,6 @@ static ptxStatus_t ptxNSC_WaitForRsp(ptxNSC_t *nscCtx, uint8_t **rsp, size_t *rs
                             (void) ptxPLAT_EnableInterrupts (nscCtx->Plat);
                         }
 
-                        /*
-                         * If the IRQ pin is asserted, process the pending
-                         * RX from thread context (not from the ISR) so that
-                         * SPI transfers can use their own interrupts safely.
-                         */
-                        if (0 != is_rx_pending)
-                        {
-                            SEGGER_RTT_printf(0, "[WaitRsp] IRQ pin HIGH, calling TriggerRx\n");
-                            (void) ptxPLAT_TriggerRx(nscCtx->Plat);
-                        }
-
                         rx_is_ongoing = ptxPLAT_CheckRxActive(nscCtx->Plat);
 
                         // Check if a new response has been received
@@ -1906,13 +1884,7 @@ static ptxStatus_t ptxNSC_WaitForRsp(ptxNSC_t *nscCtx, uint8_t **rsp, size_t *rs
                             (void) ptxPLAT_TimerIsElapsed(nscCtx->Plat, timer, &is_timer_elapsed);
                         }
 
-                        dbg_loop_cnt++;
-
                     } while((0 == is_timer_elapsed) && (0 == is_new_rsp));
-
-                    SEGGER_RTT_printf(0, "[WaitRsp] loop exited: timer=%u newRsp=%u loops=%u rxPend=%u\n",
-                                     (unsigned)is_timer_elapsed, (unsigned)is_new_rsp,
-                                     (unsigned)dbg_loop_cnt, (unsigned)is_rx_pending);
 
                     if (0 == is_new_rsp)
                     {
@@ -2163,7 +2135,6 @@ static ptxStatus_t ptxNSC_CheckHWVersion (ptxNSC_t *nscCtx)
 
     if (ptxStatus_Success == status)
     {
-        SEGGER_RTT_printf(0, "[FwDL] VERSION_REG read=0x%02X expected=0x%02X\n", value, VERSION_REG_RST);
         if (VERSION_REG_RST == value)
         {
             /* Correct PTX1K version read out. */
@@ -2171,9 +2142,6 @@ static ptxStatus_t ptxNSC_CheckHWVersion (ptxNSC_t *nscCtx)
         {
             status = PTX_STATUS(ptxStatus_Comp_NSC, ptxStatus_InternalError);
         }
-    } else
-    {
-        SEGGER_RTT_printf(0, "[FwDL] HAL_Rra VERSION_REG FAILED st=0x%04X\n", status);
     }
 
     return status;

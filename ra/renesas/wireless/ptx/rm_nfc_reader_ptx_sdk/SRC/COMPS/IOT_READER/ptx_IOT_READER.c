@@ -48,14 +48,13 @@
  */
 
 #include "ptx_IOT_READER.h"
+#include "ptxNSC.h"
+#include "ptxNSC_System.h"
+#include "ptxNSC_Registers.h"
+#include "ptxNSC_Rd.h"
+#include "ptxPLAT.h"
 #include <string.h>
 #include <stdlib.h>
-#include "ptxNSC_Rd.h"
-#include "ptxNSC.h"
-#include "ptxNSC_Registers.h"
-#include "ptxNSC_System.h"
-#include "ptxPLAT.h"
-#include "SEGGER_RTT.h"
 
 /*
  * ####################################################################################################################
@@ -278,13 +277,11 @@ ptxStatus_t ptxIoTRd_Init(ptxIoTRd_t *iotRd, ptxIoTRd_InitPars_t *initParams)
 
             /* Download the FW for PTX1K. */
             st = ptxNSC_FwDownloader(iotRd->Nsc);
-            if (ptxStatus_Success != st) { SEGGER_RTT_printf(0, "[IOT_RD] FwDownloader FAILED st=0x%04X\n", st); }
 
             /* DFY Activation. */
             if (ptxStatus_Success == st)
             {
                 st = ptxNSC_DFY_Activation(iotRd->Nsc);
-                if (ptxStatus_Success != st) { SEGGER_RTT_printf(0, "[IOT_RD] DFY_Activation FAILED st=0x%04X\n", st); }
             }
 
             if (ptxStatus_Success == st)
@@ -354,7 +351,6 @@ ptxStatus_t ptxIoTRd_Init(ptxIoTRd_t *iotRd, ptxIoTRd_InitPars_t *initParams)
                 }
 
                 st = ptxNSC_InitCmd(iotRd->Nsc, &nsc_Init_Pars);
-                if (ptxStatus_Success != st) { SEGGER_RTT_printf(0, "[IOT_RD] InitCmd FAILED st=0x%04X\n", st); }
             }
 
             if (ptxStatus_Success == st)
@@ -363,18 +359,15 @@ ptxStatus_t ptxIoTRd_Init(ptxIoTRd_t *iotRd, ptxIoTRd_InitPars_t *initParams)
 
                 /* NSC_RFCONFIG_CMD for PTX1K. Use default settings. */
                 st = ptxNSC_RfConfig(iotRd->Nsc, NULL, 0);
-                if (ptxStatus_Success != st) { SEGGER_RTT_printf(0, "[IOT_RD] RfConfig FAILED st=0x%04X\n", st); }
             }
 
             if (ptxStatus_Success == st)
             {
                 st = ptxHce_Init(&iotRd->Hce, iotRd->Plat, iotRd->Nsc, iotRd->BuffNtf, PTX_IOTRD_RF_MSG_MAX_SIZE);
-                if (ptxStatus_Success != st) { SEGGER_RTT_printf(0, "[IOT_RD] HceInit FAILED st=0x%04X\n", st); }
             }
         }
 
         /* check for pending system errors (e.g. termperature-errors during initialization) */
-        SEGGER_RTT_printf(0, "[IOT_RD] st before CheckSystemState=0x%04X\n", st);
         st = ptxNSC_CheckSystemState(iotRd->Nsc, st);
 
     } else
@@ -3023,11 +3016,11 @@ static ptxStatus_t ptxIoTRd_TempOffsetComp (ptxIoTRd_t *iotRd, int8_t *tempOffse
 
         if (temp_calculated > 255u)
         {
-            /* Clamp to maximum 8-bit register value instead of returning an error.
-             * This can happen when Tshutdown > ~141°C causes the calculated word to overflow 255. */
-            temp_calculated = 255u;
+            st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);
+        } else
+        {
+            *tempVal = (uint8_t)temp_calculated;
         }
-        *tempVal = (uint8_t)temp_calculated;
     } else
     {
         st = PTX_STATUS(ptxStatus_Comp_IoTReader, ptxStatus_InvalidParameter);

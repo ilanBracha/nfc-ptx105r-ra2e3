@@ -45,9 +45,9 @@
  * INCLUDES AND DEFINES
  * ####################################################################################################################
  */
-#include "ptxStatus.h"
 #include "ptxHce_Exchange.h"
 #include "ptxCOMMON.h"
+#include "ptxStatus.h"
 
 #if 0
 #define PTX_HCE_DEACTIVATE_REASON_DESELECT  (0x00)

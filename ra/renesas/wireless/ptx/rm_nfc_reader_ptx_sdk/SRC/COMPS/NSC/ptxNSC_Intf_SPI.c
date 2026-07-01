@@ -50,9 +50,9 @@
 #include "ptxNSC.h"
 #include "ptxNSC_Hal.h"
 #include "ptxNSC_Registers.h"
-#include <stdlib.h>
-#include "ptxStatus.h"
 #include "ptxPLAT.h"
+#include "ptxStatus.h"
+#include <stdlib.h>
 
 /*
  * ####################################################################################################################

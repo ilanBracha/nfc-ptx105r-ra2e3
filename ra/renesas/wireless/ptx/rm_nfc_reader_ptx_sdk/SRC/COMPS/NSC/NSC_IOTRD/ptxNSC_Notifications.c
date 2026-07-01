@@ -46,10 +46,10 @@
  * ####################################################################################################################
  */
 
-#include <string.h>
 #include "ptxNSC.h"
-#include "ptxNSC_Hal.h"
 #include "ptxPLAT.h"
+#include "ptxNSC_Hal.h"
+#include <string.h>
 
 
 /*

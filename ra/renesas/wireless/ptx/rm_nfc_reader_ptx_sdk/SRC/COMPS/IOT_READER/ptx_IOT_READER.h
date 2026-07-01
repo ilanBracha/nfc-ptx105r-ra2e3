@@ -54,10 +54,10 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include <stddef.h>
+#include "ptxStatus.h"
 #include "ptxHce.h"
 #include "ptxNSC.h"
-#include "ptxStatus.h"
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

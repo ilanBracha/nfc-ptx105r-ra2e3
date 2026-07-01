@@ -46,9 +46,9 @@
  * ####################################################################################################################
  */
 #include "ptxFeliCa_DTE.h"
-#include <string.h>
 #include "ptx_IOT_READER.h"
 #include "ptxPLAT.h"
+#include <string.h>
 
 
 /*

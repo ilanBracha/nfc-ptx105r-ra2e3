@@ -57,8 +57,8 @@
 
 #include <stdint.h>
 #include "ptxNativeTag_T2T.h"
-#include "ptxStatus.h"
 #include "ptxNDEF_Defines.h"
+#include "ptxStatus.h"
 
 #ifdef __cplusplus
 extern "C" {

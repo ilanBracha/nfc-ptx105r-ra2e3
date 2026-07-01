@@ -62,9 +62,6 @@
 extern "C" {
 #endif
 
-struct ptxIoTRd;
-typedef struct ptxIoTRd ptxIoTRd_t;
-
 /*
  * ####################################################################################################################
  * DEFINES / TYPES

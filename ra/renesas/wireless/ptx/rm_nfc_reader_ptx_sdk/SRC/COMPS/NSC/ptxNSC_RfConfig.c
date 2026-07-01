@@ -48,9 +48,9 @@
 
 #include "ptxNSC.h"
 #include "ptxNSC_Hal.h"
+#include "ptxPLAT.h"
 #include <string.h>
 #include <stdlib.h>
-#include "ptxPLAT.h"
 
 /*
  * ####################################################################################################################

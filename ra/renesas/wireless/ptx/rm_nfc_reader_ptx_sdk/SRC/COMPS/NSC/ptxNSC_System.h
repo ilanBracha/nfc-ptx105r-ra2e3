@@ -49,8 +49,8 @@
 #ifndef PTXNSC_SYSTEM_H_
 #define PTXNSC_SYSTEM_H_
 
-#include <stddef.h>
 #include "ptxStatus.h"
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

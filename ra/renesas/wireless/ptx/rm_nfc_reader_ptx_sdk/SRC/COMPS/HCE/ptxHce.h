@@ -54,8 +54,8 @@
  * INCLUDES
  * ####################################################################################################################
  */
-#include "ptxNSC_Event.h"
 #include "ptxStatus.h"
+#include "ptxNSC_Event.h"
 
 #ifdef __cplusplus
 extern "C" {

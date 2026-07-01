@@ -47,15 +47,16 @@
  */
 #include "ptxHce.h"
 
+#include "ptxStatus.h"
+#include "ptxPLAT.h"
+#include "ptxNSC.h"
+#include "ptxNSC_System.h"
+#include "ptxNSC_Hal.h"
+#include "ptxNSC_CE.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include "ptxNSC_CE.h"
-#include "ptxNSC.h"
-#include "ptxNSC_Hal.h"
-#include "ptxNSC_System.h"
-#include "ptxStatus.h"
-#include "ptxPLAT.h"
 
 
 /*
