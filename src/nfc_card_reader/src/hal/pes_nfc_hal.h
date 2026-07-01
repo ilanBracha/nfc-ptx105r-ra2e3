@@ -48,6 +48,31 @@ pes_status_t pes_nfc_hal_discover_start(pes_nfc_tech_mask_t tech_mask);
 /** Poll discovery status (non-blocking). */
 pes_status_t pes_nfc_hal_discover_status(pes_nfc_disc_status_t *out_status);
 
+/**
+ * Interrupt-driven wait for a card-discovery event (or system/RF error).
+ *
+ * Instead of busy-sleeping and re-polling the status register every few
+ * milliseconds, this function blocks the calling FreeRTOS task on a task
+ * notification that is given from the PTX105R's IRQ line (ICU IRQ7). The
+ * chip asserts this line whenever it has a notification pending for the
+ * host (RF-discovery, RF-error, etc.), so the task consumes zero CPU while
+ * waiting and wakes almost immediately after a card enters the field.
+ *
+ * Internally this temporarily installs a lightweight ISR (via
+ * R_ICU_ExternalIrqCallbackSet) that only calls vTaskNotifyGiveFromISR();
+ * the original ptxPLAT_GPIO_IsrCallback is restored before returning, so
+ * normal SDK operation (data exchange, presence-check, etc.) is unaffected
+ * outside of this call.
+ *
+ * @param[in]  timeout_ms  Max time to wait, in milliseconds.
+ * @param[out] out_status  Discovery status after the wait (NO_CARD if the
+ *                         wait timed out without any event).
+ * @return PES_OK on a valid read (even if out_status == NO_CARD on
+ *         timeout); PES_ERR_INTERNAL on a lower-level failure.
+ */
+pes_status_t pes_nfc_hal_wait_for_card(uint32_t timeout_ms,
+                                       pes_nfc_disc_status_t *out_status);
+
 /** Activate the first discovered card; fills card_info. */
 pes_status_t pes_nfc_hal_card_activate(pes_nfc_hal_card_info_t *card_info);
 

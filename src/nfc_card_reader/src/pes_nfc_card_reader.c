@@ -6,7 +6,7 @@
  * Owns the full FSP-driven discovery/activation/read state machine. The
  * application interacts exclusively through the PES public API:
  *
- *   - PES_NFCCardReader_Read()         : run the polling loop
+ *   - PES_NFCCardReader_Read()         : run the interrupt-driven detect/read loop
  *   - PES_NFCCardReader_DataExchange() : raw exchange with the active card
  *   - PES_NFCCardReader_Stop()         : request graceful stop
  *
@@ -30,8 +30,12 @@
 /* ── Constants ─────────────────────────────────────────────────────── */
 #define DEFAULT_TIMEOUT_MS       5000U
 #define DEFAULT_RETRY_COUNT      0U
-#define LOOP_TICK_MS             5U       /* discovery poll cadence */
 #define SUMMARY_BUF_SIZE         128U
+
+/* Upper bound on a single interrupt-wait chunk inside run_event_loop().
+ * Keeps Stop() / system-error / RF-warning checks responsive without
+ * reintroducing fine-grained SPI-status polling. */
+#define EVENT_LOOP_WAIT_CHUNK_MS 200U
 
 /* Async worker task configuration (static allocation — no heap) */
 #define ASYNC_TASK_STACK_WORDS   (4096U / sizeof(StackType_t))
@@ -87,11 +91,11 @@ pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
 
     /* 1. Wait for a card */
     pes_nfc_disc_status_t disc = PES_NFC_DISC_NO_CARD;
-    st = pes_nfc_detect_poll(timeout, &disc);
+    st = pes_nfc_detect_wait(timeout, &disc);
     if (PES_OK != st) { return st; }
 
-    /* If stop was requested during poll, detect_poll returns PES_OK with
-     * NO_CARD — treat as a clean exit. */
+    /* If stop was requested during the wait, detect_wait returns PES_OK
+     * with NO_CARD — treat as a clean exit. */
     if (g_stop_requested || (PES_NFC_DISC_NO_CARD == disc))
     { 
         return PES_OK;
@@ -176,8 +180,18 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
         {
             case LOOP_WAIT_FOR_ACTIVATION:
             {
+                /* Interrupt-driven wait: blocks (zero CPU) until the
+                 * reader's IRQ line signals a discovery event or this
+                 * chunk's wait elapses, whichever comes first. Bounded to
+                 * EVENT_LOOP_WAIT_CHUNK_MS so the Stop()/system-error/RF-
+                 * warning checks above stay responsive. */
+                uint32_t remaining = loop_forever ? EVENT_LOOP_WAIT_CHUNK_MS
+                                                   : (cfg->timeout_ms - elapsed_ms);
+                uint32_t chunk = (remaining < EVENT_LOOP_WAIT_CHUNK_MS)
+                                 ? remaining : EVENT_LOOP_WAIT_CHUNK_MS;
+
                 pes_nfc_disc_status_t disc = PES_NFC_DISC_NO_CARD;
-                if (PES_OK != pes_nfc_hal_discover_status(&disc))
+                if (PES_OK != pes_nfc_hal_wait_for_card(chunk, &disc))
                 {
                     state = LOOP_DEACTIVATE;
                     break;
@@ -187,6 +201,7 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
                 {
                     state = LOOP_DATA_EVENT;
                 }
+                if (!loop_forever) { elapsed_ms += chunk; }
                 break;
             }
 
@@ -260,9 +275,6 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
             default:
                 break;
         }
-
-        pes_nfc_hal_sleep_ms(LOOP_TICK_MS);
-        if (!loop_forever) { elapsed_ms += LOOP_TICK_MS; }
     }
 
     return PES_OK; /* timed out without a fatal error */

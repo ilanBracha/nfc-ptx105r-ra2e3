@@ -11,6 +11,30 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+/* ── Interrupt-driven wait support ─────────────────────────────────── */
+
+/* Task to notify from our temporary ISR wrapper (set while waiting). */
+static volatile TaskHandle_t g_waiting_task = NULL;
+
+/*
+ * Lightweight ISR installed only for the duration of
+ * pes_nfc_hal_wait_for_card(). Fires on the same ICU IRQ7 edge that the
+ * PTX105R uses to signal pending host notifications (RF-discovery,
+ * RF-error, etc.). Just wakes the waiting task; all actual SPI/status
+ * processing happens afterwards from thread context.
+ */
+static void pes_nfc_hal_irq_wake_cb(external_irq_callback_args_t *p_args)
+{
+    PES_COMMON_UNUSED(p_args);
+
+    if (NULL != g_waiting_task)
+    {
+        BaseType_t higher_prio_task_woken = pdFALSE;
+        vTaskNotifyGiveFromISR(g_waiting_task, &higher_prio_task_woken);
+        portYIELD_FROM_ISR(higher_prio_task_woken);
+    }
+}
+
 /* ── Internal helpers ──────────────────────────────────────────────── */
 
 /**
@@ -193,6 +217,67 @@ pes_status_t pes_nfc_hal_discover_status(pes_nfc_disc_status_t *out_status)
     }
     return PES_OK;
 }
+
+pes_status_t pes_nfc_hal_wait_for_card(uint32_t timeout_ms, pes_nfc_disc_status_t *out_status)
+{
+    if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
+    *out_status = PES_NFC_DISC_NO_CARD;
+
+    /* Before the scheduler starts (e.g. cold-boot recovery paths) there is
+     * no task context to notify — fall back to a short blocking status
+     * read instead of installing the ISR wrapper. */
+    if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
+    {
+        R_BSP_SoftwareDelay(timeout_ms, BSP_DELAY_UNITS_MILLISECONDS);
+        return pes_nfc_hal_discover_status(out_status);
+    }
+
+    TickType_t remaining_ticks = pdMS_TO_TICKS(timeout_ms);
+    TickType_t start_tick      = xTaskGetTickCount();
+
+    g_waiting_task = xTaskGetCurrentTaskHandle();
+
+    /* Install our lightweight wake-up ISR for the duration of the wait. */
+    (void)g_ext_irq.p_api->callbackSet(g_ext_irq.p_ctrl, pes_nfc_hal_irq_wake_cb, NULL, NULL);
+
+    /* Clear any stale notification so we only react to fresh IRQs. */
+    (void)ulTaskNotifyTake(pdTRUE, 0);
+
+    pes_status_t st = PES_OK;
+
+    for (;;)
+    {
+        (void)ulTaskNotifyTake(pdTRUE, remaining_ticks);
+
+        /* Restore the SDK's normal ISR handler before touching the SPI/
+         * status registers so RM_NFC_READER_PTX_StatusGet's internal
+         * ptxPLAT_TriggerRx()/notification-processing behaves exactly as
+         * it would under the original (polling) call pattern. */
+        (void)g_ext_irq.p_api->callbackSet(g_ext_irq.p_ctrl, ptxPLAT_GPIO_IsrCallback, NULL, NULL);
+
+        st = pes_nfc_hal_discover_status(out_status);
+        if (PES_OK != st) { break; }
+
+        if (PES_NFC_DISC_NO_CARD != *out_status)
+        {
+            break;  /* card found, discovery done, or multi-card state */
+        }
+
+        /* Spurious wake (unrelated IRQ) or plain timeout: check remaining
+         * time and, if any is left, resume waiting. */
+        TickType_t elapsed = xTaskGetTickCount() - start_tick;
+        if (elapsed >= remaining_ticks) { break; }
+        remaining_ticks = pdMS_TO_TICKS(timeout_ms) - elapsed;
+
+        /* Re-arm our wake-up ISR for the next wait iteration. */
+        g_waiting_task = xTaskGetCurrentTaskHandle();
+        (void)g_ext_irq.p_api->callbackSet(g_ext_irq.p_ctrl, pes_nfc_hal_irq_wake_cb, NULL, NULL);
+    }
+
+    g_waiting_task = NULL;
+    return st;
+}
+
 
 pes_status_t pes_nfc_hal_card_activate(pes_nfc_hal_card_info_t *card_info)
 {
