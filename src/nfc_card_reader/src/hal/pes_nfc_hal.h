@@ -4,6 +4,11 @@
  * Hardware Abstraction Layer for the PES NFC Card Reader module.
  * Isolates PES business logic from the vendor-specific NFC stack
  * (currently: Renesas PTX105R via RM_NFC_READER_PTX FSP wrappers).
+ *
+ * The HAL is exposed as a const struct of function pointers
+ * (g_pes_nfc_hal_ptx105r) so that engines call through an abstract
+ * vtable.  This enables testability (mock HAL) and portability
+ * (swap in a different NFC reader IC).
  */
 
 #ifndef PES_NFC_HAL_H
@@ -37,74 +42,94 @@ typedef struct {
     uint8_t             uid_len;
 } pes_nfc_hal_card_info_t;
 
-/* ── HAL API ───────────────────────────────────────────────────────── */
-
-/** Open / initialize the NFC reader (includes cold-boot recovery). */
-pes_status_t pes_nfc_hal_open(pes_nfc_reader_device_t device);
-
-/** Start RF discovery. tech_mask = bitmask of PES_NFC_TECH_* flags. */
-pes_status_t pes_nfc_hal_discover_start(pes_nfc_tech_mask_t tech_mask);
-
-/** Poll discovery status (non-blocking). */
-pes_status_t pes_nfc_hal_discover_status(pes_nfc_disc_status_t *out_status);
+/* ── HAL function-pointer table (vtable) ───────────────────────────── */
 
 /**
- * Interrupt-driven wait for a card-discovery event (or system/RF error).
- *
- * Instead of busy-sleeping and re-polling the status register every few
- * milliseconds, this function blocks the calling FreeRTOS task on a task
- * notification that is given from the PTX105R's IRQ line (ICU IRQ7). The
- * chip asserts this line whenever it has a notification pending for the
- * host (RF-discovery, RF-error, etc.), so the task consumes zero CPU while
- * waiting and wakes almost immediately after a card enters the field.
- *
- * Internally this temporarily installs a lightweight ISR (via
- * R_ICU_ExternalIrqCallbackSet) that only calls vTaskNotifyGiveFromISR();
- * the original ptxPLAT_GPIO_IsrCallback is restored before returning, so
- * normal SDK operation (data exchange, presence-check, etc.) is unaffected
- * outside of this call.
- *
- * @param[in]  timeout_ms  Max time to wait, in milliseconds.
- * @param[out] out_status  Discovery status after the wait (NO_CARD if the
- *                         wait timed out without any event).
- * @return PES_OK on a valid read (even if out_status == NO_CARD on
- *         timeout); PES_ERR_INTERNAL on a lower-level failure.
+ * Each HAL backend (e.g. PTX105R) provides a const instance of this
+ * struct.  Engines and the orchestrator call through the named global
+ * (e.g. g_pes_nfc_hal_ptx105r.open(...)) — no pointer indirection.
  */
-pes_status_t pes_nfc_hal_wait_for_card(uint32_t timeout_ms,
-                                       pes_nfc_disc_status_t *out_status);
+typedef struct {
 
-/** Activate the first discovered card; fills card_info. */
-pes_status_t pes_nfc_hal_card_activate(pes_nfc_hal_card_info_t *card_info);
+    /* ── 12 spec-defined members (§3.15) ───────────────────────────── */
 
-/** Exchange raw data with the activated card. rx_len is in/out. */
-pes_status_t pes_nfc_hal_data_exchange(const uint8_t *tx, uint32_t tx_len,
-                                       uint8_t *rx, uint32_t *rx_len);
+    /** Open / initialize the NFC reader (includes cold-boot recovery). */
+    pes_status_t (*open)(pes_nfc_reader_device_t device);
 
-/** Deactivate the current card and return to discovery. */
-pes_status_t pes_nfc_hal_deactivate(void);
+    /** Close / de-initialize the NFC reader. */
+    pes_status_t (*close)(void);
 
-/** Check system health. Returns PES_ERR_INTERNAL on critical error. */
-pes_status_t pes_nfc_hal_system_check(void);
+    /** Apply tech_mask to the polling configuration. */
+    pes_status_t (*configure_polling)(pes_nfc_tech_mask_t tech_mask);
 
-/** Raw system-state byte (PTX_SYSTEM_STATUS_*). Used by the orchestrator
- *  to differentiate "ok / overcurrent / temperature" before reporting. */
-pes_status_t pes_nfc_hal_get_system_state(uint8_t *out_state);
+    /** Enable RF field and start polling. */
+    pes_status_t (*start_polling)(void);
 
-/** Last RF error byte (PTX_RF_ERROR_NTF_CODE_*). 0 means no error. */
-pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err);
+    /** Stop polling / disable RF field. */
+    pes_status_t (*stop_polling)(void);
 
-/**
- * Wake the task currently blocked in pes_nfc_hal_wait_for_card() (if any).
- * Called from PES_NFCCardReader_Stop() so the wait exits immediately
- * instead of sleeping until the next timeout chunk expires.
- */
-void pes_nfc_hal_wake_waiting_task(void);
+    /**
+     * Interrupt-driven wait for a card-discovery event (or timeout).
+     * Includes an internal system-health check before waiting.
+     *
+     * @param[in]  timeout_ms  Max time to wait, in milliseconds.
+     * @param[out] out_status  Discovery status after the wait.
+     * @return PES_OK on a valid read; PES_ERR_INTERNAL on lower-level failure.
+     */
+    pes_status_t (*wait_for_card)(uint32_t timeout_ms,
+                                  pes_nfc_disc_status_t *out_status);
 
-/** Close / de-initialize the NFC reader. */
-pes_status_t pes_nfc_hal_close(void);
+    /** Activate the first discovered card; fills card_info. */
+    pes_status_t (*activate_card)(pes_nfc_hal_card_info_t *card_info);
 
-/** Sleep for the given number of milliseconds. */
-void pes_nfc_hal_sleep_ms(uint32_t ms);
+    /** Return the card type of the currently active card. */
+    pes_status_t (*get_card_type)(pes_nfc_card_type_t *out_type);
+
+    /** Return the UID of the currently active card. */
+    pes_status_t (*get_uid)(uint8_t *uid, uint8_t *uid_len);
+
+    /** Probe whether the active card supports NDEF. */
+    pes_status_t (*ndef_probe)(bool *out_supported);
+
+    /**
+     * Read NDEF payload from the active card.
+     * @param[out] ndef_data   Destination buffer for NDEF message bytes.
+     * @param[in]  max_bytes   Size of the destination buffer.
+     * @param[out] ndef_len    Actual number of NDEF bytes read.
+     * @return PES_OK on success, PES_ERR_NOT_FOUND if no NDEF message.
+     */
+    pes_status_t (*ndef_read)(uint8_t *ndef_data, uint16_t max_bytes,
+                              uint16_t *ndef_len);
+
+    /** Sleep for the given number of milliseconds. */
+    void (*sleep)(uint32_t ms);
+
+    /* ── Additional members (not in spec, cannot fold) ─────────────── */
+
+    /** Exchange raw data with the activated card. rx_len is in/out. */
+    pes_status_t (*data_exchange)(const uint8_t *tx, uint32_t tx_len,
+                                  uint8_t *rx, uint32_t *rx_len);
+
+    /** Deactivate the current card and return to discovery. */
+    pes_status_t (*deactivate)(void);
+
+    /** Raw system-state byte. Absorbs the old system_check — caller
+     *  inspects the byte to distinguish OK / overcurrent / temperature. */
+    pes_status_t (*get_system_state)(uint8_t *out_state);
+
+    /** Last RF error byte. 0 means no error. */
+    pes_status_t (*get_last_rf_error)(uint8_t *out_err);
+
+    /**
+     * Wake the task currently blocked in wait_for_card() (if any).
+     * Called from PES_NFCCardReader_Stop().
+     */
+    void (*wake_waiting_task)(void);
+
+} pes_nfc_hal_api_t;
+
+/* ── PTX105R backend instance ─────────────────────────────────────── */
+extern const pes_nfc_hal_api_t g_pes_nfc_hal_ptx105r;
 
 #ifdef __cplusplus
 }

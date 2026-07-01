@@ -18,7 +18,7 @@ pes_status_t pes_nfc_retry(const void *cfg, void *result_out, uint8_t max_retrie
         if (PES_OK == st) { break; }
 
         /* Deactivate + re-discover between retries */
-        (void)pes_nfc_hal_deactivate();
+        (void)g_pes_nfc_hal_ptx105r.deactivate();
     }
 
     return st;
