@@ -359,6 +359,15 @@ pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err)
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
+void pes_nfc_hal_wake_waiting_task(void)
+{
+    TaskHandle_t task = g_waiting_task;
+    if (NULL != task)
+    {
+        (void)xTaskNotifyGive(task);
+    }
+}
+
 pes_status_t pes_nfc_hal_close(void)
 {
     fsp_err_t err = RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);

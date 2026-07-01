@@ -93,6 +93,13 @@ pes_status_t pes_nfc_hal_get_system_state(uint8_t *out_state);
 /** Last RF error byte (PTX_RF_ERROR_NTF_CODE_*). 0 means no error. */
 pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err);
 
+/**
+ * Wake the task currently blocked in pes_nfc_hal_wait_for_card() (if any).
+ * Called from PES_NFCCardReader_Stop() so the wait exits immediately
+ * instead of sleeping until the next timeout chunk expires.
+ */
+void pes_nfc_hal_wake_waiting_task(void);
+
 /** Close / de-initialize the NFC reader. */
 pes_status_t pes_nfc_hal_close(void);
 

@@ -32,10 +32,11 @@
 #define DEFAULT_RETRY_COUNT      0U
 #define SUMMARY_BUF_SIZE         128U
 
-/* Upper bound on a single interrupt-wait chunk inside run_event_loop().
- * Keeps Stop() / system-error / RF-warning checks responsive without
- * reintroducing fine-grained SPI-status polling. */
-#define EVENT_LOOP_WAIT_CHUNK_MS 200U
+/* Upper bound on a single interrupt-wait inside run_event_loop().
+ * After each wait we re-check system-error and RF-warning state.
+ * Stop() wakes the task immediately via pes_nfc_hal_wake_waiting_task(),
+ * so this only bounds how often non-IRQ health checks run. */
+#define EVENT_LOOP_WAIT_CHUNK_MS 500U
 
 /* Async worker task configuration (static allocation — no heap) */
 #define ASYNC_TASK_STACK_WORDS   (4096U / sizeof(StackType_t))
@@ -424,6 +425,10 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
 pes_status_t PES_NFCCardReader_Stop(void)
 {
     g_stop_requested = true;
+    /* Wake any task blocked in pes_nfc_hal_wait_for_card() so it can
+     * observe the stop flag immediately instead of sleeping until the
+     * next timeout expiry or IRQ event. */
+    pes_nfc_hal_wake_waiting_task();
     return PES_OK;
 }
 
