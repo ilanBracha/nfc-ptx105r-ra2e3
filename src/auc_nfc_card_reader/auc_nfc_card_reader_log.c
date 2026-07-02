@@ -521,3 +521,79 @@ void ptxCommon_PrintStatusMessage(const char *message, ptxStatus_t st)
         }
     }
 }
+
+/*
+ * ####################################################################################################################
+ * APPLICATION-LEVEL CARD-INFO PRINTER
+ * ####################################################################################################################
+ *
+ * Reads fields from pes_nfc_card_result_t and formats a human-readable block
+ * to both RTT and UART.  Pure I/O — no LED or board interaction; the caller
+ * is responsible for any visual feedback (blink, etc.).
+ */
+void ptxAPP_PrintCardInfo(const pes_nfc_card_result_t *result)
+{
+    if (NULL == result) { return; }
+
+    ptxCommon_PrintF("============ CARD INFO =======================\n");
+
+    /* Tag Type */
+    ptxCommon_PrintF("Tag Type       : %s\n",
+                     (NULL != result->tag_type_name)
+                         ? result->tag_type_name : "Unknown");
+
+    /* Serial Number */
+    ptxCommon_PrintF("Serial Number  : ");
+
+    if (0u == result->uid_len)
+    {
+        ptxCommon_PrintF("N/A");
+    }
+    else
+    {
+        for (uint8_t i = 0; i < result->uid_len; i++)
+        {
+            if (i) { ptxCommon_PrintF(":"); }
+            ptxCommon_PrintF("%02X", result->uid[i]);
+        }
+    }
+
+    ptxCommon_PrintF("\n");
+
+    /* Size / Writeable */
+    if (result->data_area_size > 0u)
+    {
+        ptxCommon_PrintF("Size           : %u bytes\n",
+                         (unsigned)result->data_area_size);
+        ptxCommon_PrintF("Writeable      : %s\n",
+                         result->writeable ? "Yes" : "No");
+    }
+    else
+    {
+        ptxCommon_PrintF("Size           : N/A\n");
+        ptxCommon_PrintF("Writeable      : N/A\n");
+    }
+
+    /* NDEF records */
+    if (result->ndef_present && (result->ndef_len > 0u))
+    {
+        ptxCommon_PrintF("NDEF           : %u bytes\n",
+                         (unsigned)result->ndef_len);
+        ptxCommon_PrintF("  NDEF raw (%u bytes):", (unsigned)result->ndef_len);
+        for (uint32_t k = 0u; k < result->ndef_len; k++)
+        {
+            if ((k > 0u) && (0u == (k % 16u)))
+            {
+                ptxCommon_PrintF("\n                       ");
+            }
+            ptxCommon_PrintF(" %02X", result->ndef_data[k]);
+        }
+        ptxCommon_PrintF("\n");
+    }
+    else
+    {
+        ptxCommon_PrintF("Records        : (none)\n");
+    }
+
+    ptxCommon_PrintF("==============================================\n");
+}

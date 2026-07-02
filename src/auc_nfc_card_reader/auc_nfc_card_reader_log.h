@@ -12,6 +12,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "pes_nfc_card_reader.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,6 +62,12 @@ size_t UserUartLog_RxAvailable(void);
  * Returns 1 if a byte was written to *out, 0 if the buffer is empty.
  */
 int UserUartLog_RxGet(uint8_t *out);
+
+/**
+ * Print formatted card-info block (tag type, UID, size, NDEF) to both
+ * RTT and UART.  Pure I/O — no LED or board interaction.
+ */
+void ptxAPP_PrintCardInfo(const pes_nfc_card_result_t *result);
 
 #ifdef __cplusplus
 }

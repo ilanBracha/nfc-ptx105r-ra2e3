@@ -44,13 +44,12 @@
 
 /*
  * ####################################################################################################################
- * LOCAL LOGGING (src/ only)
+ * INCLUDES
  * ####################################################################################################################
  */
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdarg.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include "auc_nfc_card_reader_utils.h"
@@ -58,7 +57,6 @@
 #include "ptxCOMMON.h"
 #include "ptx_IOT_READER.h"
 #include "auc_nfc_card_reader.h"
-#include "SEGGER_RTT.h"
 #include "auc_nfc_card_reader_log.h"
 #include "pes_nfc_card_reader.h"
 #include "pes_ndef_util.h"
@@ -68,171 +66,10 @@
  * DEFINES / TYPES
  * ####################################################################################################################
  */
-#define ptxCommon_PrintF              ptxAPP_Printf
-#define ptxCommon_Print_Buffer        ptxAPP_PrintBuffer
-#define ptxCommon_PrintStatusMessage  ptxAPP_PrintStatus
-#define PTX_APP_PRINT_LINE_WRAP       (LINE_LENGTH - 5u)
 
 /* RX/TX buffer sizes — used for raw-exchange print buffers */
 #define APP_RX_BUF_SIZE  300u
 #define APP_TX_BUF_SIZE  280u
-
-/*
- * ####################################################################################################################
- * LOCAL LOGGING HELPERS
- * ####################################################################################################################
- */
-static void ptxAPP_Printf(const char *format, ...)
-{
-    va_list ap_rtt, ap_uart;
-    va_start(ap_rtt, format);
-    va_copy(ap_uart, ap_rtt);
-
-    (void)SEGGER_RTT_vprintf(0, format, &ap_rtt);
-
-    char buf[128];
-    int len = vsnprintf(buf, sizeof(buf), format, ap_uart);
-    if (len > 0)
-    {
-        size_t n = ((size_t)len >= sizeof(buf)) ? (sizeof(buf) - 1u) : (size_t)len;
-        UserUartLog_Write((const uint8_t *)buf, n);
-    }
-
-    va_end(ap_uart);
-    va_end(ap_rtt);
-}
-
-static void ptxAPP_PrintBuffer(uint8_t *buffer, uint32_t bufferOffset,
-                               uint32_t bufferLength, uint8_t addNewLine,
-                               uint8_t printASCII)
-{
-    if ((NULL == buffer) || (0u == bufferLength)) { return; }
-
-    for (uint32_t i = 0; i < bufferLength; i++)
-    {
-        if ((i > 0u) && (0u == (i % PTX_APP_PRINT_LINE_WRAP)))
-        {
-            ptxAPP_Printf("\n     ");
-        }
-        if (0u == printASCII)
-        {
-            ptxAPP_Printf("%02X", (uint8_t)buffer[i + bufferOffset]);
-        }
-        else
-        {
-            uint8_t c = (uint8_t)buffer[i + bufferOffset];
-            ptxAPP_Printf((c < 0x20u) ? "." : "%c", c);
-        }
-    }
-    if (0u != addNewLine) { ptxAPP_Printf("\n"); }
-}
-
-static void ptxAPP_PrintStatus(const char *message, ptxStatus_t st)
-{
-    if (NULL != message)
-    {
-        if (ptxStatus_Success == st)
-        {
-            ptxAPP_Printf("%s ... OK\n", message);
-        }
-        else
-        {
-            ptxAPP_Printf("%s ... ERROR (Status-Code = %04X)\n", message, st);
-        }
-    }
-}
-
-/*
- * ####################################################################################################################
- * CARD-INFO PRINTER  (reads fields from pes_nfc_card_result_t — no protocol logic)
- * ####################################################################################################################
- */
-static void ptxAPP_PrintCardInfo(const pes_nfc_card_result_t *result)
-{
-    if (NULL == result) { return; }
-
-    /* LED blink by card type */
-    {
-        UserBoardUtils_CardType_t led_ct;
-        switch (result->card_type)
-        {
-            case PES_NFC_CARD_TYPE_ISO14443B:
-            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
-                led_ct = UserBoardUtils_CardType_B; break;
-            case PES_NFC_CARD_TYPE_FELICA:
-            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
-                led_ct = UserBoardUtils_CardType_F; break;
-            case PES_NFC_CARD_TYPE_ISO15693:
-            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
-                led_ct = UserBoardUtils_CardType_V; break;
-            default:
-                led_ct = UserBoardUtils_CardType_A; break;
-        }
-        UserBoardUtils_BlinkForCardType(led_ct);
-    }
-
-    ptxCommon_PrintF("============ CARD INFO =======================\n");
-
-    /* Tag Type */
-    ptxCommon_PrintF("Tag Type       : %s\n",
-                     (NULL != result->tag_type_name)
-                         ? result->tag_type_name : "Unknown");
-
-    /* Serial Number */
-    ptxCommon_PrintF("Serial Number  : ");
-
-    if (0u == result->uid_len)
-    {
-        ptxCommon_PrintF("N/A");
-    }
-    else
-    {
-        for (uint8_t i = 0; i < result->uid_len; i++)
-        {
-            if (i) { ptxCommon_PrintF(":"); }
-            ptxCommon_PrintF("%02X", result->uid[i]);
-        }
-    }
-
-    ptxCommon_PrintF("\n");
-
-    /* Size / Writeable */
-    if (result->data_area_size > 0u)
-    {
-        ptxCommon_PrintF("Size           : %u bytes\n",
-                         (unsigned)result->data_area_size);
-        ptxCommon_PrintF("Writeable      : %s\n",
-                         result->writeable ? "Yes" : "No");
-    }
-    else
-    {
-        ptxCommon_PrintF("Size           : N/A\n");
-        ptxCommon_PrintF("Writeable      : N/A\n");
-    }
-
-    /* NDEF records */
-    if (result->ndef_present && (result->ndef_len > 0u))
-    {
-        ptxCommon_PrintF("NDEF           : %u bytes\n",
-                         (unsigned)result->ndef_len);
-        ptxCommon_PrintF("  NDEF raw (%u bytes):", (unsigned)result->ndef_len);
-        for (uint32_t k = 0u; k < result->ndef_len; k++)
-        {
-            if ((k > 0u) && (0u == (k % 16u)))
-            {
-                ptxCommon_PrintF("\n                       ");
-            }
-            ptxCommon_PrintF(" %02X", result->ndef_data[k]);
-        }
-        ptxCommon_PrintF("\n");
-    }
-    else
-    {
-        ptxCommon_PrintF("Records        : (none)\n");
-    }
-
-    ptxCommon_PrintF("==============================================\n");
-}
 
 /*
  * ####################################################################################################################
@@ -284,6 +121,27 @@ static void ptxAPP_HandleCardEvent(const pes_nfc_card_result_t *result)
      * The result was handed to us by PES and is still alive. */
     (void)PES_NFCCardReader_ReadCardInfo(result->protocol,
                                          (pes_nfc_card_result_t *)result);
+
+    /* LED blink by card type (board feedback kept out of the log module) */
+    {
+        UserBoardUtils_CardType_t led_ct;
+        switch (result->card_type)
+        {
+            case PES_NFC_CARD_TYPE_ISO14443B:
+            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
+                led_ct = UserBoardUtils_CardType_B; break;
+            case PES_NFC_CARD_TYPE_FELICA:
+            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
+                led_ct = UserBoardUtils_CardType_F; break;
+            case PES_NFC_CARD_TYPE_ISO15693:
+            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
+                led_ct = UserBoardUtils_CardType_V; break;
+            default:
+                led_ct = UserBoardUtils_CardType_A; break;
+        }
+        UserBoardUtils_BlinkForCardType(led_ct);
+    }
+
     ptxAPP_PrintCardInfo(result);
 
     /* ── Raw protocol demo exchange ─────────────────────────────────── */
