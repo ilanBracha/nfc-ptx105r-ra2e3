@@ -132,6 +132,13 @@ struct pes_nfc_card_result_s {
     uint16_t ndef_len;
     int8_t rssi_dbm; /* optional, HAL may return 0 if unsupported */
     uint32_t read_time_ms;
+
+    /* Extended card-info fields (populated by PES_NFCCardReader_ReadCardInfo) */
+    uint32_t    data_area_size;   /**< Tag capacity in bytes (from CC)       */
+    bool        writeable;        /**< true if tag write-access is granted   */
+    const char *tag_type_name;    /**< Human-readable tag type, e.g.
+                                       "NFC Forum Type 2 Tag (T2T)".
+                                       Points to a static string — do NOT free. */
 };
 
 /* ── API ───────────────────────────────────────────────────────────── */
@@ -197,6 +204,76 @@ pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len, 
  *         PES_ERR_DEPENDENCY if a runtime dependency check fails.
  */
 pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg);
+
+/**
+ * Read structured card information (CC, NDEF message, tag type, size,
+ * write-access) from the currently-activated card. Dispatches internally
+ * to the appropriate T2T or T4T read sequence based on `protocol`.
+ *
+ * Populates result->ndef_data/ndef_len/ndef_present, data_area_size,
+ * writeable, and tag_type_name. Call from inside an on_card_event callback
+ * while the card is still activated.
+ *
+ * @param[in]     protocol   Active RF protocol (from result->protocol).
+ * @param[in,out] result     Result struct to populate. Must not be NULL.
+ * @return PES_OK on success; PES_ERR_NOT_FOUND if not NDEF formatted.
+ */
+pes_status_t PES_NFCCardReader_ReadCardInfo(pes_nfc_protocol_t protocol,
+                                            pes_nfc_card_result_t *result);
+
+/**
+ * Write an NDEF message to the currently-activated card.
+ * Dispatches to T2T or T4T write based on `protocol`.
+ *
+ * @param[in] protocol  Active RF protocol.
+ * @param[in] ndef      NDEF message bytes (may be NULL when ndef_len==0).
+ * @param[in] ndef_len  Length in bytes (max 248). 0 is equivalent to erase.
+ * @return PES_OK on success.
+ */
+pes_status_t PES_NFCCardReader_WriteNDEF(pes_nfc_protocol_t protocol,
+                                         const uint8_t *ndef,
+                                         uint16_t ndef_len);
+
+/**
+ * Erase the NDEF message on the currently-activated card (set NLEN=0).
+ * Convenience wrapper around PES_NFCCardReader_WriteNDEF with ndef_len==0.
+ *
+ * @param[in] protocol  Active RF protocol.
+ * @return PES_OK on success.
+ */
+pes_status_t PES_NFCCardReader_EraseNDEF(pes_nfc_protocol_t protocol);
+
+/**
+ * Build a single NFC Forum well-known Text NDEF record (RTD-Text, "en",
+ * UTF-8) into the caller-supplied buffer.
+ *
+ * @param[in]  text      UTF-8 text payload (not NUL-terminated).
+ * @param[in]  text_len  Length of text in bytes (max 248).
+ * @param[out] out       Destination buffer (must have room for text_len+7).
+ * @param[out] out_len   Receives the total record length.
+ * @return PES_OK on success; PES_ERR_INVALID_CFG on bad params.
+ */
+pes_status_t PES_NDEF_BuildTextRecord(const char *text, uint16_t text_len,
+                                      uint8_t *out, uint16_t *out_len);
+
+/**
+ * Perform a protocol-specific raw demo exchange with the activated card.
+ * Builds the correct frame (T2T READ, T3T CHECK, T5T READ_SINGLE_BLOCK,
+ * NFC-DEP SYMM) and sends it via the HAL data_exchange.
+ *
+ * @param[in]  protocol  Active RF protocol.
+ * @param[in]  uid       Card UID (needed for T3T NFCID2 and T5T addressing).
+ * @param[in]  uid_len   UID length in bytes.
+ * @param[out] tx        Caller buffer filled with the TX frame that was sent.
+ * @param[out] tx_len    TX frame length.
+ * @param[out] rx        Caller buffer filled with the RX response.
+ * @param[out] rx_len    IN: capacity; OUT: received length.
+ * @return PES_OK on success.
+ */
+pes_status_t PES_NFCCardReader_RawExchange(pes_nfc_protocol_t protocol,
+                                           const uint8_t *uid, uint8_t uid_len,
+                                           uint8_t *tx, uint32_t *tx_len,
+                                           uint8_t *rx, uint32_t *rx_len);
 
 #ifdef __cplusplus
 }
