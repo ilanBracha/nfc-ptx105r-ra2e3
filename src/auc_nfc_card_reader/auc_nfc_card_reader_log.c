@@ -512,20 +512,6 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
     }
 }
 
-void auc_nfc_card_reader_log_print_stat_msg(const char *message, ptxStatus_t st)
-{
-    if (NULL != message)
-    {
-        if (ptxStatus_Success == st)
-        {
-            ptxCommon_PrintF("%s ... OK\n", message);
-        } else
-        {
-            ptxCommon_PrintF("%s ... ERROR (Status-Code = %04X)\n", message, st);
-        }
-    }
-}
-
 /*
  * ####################################################################################################################
  * APPLICATION-LEVEL CARD-INFO PRINTER
