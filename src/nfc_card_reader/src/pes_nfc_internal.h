@@ -19,10 +19,6 @@ extern "C" {
 pes_status_t pes_nfc_detect_wait(uint32_t timeout_ms,
                                  pes_nfc_disc_status_t *out_status);
 
-/* ndef/pes_ndef_read.c */
-pes_status_t pes_ndef_read_t4t(pes_nfc_card_result_t *result_out);
-pes_status_t pes_ndef_read_t2t(pes_nfc_card_result_t *result_out);
-
 /* utility/pes_retry.c */
 pes_status_t pes_nfc_retry(const void *cfg, void *result_out,
                            uint8_t max_retries);

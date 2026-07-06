@@ -34,7 +34,7 @@
 
 /* Upper bound on a single interrupt-wait inside run_event_loop().
  * After each wait we re-check system-error and RF-warning state.
- * Stop() wakes the task immediately via g_pes_nfc_hal_ptx105r.wake_waiting_task(),
+ * Stop() wakes the task immediately via pes_nfc_hal_wake_waiting_task(),
  * so this only bounds how often non-IRQ health checks run. */
 #define EVENT_LOOP_WAIT_CHUNK_MS 500U
 
@@ -104,7 +104,7 @@ pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
 
     /* 2. Activate the card */
     pes_nfc_hal_card_info_t card_info;
-    st = g_pes_nfc_hal_ptx105r.activate_card(&card_info);
+    st = pes_nfc_hal_activate_card(&card_info);
     if (PES_OK != st) { return st; }
 
     /* 3. Fill basic result fields */
@@ -119,18 +119,12 @@ pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
         res->rssi_dbm     = 0;
         res->read_time_ms = 0;
 
-        /* 4. Optionally read NDEF */
+        /* 4. Optionally read NDEF (richer read via PES_NFCCardReader_ReadCardInfo,
+         * which also populates data_area_size / writeable / tag_type_name). */
         bool want_ndef = (NULL != cfg) ? cfg->read_ndef : true;
         if (want_ndef)
         {
-            bool ndef_supported = false;
-            (void)g_pes_nfc_hal_ptx105r.ndef_probe(&ndef_supported);
-            if (ndef_supported)
-            {
-                pes_status_t nst = g_pes_nfc_hal_ptx105r.ndef_read(
-                    res->ndef_data, PES_NFC_NDEF_MAX_BYTES, &res->ndef_len);
-                res->ndef_present = (PES_OK == nst);
-            }
+            (void)PES_NFCCardReader_ReadCardInfo(res->protocol, res);
         }
     }
 
@@ -155,14 +149,14 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
 
         /* Critical system-error watchdog */
         uint8_t sys_state = PTX_SYS_STATUS_OK;
-        if (PES_OK == g_pes_nfc_hal_ptx105r.get_system_state(&sys_state))
+        if (PES_OK == pes_nfc_hal_get_system_state(&sys_state))
         {
             if (PTX_SYS_STATUS_OK != sys_state) { state = LOOP_SYSTEM_ERROR; }
         }
 
         /* PA overcurrent / other RF warning notifications */
         uint8_t last_rf_err = 0u;
-        (void)g_pes_nfc_hal_ptx105r.get_last_rf_error(&last_rf_err);
+        (void)pes_nfc_hal_get_last_rf_error(&last_rf_err);
         if ((PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT == last_rf_err) &&
             (NULL != cfg->on_card_event))
         {
@@ -186,7 +180,7 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
                                  ? remaining : EVENT_LOOP_WAIT_CHUNK_MS;
 
                 pes_nfc_disc_status_t disc = PES_NFC_DISC_NO_CARD;
-                if (PES_OK != g_pes_nfc_hal_ptx105r.wait_for_card(chunk, &disc))
+                if (PES_OK != pes_nfc_hal_wait_for_card(chunk, &disc))
                 {
                     state = LOOP_DEACTIVATE;
                     break;
@@ -203,7 +197,7 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
             case LOOP_DATA_EVENT:
             {
                 pes_nfc_hal_card_info_t info;
-                pes_status_t st = g_pes_nfc_hal_ptx105r.activate_card(&info);
+                pes_status_t st = pes_nfc_hal_activate_card(&info);
                 if (PES_OK == st)
                 {
                     (void)memset(res, 0, sizeof(*res));
@@ -212,17 +206,12 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
                     (void)memcpy(res->uid, info.uid, info.uid_len);
                     res->uid_len = info.uid_len;
 
-                    /* Optionally read NDEF */
+                    /* Optionally read NDEF (richer read via
+                     * PES_NFCCardReader_ReadCardInfo, which also populates
+                     * data_area_size / writeable / tag_type_name). */
                     if (cfg->read_ndef)
                     {
-                        bool ndef_supported = false;
-                        (void)g_pes_nfc_hal_ptx105r.ndef_probe(&ndef_supported);
-                        if (ndef_supported)
-                        {
-                            pes_status_t nst = g_pes_nfc_hal_ptx105r.ndef_read(
-                                res->ndef_data, PES_NFC_NDEF_MAX_BYTES, &res->ndef_len);
-                            res->ndef_present = (PES_OK == nst);
-                        }
+                        (void)PES_NFCCardReader_ReadCardInfo(res->protocol, res);
                     }
 
                     /* Build summary string and fire per-card event */
@@ -247,7 +236,7 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
 
             case LOOP_DEACTIVATE:
             {
-                (void)g_pes_nfc_hal_ptx105r.deactivate();    /* restart discovery */
+                (void)pes_nfc_hal_deactivate();    /* restart discovery */
                 state = LOOP_WAIT_FOR_ACTIVATION;
                 break;
             }
@@ -282,20 +271,20 @@ static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
         (void)memset(result_out, 0, sizeof(*result_out));
     }
 
-    st = g_pes_nfc_hal_ptx105r.open(cfg->reader);
+    st = pes_nfc_hal_open(cfg->reader);
     if (PES_OK != st) { return st; }
 
-    st = g_pes_nfc_hal_ptx105r.configure_polling(cfg->tech_mask);
+    st = pes_nfc_hal_configure_polling(cfg->tech_mask);
     if (PES_OK != st)
     {
-        (void)g_pes_nfc_hal_ptx105r.close();
+        (void)pes_nfc_hal_close();
         return st;
     }
 
-    st = g_pes_nfc_hal_ptx105r.start_polling();
+    st = pes_nfc_hal_start_polling();
     if (PES_OK != st)
     {
-        (void)g_pes_nfc_hal_ptx105r.close();
+        (void)pes_nfc_hal_close();
         return st;
     }
 
@@ -313,8 +302,8 @@ static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
         st = pes_nfc_card_reader_try_once(cfg, result_out);
     }
 
-    (void)g_pes_nfc_hal_ptx105r.deactivate();
-    (void)g_pes_nfc_hal_ptx105r.close();
+    (void)pes_nfc_hal_deactivate();
+    (void)pes_nfc_hal_close();
     return st;
 }
 
@@ -425,12 +414,12 @@ pes_status_t PES_NFCCardReader_Stop(void)
     /* Wake any task blocked in pes_nfc_hal_wait_for_card() so it can
      * observe the stop flag immediately instead of sleeping until the
      * next timeout expiry or IRQ event. */
-    g_pes_nfc_hal_ptx105r.wake_waiting_task();
+    pes_nfc_hal_wake_waiting_task();
     return PES_OK;
 }
 
 pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len,
                                             uint8_t *rx, uint32_t *rx_len)
 {
-    return g_pes_nfc_hal_ptx105r.data_exchange(tx, tx_len, rx, rx_len);
+    return pes_nfc_hal_data_exchange(tx, tx_len, rx, rx_len);
 }

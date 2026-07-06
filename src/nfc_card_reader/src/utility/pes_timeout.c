@@ -11,5 +11,5 @@
 
 void pes_timeout_sleep_ms(uint32_t ms)
 {
-    g_pes_nfc_hal_ptx105r.sleep(ms);
+    pes_nfc_hal_sleep(ms);
 }

@@ -20,8 +20,8 @@ static bool t4t_exchange(uint8_t *cmd, uint32_t cmd_len,
                          uint8_t *rx, uint32_t *rx_len)
 {
     *rx_len = RX_BUF_SIZE;
-    pes_status_t st = g_pes_nfc_hal_ptx105r.data_exchange(cmd, cmd_len,
-                                                           rx, rx_len);
+    pes_status_t st = pes_nfc_hal_data_exchange(cmd, cmd_len,
+                                                rx, rx_len);
     if ((PES_OK != st) || (*rx_len < 2u) ||
         (0x90u != rx[*rx_len - 2u]) || (0x00u != rx[*rx_len - 1u]))
     {
@@ -148,7 +148,7 @@ static pes_status_t write_t2t_ndef(const uint8_t *ndef, uint16_t ndef_len)
         (void)memcpy(&cmd[2], &tlv[offset], chunk);
 
         rx_len = RX_BUF_SIZE;
-        pes_status_t st = g_pes_nfc_hal_ptx105r.data_exchange(
+        pes_status_t st = pes_nfc_hal_data_exchange(
             cmd, 6u, rx, &rx_len);
         if (PES_OK != st)
         {

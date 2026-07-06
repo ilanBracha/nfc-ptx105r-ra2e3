@@ -111,5 +111,5 @@ pes_status_t PES_NFCCardReader_RawExchange(pes_nfc_protocol_t protocol,
     *tx_len = frame_len;
 
     /* Perform the exchange */
-    return g_pes_nfc_hal_ptx105r.data_exchange(tx, frame_len, rx, rx_len);
+    return pes_nfc_hal_data_exchange(tx, frame_len, rx, rx_len);
 }
