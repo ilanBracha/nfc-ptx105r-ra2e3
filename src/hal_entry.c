@@ -1,8 +1,11 @@
 #include "hal_data.h"
-#include "user_uart_log.h"
-#include "user_cli.h"
-
-extern int ptxAPP_Entry(void);
+#include "auc_nfc_card_reader_log.h"
+#include "auc_nfc_card_reader_cli.h"
+#include "auc_nfc_card_reader.h"
+#include "pes_nfc_card_reader.h"
+#include "SEGGER_RTT.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 FSP_CPP_HEADER
 void R_BSP_WarmStart(bsp_warm_start_event_t event);
@@ -14,22 +17,27 @@ FSP_CPP_FOOTER
  **********************************************************************************************************************/
 void hal_entry(void)
 {
-    /* Bring up the debug UART (g_uart0 on P1_09/P1_10) so ptxCommon_PrintF
-     * output is mirrored from the very first log line. */
-    (void)UserUartLog_Init();
-
-    /* Bring up the cooperative CLI on the same UART. The menu is printed now;
-     * UserCli_Poll() will be driven from the demo main loop so commands are
-     * processed cooperatively while logs keep flowing. */
-    UserCli_Init();
-
-    /* TODO: add your own code here */
-    (void) ptxAPP_Entry();
+    /* Start the IoT Reader application.  Under FreeRTOS, auc_nfc_card_reader_entry()
+     * creates the NFC reader task and calls vTaskStartScheduler() — it
+     * does not return. */
+    auc_nfc_card_reader_entry();
 
 #if BSP_TZ_SECURE_BUILD
     /* Enter non-secure code */
     R_BSP_NonSecureEnter();
 #endif
+}
+
+/*******************************************************************************************************************//**
+ * FreeRTOS stack overflow hook – called when configCHECK_FOR_STACK_OVERFLOW
+ * detects that a task has exceeded its allocated stack.
+ **********************************************************************************************************************/
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    (void) xTask;
+    SEGGER_RTT_printf(0, "\n*** STACK OVERFLOW in task \"%s\" ***\n", pcTaskName);
+    __BKPT(0);
+    for (;;) {}
 }
 
 /*******************************************************************************************************************//**

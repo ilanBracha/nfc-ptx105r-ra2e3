@@ -7,7 +7,7 @@
     <option key="#TargetName#" value="R7FA2E3073CFL"/>
     <option key="#TargetARCHITECTURE#" value="cortex-m23"/>
     <option key="#DeviceCommand#" value="R7FA2E307"/>
-    <option key="#RTOS#" value="_none"/>
+    <option key="#RTOS#" value="rtos.awsfreertos"/>
     <option key="#pinconfiguration#" value="R7FA2E1A92DFM.pincfg"/>
     <option key="#FSPVersion#" value="6.4.0"/>
     <option key="#ConfigurationFragments#" value="Renesas##BSP##Board##ra2e1_ek##|Renesas##BSP##Board##ra8m1_ek##|Renesas##BSP##Board##ra2e3_fpb##"/>

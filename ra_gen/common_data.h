@@ -5,6 +5,9 @@
 #include "bsp_api.h"
 #include "r_icu.h"
 #include "r_external_irq_api.h"
+#include "../ra/fsp/src/rm_comms_lock/rm_comms_lock.h"
+#include "rm_comms_spi.h"
+#include "rm_comms_api.h"
 #include "r_ioport.h"
 #include "bsp_pin_cfg.h"
 FSP_HEADER
@@ -18,6 +21,8 @@ extern const external_irq_cfg_t g_ext_irq_cfg;
 #ifndef ptxPLAT_GPIO_IsrCallback
 void ptxPLAT_GPIO_IsrCallback(external_irq_callback_args_t *p_args);
 #endif
+/* SPI Shared Bus */
+extern rm_comms_spi_bus_extended_cfg_t g_comms_spi_bus0_extended_cfg;
 #define IOPORT_CFG_NAME g_bsp_pin_cfg
 #define IOPORT_CFG_OPEN R_IOPORT_Open
 #define IOPORT_CFG_CTRL g_ioport_ctrl
