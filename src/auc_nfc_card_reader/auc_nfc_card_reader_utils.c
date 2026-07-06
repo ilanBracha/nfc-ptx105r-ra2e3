@@ -21,10 +21,11 @@ static const bsp_io_port_pin_t led_pins[] =
     BSP_IO_PORT_09_PIN_13,   /* LED3 (PMOD1_GPIO10)           */
     BSP_IO_PORT_09_PIN_15,   /* user-board LED (PMOD1_RESET)  */
 };
+
 static const uint32_t LED_COUNT = (uint32_t)(sizeof(led_pins) / sizeof(led_pins[0]));
 
 /* Configure all LED pins as outputs (called once). */
-static void led_init(void)
+static void auc_nfc_card_reader_utils_led_init (void)
 {
     static uint8_t initialized = 0u;
     if (0u == initialized)
@@ -40,7 +41,7 @@ static void led_init(void)
 }
 
 /* Set all LED pins to the given level. */
-static void led_set_all(bsp_io_level_t level)
+static void auc_nfc_card_reader_utils_led_set_all(bsp_io_level_t level)
 {
     for (uint32_t i = 0; i < LED_COUNT; i++)
     {
@@ -55,14 +56,14 @@ static void led_set_all(bsp_io_level_t level)
  * bare RA2E3 FPB even when no PMOD daughter-board is attached.
  *
  * NOTE: `g_bsp_pin_cfg` (used by R_IOPORT_Open at boot) does not include
- * the on-board LED pins (P02_13, P09_14). led_init() configures them
+ * the on-board LED pins (P02_13, P09_14). auc_nfc_card_reader_utils_led_init() configures them
  * here at first use as outputs.
  */
-void UserBoardUtils_SetStatusLed(uint8_t status)
+void auc_nfc_card_reader_utils_set_stat_led (uint8_t status)
 {
     bsp_io_level_t level = (0u != status) ? BSP_IO_LEVEL_HIGH : BSP_IO_LEVEL_LOW;
-    led_init();
-    led_set_all(level);
+    auc_nfc_card_reader_utils_led_init();
+    auc_nfc_card_reader_utils_led_set_all(level);
 }
 
 /*
@@ -70,12 +71,12 @@ void UserBoardUtils_SetStatusLed(uint8_t status)
  * Called by the CLI `blink` command and on card-detection events.
  * (The hold time used to be 500 µs which is far too short to be visible.)
  */
-void UserBoardUtils_BlinkAllLeds(void)
+void auc_nfc_card_reader_utils_blink_leds(void)
 {
-    led_init();
-    led_set_all(BSP_IO_LEVEL_HIGH);
+    auc_nfc_card_reader_utils_led_init();
+    auc_nfc_card_reader_utils_led_set_all(BSP_IO_LEVEL_HIGH);
     R_BSP_SoftwareDelay(150U, BSP_DELAY_UNITS_MILLISECONDS);
-    led_set_all(BSP_IO_LEVEL_LOW);
+    auc_nfc_card_reader_utils_led_set_all(BSP_IO_LEVEL_LOW);
 }
 
 /*
@@ -90,7 +91,7 @@ void UserBoardUtils_BlinkAllLeds(void)
  *   [1] = BSP_IO_PORT_04_PIN_14  (LED2)
  *   [2] = BSP_IO_PORT_01_PIN_07  (LED3)
  */
-void UserBoardUtils_BlinkForCardType(UserBoardUtils_CardType_t cardType)
+void auc_nfc_card_reader_utils_blink_for_card_type (auc_nfc_card_reader_utils_card_type_t cardType)
 {
     /* Bit-mask: bit N = enable led_pins[N].  Bits 0..2 cover LED1/2/3. */
     static const struct
@@ -105,7 +106,7 @@ void UserBoardUtils_BlinkForCardType(UserBoardUtils_CardType_t cardType)
         /* CardType_V */ { 0x04u, 20u },   /* LED3 only,      20 ms */
     };
 
-    led_init();
+    auc_nfc_card_reader_utils_led_init();
 
     /* Clamp to valid range; fall back to "all LEDs" if unknown. */
     uint32_t idx = (uint32_t)cardType;

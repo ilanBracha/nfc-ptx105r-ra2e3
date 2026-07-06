@@ -8,13 +8,13 @@
  *    care what the FSP pin/UART tab set as the callback (typically the
  *    generated "NULL" stub). That keeps the helper self-contained and survives
  *    project regeneration.
- *  - TX is fully non-blocking: UserUartLog_Write() copies into an internal
+ *  - TX is fully non-blocking: auc_nfc_card_reader_log_write() copies into an internal
  *    ring buffer and returns immediately. The SCI TX_COMPLETE ISR chain-loads
  *    the next contiguous chunk until the ring drains. If the ring fills up
  *    (very long burst at <115200 baud) the excess bytes are dropped so the
  *    debug log can never throttle the main loop or RTT.
  *  - RX bytes are collected in a separate ring buffer from the RX_CHAR event
- *    and consumed by user_cli via UserUartLog_RxGet().
+ *    and consumed by user_cli via auc_nfc_card_reader_log_rx_get().
  *  - The pin mux for P1_09 (TXD9) / P1_10 (RXD9) on the RA2E3 FPB is forced
  *    here via R_IOPORT_PinCfg, mirroring the SPI workaround in ptxPLAT_SPI.c
  *    -- the generated g_bsp_pin_cfg does not include those pins.
@@ -42,25 +42,25 @@ extern baud_setting_t g_uart0_baud_setting;
  * peripheral is opened but its signals never reach the package pins. We force
  * the mux here, mirroring the SPI workaround in ptxPLAT_SPI.c.
  */
-#ifndef USER_UART_LOG_TXD_PIN
-#define USER_UART_LOG_TXD_PIN  BSP_IO_PORT_01_PIN_09
+#ifndef AUC_NFC_CARD_READER_LOG_TXD_PIN
+#define AUC_NFC_CARD_READER_LOG_TXD_PIN  BSP_IO_PORT_01_PIN_09
 #endif
-#ifndef USER_UART_LOG_RXD_PIN
-#define USER_UART_LOG_RXD_PIN  BSP_IO_PORT_01_PIN_10
+#ifndef AUC_NFC_CARD_READER_LOG_RXD_PIN
+#define AUC_NFC_CARD_READER_LOG_RXD_PIN  BSP_IO_PORT_01_PIN_10
 #endif
 
 /* Target baud rate. The FSP-generated g_uart0_baud_setting in ra_gen/hal_data.c
  * is for 115200; we override it at runtime so this stays decoupled from the
  * Configurator. J-Link OB VCOM on the FPB-RA2E3 supports up to ~1 Mbps.
  * Common values: 115200, 230400, 460800, 921600. */
-#ifndef USER_UART_LOG_BAUD
-#define USER_UART_LOG_BAUD     460800u
+#ifndef AUC_NFC_CARD_READER_LOG_BAUD
+#define AUC_NFC_CARD_READER_LOG_BAUD     460800u
 #endif
 
 /* Max baud-rate error tolerated by BaudCalculate, in 1/1000 of a percent.
  * 5000 == 5%. The FSP example uses 5000 and it picks the best divider. */
-#ifndef USER_UART_LOG_BAUD_ERR_X1000
-#define USER_UART_LOG_BAUD_ERR_X1000  5000u
+#ifndef AUC_NFC_CARD_READER_LOG_BAUD_ERR_X1000
+#define AUC_NFC_CARD_READER_LOG_BAUD_ERR_X1000  5000u
 #endif
 
 /*
@@ -71,21 +71,23 @@ extern baud_setting_t g_uart0_baud_setting;
 static volatile uint8_t s_uart_initialized = 0u;
 
 /* Optional per-byte RX callback (registered by CLI layer). */
-static UserUartLog_RxCallback_t s_rx_callback = NULL;
+static auc_nfc_card_reader_log_rx_callback_t s_rx_callback = NULL;
 
 /* RX ring buffer (ISR producer / main consumer). Size MUST be a power of 2. */
-#define USER_UART_RX_BUF_SIZE   128u
-#define USER_UART_RX_BUF_MASK   (USER_UART_RX_BUF_SIZE - 1u)
-static volatile uint8_t  s_rx_buf[USER_UART_RX_BUF_SIZE];
+#define AUC_NFC_CARD_READER_LOG_RX_BUF_SIZE   128u
+#define AUC_NFC_CARD_READER_LOG_RX_BUF_MASK   (AUC_NFC_CARD_READER_LOG_RX_BUF_SIZE - 1u)
+
+static volatile uint8_t  s_rx_buf[AUC_NFC_CARD_READER_LOG_RX_BUF_SIZE];
 static volatile uint16_t s_rx_head; /* written by ISR (producer) */
 static volatile uint16_t s_rx_tail; /* written by main (consumer) */
 
 /* TX ring buffer (main producer / ISR consumer). Size MUST be a power of 2.
  * Big enough to hold a full ptxCommon_PrintF line (~256 B) plus some CLI echo
  * so logging never blocks the main loop. Increase if you see drops. */
-#define USER_UART_TX_BUF_SIZE   512u
-#define USER_UART_TX_BUF_MASK   (USER_UART_TX_BUF_SIZE - 1u)
-static volatile uint8_t  s_tx_buf[USER_UART_TX_BUF_SIZE];
+#define AUC_NFC_CARD_READER_LOG_TX_BUF_SIZE   512u
+#define AUC_NFC_CARD_READER_LOG_TX_BUF_MASK   (AUC_NFC_CARD_READER_LOG_TX_BUF_SIZE - 1u)
+
+static volatile uint8_t  s_tx_buf[AUC_NFC_CARD_READER_LOG_TX_BUF_SIZE];
 static volatile uint16_t s_tx_head;     /* next write index (main)  */
 static volatile uint16_t s_tx_tail;     /* next byte to be sent     */
 static volatile uint16_t s_tx_chunk;    /* bytes in current FSP write */
@@ -94,14 +96,15 @@ static volatile uint8_t  s_tx_busy;     /* 1 while FSP write in flight */
 /* Forward decl: kick the next contiguous chunk if idle. May be called from
  * either main (after enqueue) or ISR (on TX_COMPLETE). Caller must guarantee
  * mutual exclusion (we disable IRQs around the main-side call). */
-static void user_uart_tx_dispatch_locked(void);
-void UserUartLog_Write(const uint8_t *buf, size_t len);
+static void auc_nfc_card_reader_log_tx_locked(void);
+void auc_nfc_card_reader_log_write(const uint8_t *buf, size_t len);
+
 /*
  * ####################################################################################################################
  * CALLBACK
  * ####################################################################################################################
  */
-static void user_uart_cb(uart_callback_args_t *p_args)
+static void auc_nfc_card_reader_log_uart_cb (uart_callback_args_t *p_args)
 {
     if (NULL == p_args)
     {
@@ -114,11 +117,11 @@ static void user_uart_cb(uart_callback_args_t *p_args)
         {
             /* Previous chunk fully shifted out. Advance tail and start the
              * next contiguous chunk if any data is still pending. */
-            uint16_t tail = (uint16_t)((s_tx_tail + s_tx_chunk) & USER_UART_TX_BUF_MASK);
+            uint16_t tail = (uint16_t)((s_tx_tail + s_tx_chunk) & AUC_NFC_CARD_READER_LOG_TX_BUF_MASK);
             s_tx_tail  = tail;
             s_tx_chunk = 0u;
             s_tx_busy  = 0u;
-            user_uart_tx_dispatch_locked();
+            auc_nfc_card_reader_log_tx_locked();
             break;
         }
 
@@ -132,8 +135,8 @@ static void user_uart_cb(uart_callback_args_t *p_args)
                 s_rx_callback(rxb);
             }
 
-            /* Always store in ring buffer for UserUartLog_RxGet() consumers. */
-            uint16_t next = (uint16_t)((s_rx_head + 1u) & USER_UART_RX_BUF_MASK);
+            /* Always store in ring buffer for auc_nfc_card_reader_log_rx_get() consumers. */
+            uint16_t next = (uint16_t)((s_rx_head + 1u) & AUC_NFC_CARD_READER_LOG_RX_BUF_MASK);
             if (next != s_rx_tail)
             {
                 s_rx_buf[s_rx_head] = rxb;
@@ -160,7 +163,7 @@ static void user_uart_cb(uart_callback_args_t *p_args)
  * API
  * ####################################################################################################################
  */
-int UserUartLog_Init(void)
+int auc_nfc_card_reader_log_init(void)
 {
     if (0u != s_uart_initialized)
     {
@@ -173,10 +176,10 @@ int UserUartLog_Init(void)
      * driver was already opened from R_BSP_WarmStart() POST_C, so this just
      * overrides the two PFS registers we need. */
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
-                          USER_UART_LOG_TXD_PIN,
+                          AUC_NFC_CARD_READER_LOG_TXD_PIN,
                           ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
-                          USER_UART_LOG_RXD_PIN,
+                          AUC_NFC_CARD_READER_LOG_RXD_PIN,
                           ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
 
     /* Override the FSP-generated baud rate (typically 115200) with our own,
@@ -187,7 +190,7 @@ int UserUartLog_Init(void)
      * flexibility on RA2E3 (small SCI source clock). */
     static const uint32_t k_baud_ladder[] =
     {
-        (uint32_t)USER_UART_LOG_BAUD,
+        (uint32_t)AUC_NFC_CARD_READER_LOG_BAUD,
         921600u,
         460800u,
         230400u,
@@ -199,7 +202,7 @@ int UserUartLog_Init(void)
         baud_setting_t bs;
         if (FSP_SUCCESS == R_SCI_UART_BaudCalculate(k_baud_ladder[i],
                                                     true, /* bitrate modulation */
-                                                    (uint32_t)USER_UART_LOG_BAUD_ERR_X1000,
+                                                    (uint32_t)AUC_NFC_CARD_READER_LOG_BAUD_ERR_X1000,
                                                     &bs))
         {
             g_uart0_baud_setting = bs;
@@ -209,7 +212,7 @@ int UserUartLog_Init(void)
     }
     /* Tell RTT what we actually programmed so we can confirm without a scope. */
     SEGGER_RTT_printf(0, "[user_uart_log] UART baud = %u (requested %u)\r\n",
-                      (unsigned)chosen_baud, (unsigned)USER_UART_LOG_BAUD);
+                      (unsigned)chosen_baud, (unsigned)AUC_NFC_CARD_READER_LOG_BAUD);
 
     err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
     if (FSP_SUCCESS != err)
@@ -218,7 +221,7 @@ int UserUartLog_Init(void)
     }
 
     /* Hook our own callback so we observe UART_EVENT_TX_COMPLETE. */
-    err = g_uart0.p_api->callbackSet(g_uart0.p_ctrl, user_uart_cb, NULL, NULL);
+    err = g_uart0.p_api->callbackSet(g_uart0.p_ctrl, auc_nfc_card_reader_log_uart_cb, NULL, NULL);
     if (FSP_SUCCESS != err)
     {
         (void)g_uart0.p_api->close(g_uart0.p_ctrl);
@@ -236,7 +239,7 @@ int UserUartLog_Init(void)
 /* Dispatch the next contiguous chunk (tail .. min(head, end-of-ring)) to the
  * FSP UART driver. Safe to call when interrupts are masked OR from the ISR
  * itself (where they're effectively masked at this priority anyway). */
-static void user_uart_tx_dispatch_locked(void)
+static void auc_nfc_card_reader_log_tx_locked (void)
 {
     if (s_tx_busy)
     {
@@ -250,7 +253,7 @@ static void user_uart_tx_dispatch_locked(void)
     }
 
     /* Contiguous span from tail up to either head or the end of the ring. */
-    uint16_t end = (head > tail) ? head : (uint16_t)USER_UART_TX_BUF_SIZE;
+    uint16_t end = (head > tail) ? head : (uint16_t)AUC_NFC_CARD_READER_LOG_TX_BUF_SIZE;
     uint16_t len = (uint16_t)(end - tail);
 
     s_tx_chunk = len;
@@ -268,7 +271,7 @@ static void user_uart_tx_dispatch_locked(void)
     }
 }
 
-void UserUartLog_Write(const uint8_t *buf, size_t len)
+void auc_nfc_card_reader_log_write(const uint8_t *buf, size_t len)
 {
     if ((0u == s_uart_initialized) || (NULL == buf) || (0u == len))
     {
@@ -285,7 +288,7 @@ void UserUartLog_Write(const uint8_t *buf, size_t len)
     uint16_t tail = s_tx_tail;
     for (size_t i = 0u; i < len; i++)
     {
-        uint16_t next = (uint16_t)((head + 1u) & USER_UART_TX_BUF_MASK);
+        uint16_t next = (uint16_t)((head + 1u) & AUC_NFC_CARD_READER_LOG_TX_BUF_MASK);
         if (next == tail)
         {
             break; /* ring full -- drop remainder */
@@ -294,20 +297,20 @@ void UserUartLog_Write(const uint8_t *buf, size_t len)
         head = next;
     }
     s_tx_head = head;
-    user_uart_tx_dispatch_locked();
+    auc_nfc_card_reader_log_tx_locked();
     __enable_irq();
 }
 
-void UserUartLog_Puts(const char *s)
+void auc_nfc_card_reader_log_puts(const char *s)
 {
     if (NULL == s)
     {
         return;
     }
-    UserUartLog_Write((const uint8_t *)s, strlen(s));
+    auc_nfc_card_reader_log_write((const uint8_t *)s, strlen(s));
 }
 
-size_t UserUartLog_RxAvailable(void)
+size_t auc_nfc_card_reader_log_rx_available(void)
 {
     if (0u == s_uart_initialized)
     {
@@ -315,10 +318,10 @@ size_t UserUartLog_RxAvailable(void)
     }
     uint16_t head = s_rx_head;
     uint16_t tail = s_rx_tail;
-    return (size_t)((head - tail) & USER_UART_RX_BUF_MASK);
+    return (size_t)((head - tail) & AUC_NFC_CARD_READER_LOG_RX_BUF_MASK);
 }
 
-int UserUartLog_RxGet(uint8_t *out)
+int auc_nfc_card_reader_log_rx_get(uint8_t *out)
 {
     if ((0u == s_uart_initialized) || (NULL == out))
     {
@@ -330,11 +333,11 @@ int UserUartLog_RxGet(uint8_t *out)
         return 0;
     }
     *out = s_rx_buf[tail];
-    s_rx_tail = (uint16_t)((tail + 1u) & USER_UART_RX_BUF_MASK);
+    s_rx_tail = (uint16_t)((tail + 1u) & AUC_NFC_CARD_READER_LOG_RX_BUF_MASK);
     return 1;
 }
 
-void UserUartLog_RegisterRxCallback(UserUartLog_RxCallback_t cb)
+void auc_nfc_card_reader_log_rx_callback(auc_nfc_card_reader_log_rx_callback_t cb)
 {
     s_rx_callback = cb;
 }
@@ -351,7 +354,7 @@ void UserUartLog_RegisterRxCallback(UserUartLog_RxCallback_t cb)
  */
 
 /* Minimal format-to-buffer: supports %s %c %d %u %x %X %02X %04X %02d %04d %p %% and width/zero-pad for integers */
-static int ptxCommon_mini_vsnprintf(char *buf, unsigned max, const char *fmt, va_list ap)
+static int auc_nfc_card_reader_log_vsnprintf (char *buf, unsigned max, const char *fmt, va_list ap)
 {
     unsigned pos = 0u;
 #define PUT(c) do { if (pos < (max - 1u)) { buf[pos] = (c); } pos++; } while(0)
@@ -458,17 +461,18 @@ void ptxCommon_PrintF(const char *format, ...)
 
     /* UART: format into stack buffer and send */
     char buf[128];
-    int len = ptxCommon_mini_vsnprintf(buf, sizeof(buf), format, ap2);
+    int len = auc_nfc_card_reader_log_vsnprintf(buf, sizeof(buf), format, ap2);
+
     if (len > 0)
     {
-        UserUartLog_Write((const uint8_t *)buf, (unsigned)len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned)len);
+        auc_nfc_card_reader_log_write((const uint8_t *)buf, (unsigned)len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned)len);
     }
 
     va_end(ap2);
     va_end(ap1);
 }
 
-void ptxCommon_Print_Buffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength, uint8_t addNewLine, uint8_t printASCII)
+void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength, uint8_t addNewLine, uint8_t printASCII)
 {
     uint32_t i;
     uint8_t character_to_print;
@@ -508,7 +512,7 @@ void ptxCommon_Print_Buffer(uint8_t *buffer, uint32_t bufferOffset, uint32_t buf
     }
 }
 
-void ptxCommon_PrintStatusMessage(const char *message, ptxStatus_t st)
+void auc_nfc_card_reader_log_print_stat_msg(const char *message, ptxStatus_t st)
 {
     if (NULL != message)
     {
@@ -531,7 +535,7 @@ void ptxCommon_PrintStatusMessage(const char *message, ptxStatus_t st)
  * to both RTT and UART.  Pure I/O — no LED or board interaction; the caller
  * is responsible for any visual feedback (blink, etc.).
  */
-void ptxAPP_PrintCardInfo(const pes_nfc_card_result_t *result)
+void auc_nfc_card_reader_log_print_card_info(const pes_nfc_card_result_t *result)
 {
     if (NULL == result) { return; }
 

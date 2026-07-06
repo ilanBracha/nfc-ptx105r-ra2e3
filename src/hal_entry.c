@@ -17,10 +17,10 @@ FSP_CPP_FOOTER
  **********************************************************************************************************************/
 void hal_entry(void)
 {
-    /* Start the IoT Reader application.  Under FreeRTOS, ptxAPP_Entry()
+    /* Start the IoT Reader application.  Under FreeRTOS, auc_nfc_card_reader_entry()
      * creates the NFC reader task and calls vTaskStartScheduler() — it
      * does not return. */
-    ptxAPP_Entry();
+    auc_nfc_card_reader_entry();
 
 #if BSP_TZ_SECURE_BUILD
     /* Enter non-secure code */

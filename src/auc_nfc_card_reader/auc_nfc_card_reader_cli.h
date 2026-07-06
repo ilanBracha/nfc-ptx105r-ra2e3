@@ -1,10 +1,10 @@
 /*
- * user_cli.h
+ * auc_nfc_card_reader_cli.h
  *
  * Tiny line-based command line interface running on top of g_uart0
  * (see user_uart_log). It is fully interrupt-driven:
  *   - RX bytes are forwarded by the UART ISR to an internal callback
- *     (registered via UserUartLog_RegisterRxCallback) which handles echo,
+ *     (registered via auc_nfc_card_reader_log_rx_callback) which handles echo,
  *     backspace, and line buffering in ISR context.
  *   - When a full line (CR/LF) is received, the ISR parses and executes
  *     the command immediately — no main-loop polling is needed.
@@ -15,8 +15,8 @@
  * past, prompt is re-printed after each command".
  */
 
-#ifndef USER_BOARD_UTILS_USER_CLI_H_
-#define USER_BOARD_UTILS_USER_CLI_H_
+#ifndef AUC_NFC_CARD_READER_CLI_H_
+#define AUC_NFC_CARD_READER_CLI_H_
 
 #include <stdint.h>
 
@@ -24,54 +24,60 @@
 extern "C" {
 #endif
 
+#define AUC_NFC_CARD_READER_CLI_WRITE_TEXT_MAX 96u
+
+/**
+ * Maximum number of characters in a single CLI input line (not counting the
+ * terminating NUL). Lines longer than this are truncated.
+ */
+void auc_nfc_card_reader_cli_prompt (void);
+
 /**
  * Print the welcome banner + menu, register the UART RX ISR callback, and
- * arm the line buffer. Requires UserUartLog_Init() to have been called first.
+ * arm the line buffer. Requires auc_nfc_card_reader_log_init() to have been called first.
  */
-void UserCli_Init(void);
+void auc_nfc_card_reader_cli_init(void);
 
 /**
  * Dispatch any pending command that was completed by the UART RX ISR.
  * Since v2 the dispatch happens directly in the RX ISR, so this function
  * is a no-op. Kept for backward compatibility so existing call sites compile.
  */
-void UserCli_Process(void);
+void auc_nfc_card_reader_cli_process(void);
 
 /**
- * Legacy API — equivalent to UserCli_Process(). Kept for backward
+ * Legacy API — equivalent to auc_nfc_card_reader_cli_process(). Kept for backward
  * compatibility so existing call sites continue to compile.
  */
-void UserCli_Poll(void);
+void auc_nfc_card_reader_cli_poll(void);
 
 /**
  * Print the menu again (useful from anywhere, e.g. after a long log burst).
  */
-void UserCli_PrintMenu(void);
+void auc_nfc_card_reader_cli_print_menu(void);
 
 /**
  * Arm a one-shot "erase the next tag" request from the CLI side. The NFC
- * read loop should poll UserCli_IsEraseArmed() once a tag has been activated
- * and, if armed, perform the erase and then call UserCli_ClearEraseArmed().
+ * read loop should poll auc_nfc_card_reader_cli_is_erase_armed() once a tag has been activated
+ * and, if armed, perform the erase and then call auc_nfc_card_reader_cli_clr_erase_armed().
  */
-void    UserCli_ArmEraseNext   (void);
-uint8_t UserCli_IsEraseArmed   (void);
-void    UserCli_ClearEraseArmed(void);
+void    auc_nfc_card_reader_cli_arm_erase_next (void);
+uint8_t auc_nfc_card_reader_cli_is_erase_armed (void);
+void    auc_nfc_card_reader_cli_clr_erase_armed(void);
 
 /**
- * One-shot "write a Text record to the next tag" request. UserCli_ArmWriteNext
+ * One-shot "write a Text record to the next tag" request. auc_nfc_card_reader_cli_arm_write_next
  * stores a copy of `text` (max USER_CLI_WRITE_TEXT_MAX bytes) and arms the flag.
- * The NFC loop polls UserCli_IsWriteArmed(), retrieves the payload via
- * UserCli_GetWriteText(), performs the write, and calls UserCli_ClearWriteArmed().
+ * The NFC loop polls auc_nfc_card_reader_cli_is_write_armed(), retrieves the payload via
+ * auc_nfc_card_reader_cli_get_write_text(), performs the write, and calls auc_nfc_card_reader_cli_clr_write_armed().
  */
-#define USER_CLI_WRITE_TEXT_MAX 96u
-
-void        UserCli_ArmWriteNext   (const char *text, uint16_t text_len);
-uint8_t     UserCli_IsWriteArmed   (void);
-const char *UserCli_GetWriteText   (uint16_t *out_len);
-void        UserCli_ClearWriteArmed(void);
+void         auc_nfc_card_reader_cli_arm_write_next (const char * text, uint16_t text_len);
+uint8_t      auc_nfc_card_reader_cli_is_write_armed (void);
+const char * auc_nfc_card_reader_cli_get_write_text (uint16_t * out_len);
+void         auc_nfc_card_reader_cli_clr_write_armed(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* USER_BOARD_UTILS_USER_CLI_H_ */
+#endif /* AUC_NFC_CARD_READER_CLI_H_ */

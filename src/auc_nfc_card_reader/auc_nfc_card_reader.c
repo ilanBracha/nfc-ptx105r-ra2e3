@@ -68,30 +68,30 @@
  */
 
 /* RX/TX buffer sizes — used for raw-exchange print buffers */
-#define APP_RX_BUF_SIZE  300u
-#define APP_TX_BUF_SIZE  280u
+#define AUC_NFC_CARD_READER_RX_BUF_SIZE  300u
+#define AUC_NFC_CARD_READER_TX_BUF_SIZE  280u
 
 /*
  * ####################################################################################################################
  * DATA EXCHANGE (CLI write/erase + card info + raw demo exchange)
  * ####################################################################################################################
  */
-static void ptxAPP_HandleCardEvent(const pes_nfc_card_result_t *result)
+static void auc_nfc_card_reader_card_event (const pes_nfc_card_result_t *result)
 {
     if (NULL == result) { return; }
 
-    /* ── CLI: one-shot write / erase ────────────────────────────────── */
-    if ((0u != UserCli_IsWriteArmed()) || (0u != UserCli_IsEraseArmed()))
+    /* CLI: one-shot write / erase */
+    if ((0u != auc_nfc_card_reader_cli_is_write_armed()) || (0u != auc_nfc_card_reader_cli_is_erase_armed()))
     {
-        uint8_t      is_write = UserCli_IsWriteArmed();
+        uint8_t      is_write = auc_nfc_card_reader_cli_is_write_armed();
         const char  *op_name  = is_write ? "Write" : "Erase";
         pes_status_t op_st    = PES_OK;
 
         if (0u != is_write)
         {
             uint16_t    txt_len = 0u;
-            const char *txt     = UserCli_GetWriteText(&txt_len);
-            uint8_t     ndef_buf[USER_CLI_WRITE_TEXT_MAX + 7u];
+            const char *txt     = auc_nfc_card_reader_cli_get_write_text(&txt_len);
+            uint8_t     ndef_buf[AUC_NFC_CARD_READER_CLI_WRITE_TEXT_MAX + 7u];
             uint16_t    ndef_len = 0u;
 
             op_st = PES_NDEF_BuildTextRecord(txt, txt_len, ndef_buf, &ndef_len);
@@ -110,8 +110,8 @@ static void ptxAPP_HandleCardEvent(const pes_nfc_card_result_t *result)
                          op_name, (unsigned)result->protocol,
                          (PES_OK == op_st) ? "OK" : "ERROR");
 
-        UserCli_ClearWriteArmed();
-        UserCli_ClearEraseArmed();
+        auc_nfc_card_reader_cli_clr_write_armed();
+        auc_nfc_card_reader_cli_clr_erase_armed();
         return;
     }
 
@@ -124,7 +124,7 @@ static void ptxAPP_HandleCardEvent(const pes_nfc_card_result_t *result)
 
     /* LED blink by card type (board feedback kept out of the log module) */
     {
-        UserBoardUtils_CardType_t led_ct;
+        auc_nfc_card_reader_utils_card_type_t led_ct;
         switch (result->card_type)
         {
             case PES_NFC_CARD_TYPE_ISO14443B:
@@ -139,19 +139,19 @@ static void ptxAPP_HandleCardEvent(const pes_nfc_card_result_t *result)
             default:
                 led_ct = UserBoardUtils_CardType_A; break;
         }
-        UserBoardUtils_BlinkForCardType(led_ct);
+        auc_nfc_card_reader_utils_blink_for_card_type(led_ct);
     }
 
-    ptxAPP_PrintCardInfo(result);
+    auc_nfc_card_reader_log_print_card_info(result);
 
-    /* ── Raw protocol demo exchange ─────────────────────────────────── */
+    /* Raw protocol exchange */
     if ((PES_NFC_PROT_ISODEP != result->protocol) &&
         (PES_NFC_PROT_UNDEFINED != result->protocol))
     {
-        static uint8_t tx_buf[APP_TX_BUF_SIZE];
-        static uint8_t rx_buf[APP_RX_BUF_SIZE];
+        static uint8_t tx_buf[AUC_NFC_CARD_READER_TX_BUF_SIZE];
+        static uint8_t rx_buf[AUC_NFC_CARD_READER_RX_BUF_SIZE];
         uint32_t tx_len = 0u;
-        uint32_t rx_len = APP_RX_BUF_SIZE;
+        uint32_t rx_len = AUC_NFC_CARD_READER_RX_BUF_SIZE;
 
         pes_status_t st = PES_NFCCardReader_RawExchange(
             result->protocol,
@@ -181,39 +181,41 @@ static void ptxAPP_HandleCardEvent(const pes_nfc_card_result_t *result)
  * CALLBACKS
  * ####################################################################################################################
  */
-static void on_nfc_read_done(pes_status_t status,
-                             const pes_nfc_card_result_t *result,
-                             const char *summary,
-                             void *p_context)
+static void on_nfc_read_done (pes_status_t status,
+                              const pes_nfc_card_result_t *result,
+                              const char *summary,
+                              void *p_context)
 {
     (void)p_context;
 
-    UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_HIGH);
+    auc_nfc_card_reader_utils_set_stat_led(BSP_IO_LEVEL_HIGH);
 
     /* Informational / warning / fatal events (result == NULL) */
     if (NULL == result)
     {
-        if (NULL != summary) { ptxCommon_PrintF("%s\n", summary); }
-        UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
+        if (NULL != summary)
+        {
+            ptxCommon_PrintF("%s\n", summary);
+        }
+
+        auc_nfc_card_reader_utils_set_stat_led(BSP_IO_LEVEL_LOW);
         return;
     }
 
     ptxCommon_PrintF(RTT_CTRL_TEXT_BRIGHT_GREEN "\n\n%s" RTT_CTRL_RESET "\n",
                      (NULL != summary) ? summary : "CARD DETECTED!");
 
-    ptxAPP_HandleCardEvent(result);
+    auc_nfc_card_reader_card_event(result);
     (void)status;
 
-    UserBoardUtils_SetStatusLed(BSP_IO_LEVEL_LOW);
+    auc_nfc_card_reader_utils_set_stat_led(BSP_IO_LEVEL_LOW);
 }
 
-static void on_nfc_operation_done(pes_status_t status, void *p_context)
+static void on_nfc_operation_done (pes_status_t status, void *p_context)
 {
     (void)p_context;
-    ptxCommon_PrintF("PES_NFCCardReader_Read completed (status=%d)\n",
-                     (int)status);
-    g_ioport.p_api->pinWrite(g_ioport.p_ctrl,
-                              USER_BOARD_LED_IOT_RD, USER_BOARD_LED_INACTIVE);
+    ptxCommon_PrintF("PES_NFCCardReader_Read completed (status=%d)\n", (int)status);
+    g_ioport.p_api->pinWrite(g_ioport.p_ctrl, AUC_NFC_CARD_READER_UTILS_LED_RD, AUC_NFC_CARD_READER_UTILS_LED_INACTV);
 }
 
 /*
@@ -221,17 +223,16 @@ static void on_nfc_operation_done(pes_status_t status, void *p_context)
  * APPLICATION ENTRY POINT
  * ####################################################################################################################
  */
-void ptxAPP_Entry(void)
+void auc_nfc_card_reader_entry (void)
 {
-    UserUartLog_Init();
-    UserCli_Init();
-    ptxIOT_READER_App();
+    auc_nfc_card_reader_log_init();
+    auc_nfc_card_reader_cli_init();
+    auc_nfc_card_reader_app();
 }
 
-void ptxIOT_READER_App(void)
+void auc_nfc_card_reader_app (void)
 {
-    g_ioport.p_api->pinWrite(g_ioport.p_ctrl,
-                              USER_BOARD_LED_IOT_RD, USER_BOARD_LED_ACTIVE);
+    g_ioport.p_api->pinWrite(g_ioport.p_ctrl, AUC_NFC_CARD_READER_UTILS_LED_RD, AUC_NFC_CARD_READER_UTILS_LED_ACTV);
 
     ptxCommon_PrintF("System Initialization (PES NFC Card Reader) ... starting\n");
 

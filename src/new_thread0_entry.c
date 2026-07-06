@@ -10,7 +10,7 @@ void new_thread0_entry(void *pvParameters)
     /* Start the NFC card reader application.
      * This runs the UART/CLI init then the blocking NFC event loop.
      * The function only returns on fatal error. */
-    ptxAPP_Entry();
+    auc_nfc_card_reader_entry();
 
     /* Should not reach here; suspend if it does. */
     vTaskSuspend(NULL);

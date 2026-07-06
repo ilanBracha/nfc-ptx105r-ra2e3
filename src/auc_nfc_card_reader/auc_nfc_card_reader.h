@@ -62,8 +62,8 @@ extern "C" {
  * This function is the entry point for the IoT Reader application with discovery loop.
  *
  */
-void ptxIOT_READER_App(void);
-void ptxAPP_Entry(void);
+void auc_nfc_card_reader_app(void);
+void auc_nfc_card_reader_entry(void);
 
 #ifdef __cplusplus
 }
