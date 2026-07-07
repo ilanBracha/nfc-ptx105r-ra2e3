@@ -5,7 +5,7 @@
  */
 
 #include "pes_common.h"
-#include "pes_nfc_hal.h"
+#include "pes_nfc_ptx.h"
 #include "pes_nfc_internal.h"
 
 pes_status_t pes_nfc_retry(const void *cfg, void *result_out, uint8_t max_retries)
@@ -18,7 +18,7 @@ pes_status_t pes_nfc_retry(const void *cfg, void *result_out, uint8_t max_retrie
         if (PES_OK == st) { break; }
 
         /* Deactivate + re-discover between retries */
-        (void)pes_nfc_hal_deactivate();
+        (void)pes_nfc_ptx_deactivate();
     }
 
     return st;

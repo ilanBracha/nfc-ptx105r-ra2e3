@@ -8,7 +8,7 @@
 #ifndef PES_NFC_INTERNAL_H
 #define PES_NFC_INTERNAL_H
 
-#include "pes_nfc_hal.h"            /* pes_nfc_disc_status_t, etc. */
+#include "pes_nfc_ptx.h"            /* pes_nfc_disc_status_t, etc. */
 #include "pes_nfc_card_reader.h"    /* pes_nfc_card_result_t, etc. */
 
 #ifdef __cplusplus

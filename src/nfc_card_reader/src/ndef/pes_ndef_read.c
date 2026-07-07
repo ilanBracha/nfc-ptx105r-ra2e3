@@ -7,21 +7,21 @@
  * NO printing — all results go into the caller's pes_nfc_card_result_t.
  */
 
-#include "pes_nfc_hal.h"
+#include "pes_nfc_ptx.h"
 #include "pes_nfc_internal.h"
 #include "pes_nfc_card_reader.h"
 #include <string.h>
 
 /* ── Constants ─────────────────────────────────────────────────────── */
-#define RX_BUF_SIZE   PES_NFC_HAL_RX_BUF_SIZE
-#define TX_BUF_SIZE   PES_NFC_HAL_TX_BUF_SIZE
+#define RX_BUF_SIZE   PES_NFC_PTX_RX_BUF_SIZE
+#define TX_BUF_SIZE   PES_NFC_PTX_TX_BUF_SIZE
 
 /* ── Internal helper: T4T APDU exchange with SW=9000 check ─────────── */
 static bool t4t_exchange(uint8_t *cmd, uint32_t cmd_len,
                          uint8_t *rx, uint32_t *rx_len)
 {
     *rx_len = RX_BUF_SIZE;
-    pes_status_t st = pes_nfc_hal_data_exchange(cmd, cmd_len,
+    pes_status_t st = pes_nfc_ptx_data_exchange(cmd, cmd_len,
                                                 rx, rx_len);
     if ((PES_OK != st) || (*rx_len < 2u) ||
         (0x90u != rx[*rx_len - 2u]) || (0x00u != rx[*rx_len - 1u]))
@@ -147,7 +147,7 @@ static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
     /* READ block 3 -> CC (response = blocks 3..6, 16 bytes) */
     cmd[0] = 0x30; cmd[1] = 0x03;
     rx_len = RX_BUF_SIZE;
-    pes_status_t st = pes_nfc_hal_data_exchange(cmd, 2u, rx, &rx_len);
+    pes_status_t st = pes_nfc_ptx_data_exchange(cmd, 2u, rx, &rx_len);
     if ((PES_OK != st) || (rx_len < 4u))
     {
         return PES_ERR_NOT_FOUND;
@@ -177,7 +177,7 @@ static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
     {
         cmd[0] = 0x30; cmd[1] = block;
         rx_len = RX_BUF_SIZE;
-        st = pes_nfc_hal_data_exchange(cmd, 2u, rx, &rx_len);
+        st = pes_nfc_ptx_data_exchange(cmd, 2u, rx, &rx_len);
         if ((PES_OK != st) || (rx_len < 4u))
         {
             break;

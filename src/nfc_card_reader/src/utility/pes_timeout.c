@@ -6,10 +6,10 @@
  */
 
 #include "pes_common.h"
-#include "pes_nfc_hal.h"
+#include "pes_nfc_ptx.h"
 #include "pes_nfc_internal.h"
 
 void pes_timeout_sleep_ms(uint32_t ms)
 {
-    pes_nfc_hal_sleep(ms);
+    pes_nfc_ptx_sleep(ms);
 }

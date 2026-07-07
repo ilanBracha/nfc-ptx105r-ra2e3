@@ -1,19 +1,20 @@
 /**
- * pes_nfc_hal_ptx105r.c
+ * pes_nfc_ptx105r.c
  *
- * HAL implementation for the Renesas PTX105R NFC reader, using the
+ * Implementation for the Renesas PTX105R NFC reader, using the
  * RM_NFC_READER_PTX FSP API surface exclusively.
  *
  * Each function is a direct, non-static entry point declared in
- * pes_nfc_hal.h and called by name from the rest of the PES NFC Card
+ * pes_nfc_ptx.h and called by name from the rest of the PES NFC Card
  * Reader module — no function-pointer vtable indirection.
  */
 
-#include "pes_nfc_hal.h"
-#include "hal_data.h"          /* g_nfc_reader_ptx0_ctrl/cfg, FSP types */
+#include "pes_nfc_ptx.h"
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
+/* g_nfc_reader_ptx0_ctrl/cfg, FSP types */
+#include "hal_data.h"
 
 /* ── Interrupt-driven wait support ─────────────────────────────────── */
 
@@ -179,9 +180,9 @@ static pes_status_t ptx105r_system_check(void)
  */
 static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
 
-/* ── HAL function implementations ──────────────────────────────────── */
+/* ── PTX function implementations ──────────────────────────────────── */
 
-pes_status_t pes_nfc_hal_open(pes_nfc_reader_device_t device)
+pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
 {
     PES_COMMON_UNUSED(device);
 
@@ -197,14 +198,14 @@ pes_status_t pes_nfc_hal_open(pes_nfc_reader_device_t device)
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_close(void)
+pes_status_t pes_nfc_ptx_close(void)
 {
     g_active_reg = NULL;
     fsp_err_t err = RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_configure_polling(pes_nfc_tech_mask_t tech_mask)
+pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask)
 {
     /* Poll flags are configured in g_nfc_reader_ptx0_cfg at build time.
      * A future refinement could apply tech_mask dynamically here. */
@@ -212,26 +213,26 @@ pes_status_t pes_nfc_hal_configure_polling(pes_nfc_tech_mask_t tech_mask)
     return PES_OK;
 }
 
-pes_status_t pes_nfc_hal_start_polling(void)
+pes_status_t pes_nfc_ptx_start_polling(void)
 {
     fsp_err_t err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_stop_polling(void)
+pes_status_t pes_nfc_ptx_stop_polling(void)
 {
     fsp_err_t err = RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl,
                                                           NFC_READER_PTX_RETURN_IDLE);
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_wait_for_card(uint32_t timeout_ms,
+pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms,
                                        pes_nfc_disc_status_t *out_status)
 {
     if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
     *out_status = PES_NFC_DISC_NO_CARD;
 
-    /* Folded system-health check (was separate pes_nfc_hal_system_check). */
+    /* Folded system-health check (was separate pes_nfc_ptx_system_check). */
     pes_status_t sys = ptx105r_system_check();
     if (PES_OK != sys) { return sys; }
 
@@ -285,7 +286,7 @@ pes_status_t pes_nfc_hal_wait_for_card(uint32_t timeout_ms,
     return st;
 }
 
-pes_status_t pes_nfc_hal_activate_card(pes_nfc_hal_card_info_t *card_info)
+pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
 {
     if (NULL == card_info) { return PES_ERR_INVALID_CFG; }
     (void)memset(card_info, 0, sizeof(*card_info));
@@ -318,7 +319,7 @@ pes_status_t pes_nfc_hal_activate_card(pes_nfc_hal_card_info_t *card_info)
     return PES_OK;
 }
 
-pes_status_t pes_nfc_hal_get_card_type(pes_nfc_card_type_t *out_type)
+pes_status_t pes_nfc_ptx_get_card_type(pes_nfc_card_type_t *out_type)
 {
     if (NULL == out_type) { return PES_ERR_INVALID_CFG; }
 
@@ -332,7 +333,7 @@ pes_status_t pes_nfc_hal_get_card_type(pes_nfc_card_type_t *out_type)
     return PES_OK;
 }
 
-pes_status_t pes_nfc_hal_get_uid(uint8_t *uid, uint8_t *uid_len)
+pes_status_t pes_nfc_ptx_get_uid(uint8_t *uid, uint8_t *uid_len)
 {
     if ((NULL == uid) || (NULL == uid_len)) { return PES_ERR_INVALID_CFG; }
 
@@ -346,7 +347,7 @@ pes_status_t pes_nfc_hal_get_uid(uint8_t *uid, uint8_t *uid_len)
     return PES_OK;
 }
 
-void pes_nfc_hal_sleep(uint32_t ms)
+void pes_nfc_ptx_sleep(uint32_t ms)
 {
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     {
@@ -358,7 +359,7 @@ void pes_nfc_hal_sleep(uint32_t ms)
     }
 }
 
-pes_status_t pes_nfc_hal_data_exchange(const uint8_t *tx, uint32_t tx_len,
+pes_status_t pes_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
                                        uint8_t *rx, uint32_t *rx_len)
 {
     if ((NULL == tx) || (NULL == rx) || (NULL == rx_len)) { return PES_ERR_INVALID_CFG; }
@@ -375,14 +376,14 @@ pes_status_t pes_nfc_hal_data_exchange(const uint8_t *tx, uint32_t tx_len,
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_deactivate(void)
+pes_status_t pes_nfc_ptx_deactivate(void)
 {
     fsp_err_t err = RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl,
                                                           NFC_READER_PTX_RETURN_DISCOVER);
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_get_system_state(uint8_t *out_state)
+pes_status_t pes_nfc_ptx_get_system_state(uint8_t *out_state)
 {
     if (NULL == out_state) { return PES_ERR_INVALID_CFG; }
     fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
@@ -390,7 +391,7 @@ pes_status_t pes_nfc_hal_get_system_state(uint8_t *out_state)
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err)
+pes_status_t pes_nfc_ptx_get_last_rf_error(uint8_t *out_err)
 {
     if (NULL == out_err) { return PES_ERR_INVALID_CFG; }
     fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
@@ -398,7 +399,7 @@ pes_status_t pes_nfc_hal_get_last_rf_error(uint8_t *out_err)
     return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-void pes_nfc_hal_wake_waiting_task(void)
+void pes_nfc_ptx_wake_waiting_task(void)
 {
     TaskHandle_t task = g_waiting_task;
     if (NULL != task)

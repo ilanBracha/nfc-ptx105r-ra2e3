@@ -3,10 +3,10 @@
  *
  * Card detection: wait for a card-discovery event, the timeout to expire,
  * or a stop request. Interrupt-driven — no fixed-cadence status polling.
- * Uses only the pes_nfc_hal API.
+ * Uses only the pes_nfc_ptx API.
  */
 
-#include "pes_nfc_hal.h"
+#include "pes_nfc_ptx.h"
 #include "pes_nfc_internal.h"
 
 pes_status_t pes_nfc_detect_wait(uint32_t timeout_ms, pes_nfc_disc_status_t *out_status)
@@ -21,13 +21,13 @@ pes_status_t pes_nfc_detect_wait(uint32_t timeout_ms, pes_nfc_disc_status_t *out
     }
 
     /* System-health check is now performed internally by
-     * pes_nfc_hal_wait_for_card. */
+     * pes_nfc_ptx_wait_for_card. */
 
     /* Block (zero-CPU) until the reader's IRQ line signals an event or
      * the timeout elapses. If PES_NFCCardReader_Stop() is called while
      * we are blocked, it sends a task notification to wake us
      * immediately so we can observe the stop flag. */
-    pes_status_t st = pes_nfc_hal_wait_for_card(timeout_ms, out_status);
+    pes_status_t st = pes_nfc_ptx_wait_for_card(timeout_ms, out_status);
     if (PES_OK != st) { return st; }
 
     if (PES_NFC_DISC_NO_CARD != *out_status)

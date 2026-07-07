@@ -7,12 +7,12 @@
  * NO printing — returns TX/RX data in caller-supplied buffers.
  */
 
-#include "pes_nfc_hal.h"
+#include "pes_nfc_ptx.h"
 #include "pes_nfc_card_reader.h"
 #include <string.h>
 
 /* ── Constants ─────────────────────────────────────────────────────── */
-#define RX_BUF_SIZE   PES_NFC_HAL_RX_BUF_SIZE
+#define RX_BUF_SIZE   PES_NFC_PTX_RX_BUF_SIZE
 
 pes_status_t PES_NFCCardReader_RawExchange(pes_nfc_protocol_t protocol,
                                            const uint8_t *uid, uint8_t uid_len,
@@ -111,5 +111,5 @@ pes_status_t PES_NFCCardReader_RawExchange(pes_nfc_protocol_t protocol,
     *tx_len = frame_len;
 
     /* Perform the exchange */
-    return pes_nfc_hal_data_exchange(tx, frame_len, rx, rx_len);
+    return pes_nfc_ptx_data_exchange(tx, frame_len, rx, rx_len);
 }

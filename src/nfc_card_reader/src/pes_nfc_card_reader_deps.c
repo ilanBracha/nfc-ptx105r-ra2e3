@@ -6,7 +6,7 @@
  */
 
 #include "pes_nfc_card_reader_deps.h"
-#include "pes_nfc_hal.h"
+#include "pes_nfc_ptx.h"
 #include "hal_data.h"   /* g_nfc_reader_ptx0_ctrl */
 
 pes_status_t pes_nfc_card_reader_validate_deps(void)
