@@ -7,7 +7,7 @@
 #ifndef PES_NFC_CARD_READER_DEPS_H
 #define PES_NFC_CARD_READER_DEPS_H
 
-#include "pes_common.h"
+#include "pes_nfc_card_reader.h"
 
 #ifdef __cplusplus
 extern "C" {

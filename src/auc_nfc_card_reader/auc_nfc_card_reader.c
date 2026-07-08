@@ -59,7 +59,6 @@
 #include "auc_nfc_card_reader.h"
 #include "auc_nfc_card_reader_log.h"
 #include "pes_nfc_card_reader.h"
-#include "pes_ndef_util.h"
 
 /*
  * ####################################################################################################################

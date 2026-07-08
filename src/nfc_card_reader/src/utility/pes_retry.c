@@ -4,9 +4,7 @@
  * Retry wrapper for the PES NFC Card Reader.
  */
 
-#include "pes_common.h"
-#include "pes_nfc_ptx.h"
-#include "pes_nfc_internal.h"
+#include "pes_nfc_ptx105r.h"
 
 pes_status_t pes_nfc_retry(const void *cfg, void *result_out, uint8_t max_retries)
 {

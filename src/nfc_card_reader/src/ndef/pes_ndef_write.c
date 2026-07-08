@@ -8,8 +8,8 @@
  * NO printing — returns pes_status_t only.
  */
 
-#include "pes_nfc_ptx.h"
 #include "pes_nfc_card_reader.h"
+#include "pes_nfc_ptx105r.h"
 #include <string.h>
 
 /* ── Constants ─────────────────────────────────────────────────────── */

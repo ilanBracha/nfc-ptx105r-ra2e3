@@ -19,9 +19,8 @@
  */
 
 #include "pes_nfc_card_reader.h"
-#include "pes_nfc_ptx.h"
+#include "pes_nfc_ptx105r.h"
 #include "pes_nfc_card_reader_deps.h"
-#include "pes_nfc_internal.h"
 #include <string.h>
 #include <stdint.h>
 #include "FreeRTOS.h"
@@ -422,4 +421,179 @@ pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len,
                                             uint8_t *rx, uint32_t *rx_len)
 {
     return pes_nfc_ptx_data_exchange(tx, tx_len, rx, rx_len);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  Card summary (was pes_card_summary.c)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+static const char HEX_DIGITS[] = "0123456789ABCDEF";
+
+static uint32_t copy_str(char *dst, uint32_t dst_size, uint32_t off, const char *s)
+{
+    while ((NULL != s) && ('\0' != *s) && (off + 1u < dst_size))
+    {
+        dst[off++] = *s++;
+    }
+    return off;
+}
+
+static uint32_t copy_hex_byte(char *dst, uint32_t dst_size, uint32_t off, uint8_t b)
+{
+    if (off + 2u >= dst_size) { return off; }
+    dst[off++] = HEX_DIGITS[(b >> 4) & 0x0Fu];
+    dst[off++] = HEX_DIGITS[b & 0x0Fu];
+    return off;
+}
+
+static uint32_t copy_uint(char *dst, uint32_t dst_size, uint32_t off, uint32_t v)
+{
+    char tmp[11];
+    uint32_t n = 0;
+    if (0u == v)
+    {
+        if (off + 1u < dst_size) { dst[off++] = '0'; }
+        return off;
+    }
+    while (v > 0u && n < sizeof(tmp))
+    {
+        tmp[n++] = (char)('0' + (v % 10u));
+        v /= 10u;
+    }
+    while (n > 0u && off + 1u < dst_size)
+    {
+        dst[off++] = tmp[--n];
+    }
+    return off;
+}
+
+static const char * card_type_name(pes_nfc_card_type_t t)
+{
+    switch (t)
+    {
+        case PES_NFC_CARD_TYPE_ISO14443A:        return "ISO14443A";
+        case PES_NFC_CARD_TYPE_ISO14443B:        return "ISO14443B";
+        case PES_NFC_CARD_TYPE_FELICA:           return "FeliCa";
+        case PES_NFC_CARD_TYPE_ISO15693:         return "ISO15693";
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_2:   return "NFC-T2T";
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:   return "NFC-T3T";
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4A:  return "NFC-T4A";
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:  return "NFC-T4B";
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:   return "NFC-T5T";
+        default:                                 return "Unknown";
+    }
+}
+
+uint32_t pes_card_summary_build(const pes_nfc_card_result_t *res,
+                                char *buf, uint32_t buf_size)
+{
+    if ((NULL == buf) || (0u == buf_size)) { return 0u; }
+    if (NULL == res)
+    {
+        buf[0] = '\0';
+        return 0u;
+    }
+
+    uint32_t off = 0u;
+
+    off = copy_str(buf, buf_size, off, "CARD DETECTED! type=");
+    off = copy_str(buf, buf_size, off, card_type_name(res->card_type));
+    off = copy_str(buf, buf_size, off, " UID=");
+    for (uint8_t i = 0; i < res->uid_len; i++)
+    {
+        off = copy_hex_byte(buf, buf_size, off, res->uid[i]);
+    }
+    if (res->ndef_present)
+    {
+        off = copy_str(buf, buf_size, off, " NDEF=");
+        off = copy_uint(buf, buf_size, off, (uint32_t)res->ndef_len);
+        off = copy_str(buf, buf_size, off, "B");
+    }
+
+    if (off < buf_size) { buf[off] = '\0'; }
+    else                { buf[buf_size - 1u] = '\0'; off = buf_size - 1u; }
+    return off;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  Raw exchange (was pes_nfc_raw_exchange.c)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+pes_status_t PES_NFCCardReader_RawExchange(pes_nfc_protocol_t protocol,
+                                           const uint8_t *uid, uint8_t uid_len,
+                                           uint8_t *tx, uint32_t *tx_len,
+                                           uint8_t *rx, uint32_t *rx_len)
+{
+    if ((NULL == tx) || (NULL == tx_len) || (NULL == rx) || (NULL == rx_len))
+    {
+        return PES_ERR_INVALID_CFG;
+    }
+
+    uint32_t frame_len = 0;
+
+    switch (protocol)
+    {
+        case PES_NFC_PROT_T2T:
+        {
+            tx[0] = 0x30u;
+            tx[1] = 0x00u;
+            frame_len = 2u;
+            break;
+        }
+
+        case PES_NFC_PROT_T3T:
+        {
+            static const uint8_t t3t_tail[] = {
+                0x01, 0x0B, 0x00, 0x01, 0x80, 0x00
+            };
+
+            tx[0] = 0x06;
+            if ((NULL != uid) && (uid_len >= 8u))
+            {
+                (void)memcpy(&tx[1], uid, 8u);
+            }
+            else
+            {
+                (void)memset(&tx[1], 0, 8u);
+            }
+            (void)memcpy(&tx[9], t3t_tail, sizeof(t3t_tail));
+            frame_len = 1u + 8u + (uint32_t)sizeof(t3t_tail);
+            break;
+        }
+
+        case PES_NFC_PROT_T5T:
+        {
+            tx[0] = 0x22u;
+            tx[1] = 0x20u;
+            if ((NULL != uid) && (uid_len >= 8u))
+            {
+                for (uint8_t i = 0; i < 8u; i++)
+                {
+                    tx[2u + i] = uid[7u - i];
+                }
+            }
+            else
+            {
+                (void)memset(&tx[2], 0, 8u);
+            }
+            tx[10] = 0x00u;
+            frame_len = 11u;
+            break;
+        }
+
+        case PES_NFC_PROT_NFCDEP:
+        {
+            tx[0] = 0x00u;
+            tx[1] = 0x00u;
+            frame_len = 2u;
+            break;
+        }
+
+        default:
+            return PES_ERR_INVALID_CFG;
+    }
+
+    *tx_len = frame_len;
+
+    return pes_nfc_ptx_data_exchange(tx, frame_len, rx, rx_len);
 }

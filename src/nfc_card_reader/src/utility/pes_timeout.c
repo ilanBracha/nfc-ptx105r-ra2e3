@@ -5,9 +5,7 @@
  * could be added for non-blocking support.
  */
 
-#include "pes_common.h"
-#include "pes_nfc_ptx.h"
-#include "pes_nfc_internal.h"
+#include "pes_nfc_ptx105r.h"
 
 void pes_timeout_sleep_ms(uint32_t ms)
 {

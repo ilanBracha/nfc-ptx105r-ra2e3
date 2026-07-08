@@ -2,16 +2,111 @@
  * pes_nfc_card_reader.h
  *
  * PES NFC Card Reader module public API.
+ *
+ * This header is the single public include for the module. It provides:
+ *   - Shared types and status codes (formerly pes_common.h)
+ *   - NDEF parsing/decoding types and API (formerly pes_ndef_util.h)
+ *   - NFC Card Reader configuration, result, and API
  */
 
 #ifndef PES_NFC_CARD_READER_H
 #define PES_NFC_CARD_READER_H
 
-#include "pes_common.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  Common types, status codes, and callback convention (was pes_common.h)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+#define PES_COMMON_UNUSED(x) (void)(x)
+
+typedef enum {
+    PES_OK                  =   0,
+    PES_ERR_TIMEOUT         =  -1,
+    PES_ERR_CRED_INVALID    =  -2,
+    PES_ERR_CONN_FAIL       =  -3,
+    PES_ERR_NO_IP           =  -4,
+    PES_ERR_NO_CLOUD        =  -5,
+    PES_ERR_DEPENDENCY      =  -6,
+    PES_ERR_INVALID_CFG     =  -7,
+    PES_ERR_NOT_FOUND       =  -8,
+    PES_ERR_BUFFER_OVERFLOW =  -9,
+    PES_ERR_INTERNAL        = -99,
+} pes_status_t;
+
+typedef void (*pes_callback_t)(pes_status_t status, void *p_context);
+
+#ifndef PES_LOG
+#define PES_LOG(fmt, ...)   /* default: silent */
+#endif
+
+/* ════════════════════════════════════════════════════════════════════════
+ *  NDEF parsing and decoding utilities (was pes_ndef_util.h)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+#define PES_NDEF_MAX_RECORDS        8U
+#define PES_NDEF_MAX_TYPE_LEN      32U
+#define PES_NDEF_WIFI_SSID_MAX     32U
+#define PES_NDEF_WIFI_PASS_MAX     64U
+#define PES_NDEF_BT_NAME_MAX       48U
+
+typedef struct {
+    uint8_t  tnf;
+    uint8_t  type[PES_NDEF_MAX_TYPE_LEN];
+    uint8_t  type_len;
+    const uint8_t *payload;
+    uint32_t payload_len;
+    uint8_t  flags;
+} pes_ndef_record_t;
+
+typedef struct {
+    pes_ndef_record_t records[PES_NDEF_MAX_RECORDS];
+    uint8_t           record_count;
+    bool              truncated;
+} pes_ndef_decoded_t;
+
+typedef struct {
+    char     ssid[PES_NDEF_WIFI_SSID_MAX + 1];
+    uint8_t  ssid_len;
+    uint16_t auth_type;
+    uint16_t enc_type;
+    char     password[PES_NDEF_WIFI_PASS_MAX + 1];
+    uint8_t  password_len;
+    uint8_t  mac_addr[6];
+    bool     mac_present;
+} pes_wifi_info_t;
+
+typedef struct {
+    uint8_t  bd_addr[6];
+    bool     addr_present;
+    char     local_name[PES_NDEF_BT_NAME_MAX + 1];
+    uint8_t  name_len;
+    bool     is_le;
+} pes_bt_info_t;
+
+pes_status_t PES_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
+                                    pes_ndef_decoded_t *out);
+
+pes_status_t PES_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
+                                 pes_wifi_info_t *out);
+
+pes_status_t PES_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
+                                      bool is_le, pes_bt_info_t *out);
+
+bool PES_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
+                      const uint8_t **val, uint32_t *val_len);
+
+bool PES_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
+                         const char *str);
+
+bool PES_NDEF_StartsWith(const char *str, uint32_t str_len,
+                         const char *prefix);
 
 /* ── Device selection ──────────────────────────────────────────────── */
 typedef enum {

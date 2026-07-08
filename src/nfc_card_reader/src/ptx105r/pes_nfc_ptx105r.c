@@ -5,11 +5,12 @@
  * RM_NFC_READER_PTX FSP API surface exclusively.
  *
  * Each function is a direct, non-static entry point declared in
- * pes_nfc_ptx.h and called by name from the rest of the PES NFC Card
+ * pes_nfc_ptx105r.h and called by name from the rest of the PES NFC Card
  * Reader module — no function-pointer vtable indirection.
  */
 
-#include "pes_nfc_ptx.h"
+#include "pes_nfc_ptx105r.h"
+#include "pes_nfc_ptx105r_board.h"
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -140,9 +141,6 @@ static void extract_uid(ptxIoTRd_CardParams_t *card, uint8_t *uid, uint8_t *uid_
     }
 }
 
-/**
- * Poll discovery status (internal helper, folded into wait_for_card).
- */
 static pes_status_t ptx105r_discover_status(pes_nfc_disc_status_t *out_status)
 {
     if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
@@ -162,9 +160,6 @@ static pes_status_t ptx105r_discover_status(pes_nfc_disc_status_t *out_status)
     return PES_OK;
 }
 
-/**
- * System-health check (internal helper, folded into wait_for_card).
- */
 static pes_status_t ptx105r_system_check(void)
 {
     uint8_t state = 0;
@@ -174,10 +169,6 @@ static pes_status_t ptx105r_system_check(void)
     return (PTX_SYSTEM_STATUS_OK == state) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-/**
- * Cached card registry pointer — set by activate_card, used by
- * get_card_type / get_uid so they don't need to re-fetch the registry.
- */
 static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
 
 /* ── PTX function implementations ──────────────────────────────────── */
@@ -188,7 +179,6 @@ pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
 
     fsp_err_t err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
 
-    /* Cold-boot recovery: first Open can fail on PTX105R. */
     if (FSP_ERR_INVALID_DATA == err)
     {
         (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
@@ -207,8 +197,6 @@ pes_status_t pes_nfc_ptx_close(void)
 
 pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask)
 {
-    /* Poll flags are configured in g_nfc_reader_ptx0_cfg at build time.
-     * A future refinement could apply tech_mask dynamically here. */
     PES_COMMON_UNUSED(tech_mask);
     return PES_OK;
 }
@@ -232,13 +220,9 @@ pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms,
     if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
     *out_status = PES_NFC_DISC_NO_CARD;
 
-    /* Folded system-health check (was separate pes_nfc_ptx_system_check). */
     pes_status_t sys = ptx105r_system_check();
     if (PES_OK != sys) { return sys; }
 
-    /* Before the scheduler starts (e.g. cold-boot recovery paths) there is
-     * no task context to notify — fall back to a short blocking status
-     * read instead of installing the ISR wrapper. */
     if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
     {
         R_BSP_SoftwareDelay(timeout_ms, BSP_DELAY_UNITS_MILLISECONDS);
@@ -250,10 +234,8 @@ pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms,
 
     g_waiting_task = xTaskGetCurrentTaskHandle();
 
-    /* Install our lightweight wake-up ISR for the duration of the wait. */
     (void)g_ext_irq.p_api->callbackSet(g_ext_irq.p_ctrl, ptx105r_irq_wake_cb, NULL, NULL);
 
-    /* Clear any stale notification so we only react to fresh IRQs. */
     (void)ulTaskNotifyTake(pdTRUE, 0);
 
     pes_status_t st = PES_OK;
@@ -262,8 +244,6 @@ pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms,
     {
         (void)ulTaskNotifyTake(pdTRUE, remaining_ticks);
 
-        /* Restore the SDK's normal ISR handler before touching the SPI/
-         * status registers. */
         (void)g_ext_irq.p_api->callbackSet(g_ext_irq.p_ctrl, ptxPLAT_GPIO_IsrCallback, NULL, NULL);
 
         st = ptx105r_discover_status(out_status);
@@ -297,7 +277,6 @@ pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
 
     g_active_reg = reg;
 
-    /* If a card is already active (single-card path), use it directly. */
     if (NULL != reg->ActiveCard)
     {
         card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
@@ -306,7 +285,6 @@ pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
         return PES_OK;
     }
 
-    /* Multi-card path: activate the first card. */
     if (0u == reg->NrCards) { return PES_ERR_NOT_FOUND; }
 
     ptxIoTRd_CardProtocol_t prot = choose_protocol(&reg->Cards[0]);

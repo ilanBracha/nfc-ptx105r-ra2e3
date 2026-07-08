@@ -6,8 +6,7 @@
  * Uses only the pes_nfc_ptx API.
  */
 
-#include "pes_nfc_ptx.h"
-#include "pes_nfc_internal.h"
+#include "pes_nfc_ptx105r.h"
 
 pes_status_t pes_nfc_detect_wait(uint32_t timeout_ms, pes_nfc_disc_status_t *out_status)
 {

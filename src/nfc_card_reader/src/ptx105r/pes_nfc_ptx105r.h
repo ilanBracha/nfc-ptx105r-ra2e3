@@ -1,5 +1,5 @@
 /**
- * pes_nfc_ptx.h
+ * pes_nfc_ptx105r.h
  *
  * Hardware Abstraction Layer for the PES NFC Card Reader module.
  * Isolates PES business logic from the vendor-specific NFC stack
@@ -10,10 +10,9 @@
  * pointer vtable indirection.
  */
 
-#ifndef PES_NFC_PTX_H
-#define PES_NFC_PTX_H
+#ifndef PES_NFC_PTX105R_H
+#define PES_NFC_PTX105R_H
 
-#include "pes_common.h"
 #include "pes_nfc_card_reader.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -43,66 +42,55 @@ typedef struct {
 
 /* ── PTX functions (PTX105R backend, pes_nfc_ptx105r.c) ─────────────── */
 
-/** Open / initialize the NFC reader (includes cold-boot recovery). */
 pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device);
-
-/** Close / de-initialize the NFC reader. */
 pes_status_t pes_nfc_ptx_close(void);
-
-/** Apply tech_mask to the polling configuration. */
 pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask);
-
-/** Enable RF field and start polling. */
 pes_status_t pes_nfc_ptx_start_polling(void);
-
-/** Stop polling / disable RF field. */
 pes_status_t pes_nfc_ptx_stop_polling(void);
-
-/**
- * Interrupt-driven wait for a card-discovery event (or timeout).
- * Includes an internal system-health check before waiting.
- *
- * @param[in]  timeout_ms  Max time to wait, in milliseconds.
- * @param[out] out_status  Discovery status after the wait.
- * @return PES_OK on a valid read; PES_ERR_INTERNAL on lower-level failure.
- */
 pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms,
                                        pes_nfc_disc_status_t *out_status);
-
-/** Activate the first discovered card; fills card_info. */
 pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info);
-
-/** Return the card type of the currently active card. */
 pes_status_t pes_nfc_ptx_get_card_type(pes_nfc_card_type_t *out_type);
-
-/** Return the UID of the currently active card. */
 pes_status_t pes_nfc_ptx_get_uid(uint8_t *uid, uint8_t *uid_len);
-
-/** Sleep for the given number of milliseconds. */
 void pes_nfc_ptx_sleep(uint32_t ms);
-
-/** Exchange raw data with the activated card. rx_len is in/out. */
 pes_status_t pes_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
                                        uint8_t *rx, uint32_t *rx_len);
-
-/** Deactivate the current card and return to discovery. */
 pes_status_t pes_nfc_ptx_deactivate(void);
-
-/** Raw system-state byte. Caller inspects the byte to distinguish
- *  OK / overcurrent / temperature. */
 pes_status_t pes_nfc_ptx_get_system_state(uint8_t *out_state);
-
-/** Last RF error byte. 0 means no error. */
 pes_status_t pes_nfc_ptx_get_last_rf_error(uint8_t *out_err);
-
-/**
- * Wake the task currently blocked in pes_nfc_ptx_wait_for_card() (if any).
- * Called from PES_NFCCardReader_Stop().
- */
 void pes_nfc_ptx_wake_waiting_task(void);
+
+/* ── Internal forward declarations ─────────────────────────────────── */
+
+/* detection/pes_nfc_detect.c */
+pes_status_t pes_nfc_detect_wait(uint32_t timeout_ms,
+                                 pes_nfc_disc_status_t *out_status);
+
+/* utility/pes_retry.c */
+pes_status_t pes_nfc_retry(const void *cfg, void *result_out,
+                           uint8_t max_retries);
+
+/* utility/pes_timeout.c */
+void pes_timeout_sleep_ms(uint32_t ms);
+
+/* pes_nfc_card_reader.c  (used by retry) */
+pes_status_t pes_nfc_card_reader_try_once(const void *cfg, void *result_out);
+
+/* pes_nfc_card_reader.c — stop flag (checked by detect_wait & event loop) */
+bool pes_nfc_card_reader_is_stop_requested(void);
+
+/* pes_nfc_card_reader.c — card summary */
+uint32_t pes_card_summary_build(const pes_nfc_card_result_t *res,
+                                char *buf, uint32_t buf_size);
+
+/* utility/pes_nfc_uid.c */
+uint32_t pes_nfc_uid_to_hex(const uint8_t *uid, uint8_t uid_len,
+                            char *out, uint32_t out_size);
+uint32_t pes_nfc_uid_to_hex_colon(const uint8_t *uid, uint8_t uid_len,
+                                  char *out, uint32_t out_size);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* PES_NFC_PTX_H */
+#endif /* PES_NFC_PTX105R_H */
