@@ -12,10 +12,14 @@
 #include "pes_nfc_ptx105r.h"
 #include <string.h>
 
-/* ── Constants ─────────────────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Constants
+ **********************************************************************************************************************/
 #define RX_BUF_SIZE   PES_NFC_PTX_RX_BUF_SIZE
 
-/* ── Internal helper: T4T APDU exchange with SW=9000 check ─────────── */
+/***********************************************************************************************************************
+ * Internal helper: T4T APDU exchange with SW=9000 check
+ **********************************************************************************************************************/
 static bool t4t_exchange(uint8_t *cmd, uint32_t cmd_len,
                          uint8_t *rx, uint32_t *rx_len)
 {
@@ -30,7 +34,9 @@ static bool t4t_exchange(uint8_t *cmd, uint32_t cmd_len,
     return true;
 }
 
-/* ── Type 4 Tag NDEF Write/Erase ───────────────────────────────────── */
+/***********************************************************************************************************************
+ * Type 4 Tag NDEF Write/Erase
+ **********************************************************************************************************************/
 
 static pes_status_t write_t4t_ndef(const uint8_t *ndef, uint16_t ndef_len)
 {
@@ -112,7 +118,9 @@ static pes_status_t write_t4t_ndef(const uint8_t *ndef, uint16_t ndef_len)
     return PES_OK;
 }
 
-/* ── Type 2 Tag NDEF Write/Erase ───────────────────────────────────── */
+/***********************************************************************************************************************
+ * Type 2 Tag NDEF Write/Erase
+ **********************************************************************************************************************/
 
 static pes_status_t write_t2t_ndef(const uint8_t *ndef, uint16_t ndef_len)
 {
@@ -163,7 +171,9 @@ static pes_status_t write_t2t_ndef(const uint8_t *ndef, uint16_t ndef_len)
     return PES_OK;
 }
 
-/* ── Public API: Write NDEF ────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Public API: Write NDEF
+ **********************************************************************************************************************/
 
 pes_status_t PES_NFCCardReader_WriteNDEF(pes_nfc_protocol_t protocol,
                                          const uint8_t *ndef,
@@ -182,7 +192,9 @@ pes_status_t PES_NFCCardReader_WriteNDEF(pes_nfc_protocol_t protocol,
     }
 }
 
-/* ── Public API: Erase NDEF ────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Public API: Erase NDEF
+ **********************************************************************************************************************/
 
 pes_status_t PES_NFCCardReader_EraseNDEF(pes_nfc_protocol_t protocol)
 {
@@ -190,7 +202,9 @@ pes_status_t PES_NFCCardReader_EraseNDEF(pes_nfc_protocol_t protocol)
     return PES_NFCCardReader_WriteNDEF(protocol, NULL, 0u);
 }
 
-/* ── Public API: Build RTD-Text Record ─────────────────────────────── */
+/***********************************************************************************************************************
+ * Public API: Build RTD-Text Record
+ **********************************************************************************************************************/
 
 pes_status_t PES_NDEF_BuildTextRecord(const char *text, uint16_t text_len,
                                       uint8_t *out, uint16_t *out_len)

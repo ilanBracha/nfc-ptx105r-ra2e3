@@ -30,7 +30,9 @@
 #include "ptxPLAT_TIMER.h"
 #include "ptxPERIPH_APPTIMER.h"
 
-/* ── Module-local constants ────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Module-local constants
+ **********************************************************************************************************************/
 #define PTX105R_ZERO                  (0)
 #define PTX105R_SHUTDOWN_TEMP         (223U)
 #define PTX105R_TIMEOUT_RAW           (200U) /* Application-timeout for raw-protocol exchanges */
@@ -41,7 +43,9 @@ static bool g_start_temp_calibration = true;
 /* Tracks whether pes_nfc_ptx_open() succeeded (replaces FSP ctrl->open) */
 static bool g_ptx_opened = false;
 
-/* ── Interrupt-driven wait support ─────────────────────────────────── */
+/***********************************************************************************************************************
+ * Interrupt-driven wait support
+ **********************************************************************************************************************/
 
 static volatile TaskHandle_t g_waiting_task = NULL;
 
@@ -56,7 +60,9 @@ static void ptx105r_irq_wake_cb(external_irq_callback_args_t *p_args)
     }
 }
 
-/* ── Internal helpers ──────────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Internal helpers
+ **********************************************************************************************************************/
 
 static pes_nfc_card_type_t map_card_type(ptxIoTRd_CardParams_t *card,
                                          ptxIoTRd_CardProtocol_t prot)
@@ -195,7 +201,9 @@ static pes_status_t ptx105r_system_check(void)
 
 static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
 
-/* ── PTX SDK function implementations ──────────────────────────────── */
+/***********************************************************************************************************************
+ * PTX SDK function implementations
+ **********************************************************************************************************************/
 
 pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
 {

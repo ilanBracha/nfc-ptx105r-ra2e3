@@ -20,9 +20,9 @@
 extern "C" {
 #endif
 
-/* ════════════════════════════════════════════════════════════════════════
- *  Common types, status codes, and callback convention (was pes_common.h)
- * ════════════════════════════════════════════════════════════════════════ */
+/**********************************************************************************************************************
+ * Common types, status codes, and callback convention
+ **********************************************************************************************************************/
 
 #define PES_COMMON_UNUSED(x) (void)(x)
 
@@ -46,9 +46,9 @@ typedef void (*pes_callback_t)(pes_status_t status, void *p_context);
 #define PES_LOG(fmt, ...)   /* default: silent */
 #endif
 
-/* ════════════════════════════════════════════════════════════════════════
- *  NDEF parsing and decoding utilities (was pes_ndef_util.h)
- * ════════════════════════════════════════════════════════════════════════ */
+/**********************************************************************************************************************
+ * NDEF parsing and decoding utilities
+ **********************************************************************************************************************/
 
 #define PES_NDEF_MAX_RECORDS        8U
 #define PES_NDEF_MAX_TYPE_LEN      32U
@@ -108,12 +108,16 @@ bool PES_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
 bool PES_NDEF_StartsWith(const char *str, uint32_t str_len,
                          const char *prefix);
 
-/* ── Device selection ──────────────────────────────────────────────── */
+/**********************************************************************************************************************
+ * Device selection
+ **********************************************************************************************************************/
 typedef enum {
     PES_NFC_READER_PTX105R = 0,
 } pes_nfc_reader_device_t;
 
-/* ── Technology mask ───────────────────────────────────────────────── */
+/**********************************************************************************************************************
+ * Technology mask
+ **********************************************************************************************************************/
 typedef uint32_t pes_nfc_tech_mask_t;
 
 #define PES_NFC_TECH_ISO14443A   (1UL << 0)
@@ -128,7 +132,9 @@ typedef uint32_t pes_nfc_tech_mask_t;
                            PES_NFC_TECH_ISO15693  | \
                            PES_NFC_TECH_NFC_FORUM)
 
-/* ── Card type (must precede result struct) ────────────────────────── */
+/**********************************************************************************************************************
+ * Card type (must precede result struct)
+ **********************************************************************************************************************/
 typedef enum {
     PES_NFC_CARD_TYPE_UNKNOWN = 0,
     PES_NFC_CARD_TYPE_ISO14443A,
@@ -142,7 +148,9 @@ typedef enum {
     PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5,
 } pes_nfc_card_type_t;
 
-/* ── Active-card RF protocol (PES-owned mirror of PTX protocol enum) ─ */
+/**********************************************************************************************************************
+ * Active-card RF protocol (PES-owned mirror of PTX protocol enum)
+ **********************************************************************************************************************/
 typedef enum {
     PES_NFC_PROT_UNDEFINED = 0,
     PES_NFC_PROT_T2T,
@@ -153,18 +161,24 @@ typedef enum {
     PES_NFC_PROT_EXTENSION,
 } pes_nfc_protocol_t;
 
-/* ── Operation-end callback (non-blocking mode) ────────────────────── */
+/**********************************************************************************************************************
+ * Operation-end callback (non-blocking mode)
+ **********************************************************************************************************************/
 /**
  * Fired once when a non-blocking PES_NFCCardReader_Read() completes
  * (timeout, fatal error, or PES_NFCCardReader_Stop() was called).
  */
 typedef void (*pes_nfc_callback_t)(pes_status_t status, void *p_context);
 
-/* ── Result (forward-declared so the per-card event cb can reference it) */
+/**********************************************************************************************************************
+ * Result (forward-declared so the per-card event cb can reference it)
+ **********************************************************************************************************************/
 struct pes_nfc_card_result_s;
 typedef struct pes_nfc_card_result_s pes_nfc_card_result_t;
 
-/* ── Per-card event callback ───────────────────────────────────────── */
+/**********************************************************************************************************************
+ * Per-card event callback
+ **********************************************************************************************************************/
 /*
  * Fired by PES_NFCCardReader_Read() each time a card is detected, activated
  * and (optionally) NDEF-read. The application MUST treat result/summary as
@@ -176,7 +190,9 @@ typedef void (*pes_nfc_card_event_cb_t)(pes_status_t status,
                                         const char *summary,
                                         void *p_context);
 
-/* ── Configuration ─────────────────────────────────────────────────── */
+/**********************************************************************************************************************
+ * Configuration
+ **********************************************************************************************************************/
 typedef struct {
     /* Reader device selection */
     pes_nfc_reader_device_t reader;
@@ -213,7 +229,9 @@ typedef struct {
     bool validate_dependencies;
 } pes_nfc_card_reader_cfg_t;
 
-/* ── Result ────────────────────────────────────────────────────────── */
+/**********************************************************************************************************************
+ * Result
+ **********************************************************************************************************************/
 #define PES_NFC_UID_MAX_BYTES       10U
 #define PES_NFC_NDEF_MAX_BYTES      512U
 
@@ -242,7 +260,9 @@ pes_status_t pes_ndef_read_t4t(pes_nfc_card_result_t *result_out);
 /* Internal NDEF read helper function for Type 2 Tags (T2T) */
 pes_status_t pes_ndef_read_t2t(pes_nfc_card_result_t *result_out);
 
-/* ── API ───────────────────────────────────────────────────────────── */
+/**********************************************************************************************************************
+ * API
+ **********************************************************************************************************************/
 
 /**
  * Read NFC cards according to the supplied configuration.

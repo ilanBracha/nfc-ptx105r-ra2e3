@@ -114,8 +114,8 @@ static void auc_nfc_card_reader_card_event (const pes_nfc_card_result_t *result)
         return;
     }
 
-    /* ── Read card info via PES ─────────────────────────────────────── */
-    /* Cast away const — PES_NFCCardReader_ReadCardInfo populates the
+    /* Read card info via PES - Cast away const — 
+     * PES_NFCCardReader_ReadCardInfo populates the
      * extended fields (data_area_size, writeable, tag_type_name, ndef_*).
      * The result was handed to us by PES and is still alive. */
     (void)PES_NFCCardReader_ReadCardInfo(result->protocol,

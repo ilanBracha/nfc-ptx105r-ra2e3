@@ -26,7 +26,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-/* ── Constants ─────────────────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Constants
+ **********************************************************************************************************************/
 #define DEFAULT_TIMEOUT_MS       5000U
 #define DEFAULT_RETRY_COUNT      0U
 #define SUMMARY_BUF_SIZE         128U
@@ -46,7 +48,9 @@
 #define PTX_SYS_STATUS_OK                       0x00u
 #define PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT 0x06u
 
-/* ── Per-call orchestrator state ──────────────────────────────────── */
+/***********************************************************************************************************************
+ * Per-call orchestrator state
+ **********************************************************************************************************************/
 typedef enum {
     LOOP_WAIT_FOR_ACTIVATION = 0,
     LOOP_DATA_EVENT,
@@ -54,7 +58,9 @@ typedef enum {
     LOOP_SYSTEM_ERROR,
 } loop_state_t;
 
-/* ── Stop-requested flag ──────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Stop-requested flag
+ **********************************************************************************************************************/
 static volatile bool g_stop_requested = false;
 
 bool pes_nfc_card_reader_is_stop_requested(void)
@@ -62,7 +68,9 @@ bool pes_nfc_card_reader_is_stop_requested(void)
     return g_stop_requested;
 }
 
-/* ── Non-blocking async context (static allocation) ───────────────── */
+/***********************************************************************************************************************
+ * Non-blocking async context (static allocation)
+ **********************************************************************************************************************/
 typedef struct {
     pes_nfc_card_reader_cfg_t  cfg;          /* deep copy of caller cfg  */
     pes_nfc_card_result_t     *p_result_out; /* caller's result pointer  */
@@ -74,13 +82,17 @@ static StaticTask_t         g_async_task_tcb;
 static StackType_t          g_async_task_stack[ASYNC_TASK_STACK_WORDS];
 static TaskHandle_t         g_async_task_handle = NULL;
 
-/* ── Forward declarations ─────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Forward declarations
+ **********************************************************************************************************************/
 static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
                                            pes_nfc_card_result_t *result_out);
 static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
                                    pes_nfc_card_result_t *result_out);
 
-/* ── Single-attempt (used by retry wrapper & single-shot) ─────────── */
+/***********************************************************************************************************************
+ * Single-attempt (used by retry wrapper & single-shot)
+ **********************************************************************************************************************/
 pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
 {
     const pes_nfc_card_reader_cfg_t *cfg = (const pes_nfc_card_reader_cfg_t *)cfg_raw;
@@ -130,7 +142,9 @@ pes_status_t pes_nfc_card_reader_try_once(const void *cfg_raw, void *result_raw)
     return PES_OK;
 }
 
-/* ── Event-loop mode ──────────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Event-loop mode
+ **********************************************************************************************************************/
 static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
                                    pes_nfc_card_result_t *result_out)
 {
@@ -259,7 +273,9 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
     return PES_OK; /* timed out without a fatal error */
 }
 
-/* ── Blocking core (open → discover → loop/shot → cleanup) ────────── */
+/***********************************************************************************************************************
+ * Blocking core
+ **********************************************************************************************************************/
 static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
                                            pes_nfc_card_result_t *result_out)
 {
@@ -306,7 +322,9 @@ static pes_status_t pes_nfc_read_blocking(const pes_nfc_card_reader_cfg_t *cfg,
     return st;
 }
 
-/* ── Async worker task function ───────────────────────────────────── */
+/***********************************************************************************************************************
+ * Async worker task function
+ **********************************************************************************************************************/
 static void pes_nfc_async_worker(void *pvParameters)
 {
     (void)pvParameters;
@@ -327,7 +345,9 @@ static void pes_nfc_async_worker(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-/* ── Public API ────────────────────────────────────────────────────── */
+/***********************************************************************************************************************
+ * Public API
+ **********************************************************************************************************************/
 
 pes_status_t PES_NFCCardReader_Validate(const pes_nfc_card_reader_cfg_t *cfg)
 {
@@ -370,7 +390,7 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
     st = PES_NFCCardReader_Validate(cfg);
     if (PES_OK != st) { return st; }
 
-    /* ── Non-blocking path ─────────────────────────────────────────── */
+    /* Non-blocking path */
     if (NULL != cfg->callback)
     {
         /* Re-entrancy guard: only one async Read() at a time. */
@@ -402,7 +422,7 @@ pes_status_t PES_NFCCardReader_Read(const pes_nfc_card_reader_cfg_t *cfg,
         return PES_OK;  /* returns immediately */
     }
 
-    /* ── Blocking path ─────────────────────────────────────────────── */
+    /* Blocking path */
     g_stop_requested = false;
     return pes_nfc_read_blocking(cfg, result_out);
 }
@@ -423,9 +443,9 @@ pes_status_t PES_NFCCardReader_DataExchange(const uint8_t *tx, uint32_t tx_len,
     return pes_nfc_ptx_data_exchange(tx, tx_len, rx, rx_len);
 }
 
-/* ════════════════════════════════════════════════════════════════════════
- *  Card summary (was pes_card_summary.c)
- * ════════════════════════════════════════════════════════════════════════ */
+/***********************************************************************************************************************
+ * Card summary
+ **********************************************************************************************************************/
 
 static const char HEX_DIGITS[] = "0123456789ABCDEF";
 
@@ -515,9 +535,9 @@ uint32_t pes_card_summary_build(const pes_nfc_card_result_t *res,
     return off;
 }
 
-/* ════════════════════════════════════════════════════════════════════════
- *  Raw exchange (was pes_nfc_raw_exchange.c)
- * ════════════════════════════════════════════════════════════════════════ */
+/***********************************************************************************************************************
+ * Raw exchange
+ **********************************************************************************************************************/
 
 pes_status_t PES_NFCCardReader_RawExchange(pes_nfc_protocol_t protocol,
                                            const uint8_t *uid, uint8_t uid_len,

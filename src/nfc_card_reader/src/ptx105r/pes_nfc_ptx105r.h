@@ -22,7 +22,9 @@
 extern "C" {
 #endif
 
-/* ── Discovery status ──────────────────────────────────────────────── */
+/**********************************************************************************************************************
+ * Discovery status
+ **********************************************************************************************************************/
 typedef enum {
     PES_NFC_DISC_NO_CARD = 0,
     PES_NFC_DISC_CARD_ACTIVE,
@@ -30,7 +32,9 @@ typedef enum {
     PES_NFC_DISC_DONE,
 } pes_nfc_disc_status_t;
 
-/* ── Activated card info (filled after activation) ─────────────────── */
+/**********************************************************************************************************************
+ * Activated card info (filled after activation)
+ **********************************************************************************************************************/
 #define PES_NFC_PTX_RX_BUF_SIZE   300U
 #define PES_NFC_PTX_TX_BUF_SIZE   280U
 
@@ -41,8 +45,9 @@ typedef struct {
     uint8_t             uid_len;
 } pes_nfc_ptx_card_info_t;
 
-/* ── PTX functions (PTX105R backend, pes_nfc_ptx105r.c) ─────────────── */
-
+/**********************************************************************************************************************
+ * PTX functions
+ **********************************************************************************************************************/
 pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device);
 pes_status_t pes_nfc_ptx_close(void);
 /** Returns true if pes_nfc_ptx_open() has succeeded and pes_nfc_ptx_close()
@@ -64,7 +69,9 @@ pes_status_t pes_nfc_ptx_get_system_state(uint8_t *out_state);
 pes_status_t pes_nfc_ptx_get_last_rf_error(uint8_t *out_err);
 void pes_nfc_ptx_wake_waiting_task(void);
 
-/* ── Internal forward declarations ─────────────────────────────────── */
+/**********************************************************************************************************************
+ * Internal forward declarations
+ **********************************************************************************************************************/
 
 /* detection/pes_nfc_detect.c */
 pes_status_t pes_nfc_detect_wait(uint32_t timeout_ms,
