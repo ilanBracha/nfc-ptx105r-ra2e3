@@ -1,12 +1,20 @@
 /**
  * pes_nfc_ptx105r.c
  *
- * Implementation for the Renesas PTX105R NFC reader, using the
- * RM_NFC_READER_PTX FSP API surface exclusively.
+ * Implementation for the Renesas PTX105R NFC reader, calling the Renesas
+ * PTX NFC SDK (ptxIoTRd_* / ptx_IOT_READER.h) directly instead of going
+ * through the RM_NFC_READER_PTX FSP wrapper. Peripheral (SPI/GPIO/Timer)
+ * bring-up still uses the ptxPLAT_* /ptxPERIPH_* platform-glue functions
+ * that are also used internally by the FSP wrapper, pointed at the
+ * FSP-generated peripheral instances in g_nfc_reader_ptx0_cfg.
  *
  * Each function is a direct, non-static entry point declared in
  * pes_nfc_ptx105r.h and called by name from the rest of the PES NFC Card
  * Reader module — no function-pointer vtable indirection.
+ *
+ * There is no local state-machine (open/idle/discovered/activated) here:
+ * we rely on the PTX SDK's own error handling/return codes instead of
+ * re-implementing the FSP wrapper's defensive state checks.
  */
 
 #include "pes_nfc_ptx105r.h"
@@ -14,8 +22,24 @@
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
-/* g_nfc_reader_ptx0_ctrl/cfg, FSP types */
 #include "hal_data.h"
+/* PTX NFC SDK — used directly instead of the RM_NFC_READER_PTX FSP API */
+#include "ptx_IOT_READER.h"
+#include "ptxPLAT_GPIO.h"
+#include "ptxPLAT_SPI.h"
+#include "ptxPLAT_TIMER.h"
+#include "ptxPERIPH_APPTIMER.h"
+
+/* ── Module-local constants ────────────────────────────────────────── */
+#define PTX105R_ZERO                  (0)
+#define PTX105R_SHUTDOWN_TEMP         (223U)
+#define PTX105R_TIMEOUT_RAW           (200U) /* Application-timeout for raw-protocol exchanges */
+
+/* Only perform temperature-sensor calibration once per power cycle */
+static bool g_start_temp_calibration = true;
+
+/* Tracks whether pes_nfc_ptx_open() succeeded (replaces FSP ctrl->open) */
+static bool g_ptx_opened = false;
 
 /* ── Interrupt-driven wait support ─────────────────────────────────── */
 
@@ -146,9 +170,9 @@ static pes_status_t ptx105r_discover_status(pes_nfc_disc_status_t *out_status)
     if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
 
     uint8_t raw = 0;
-    fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
-                                                 StatusType_Discover, &raw);
-    if (FSP_SUCCESS != err) { return PES_ERR_INTERNAL; }
+    ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                              StatusType_Discover, &raw);
+    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
 
     switch (raw)
     {
@@ -163,36 +187,93 @@ static pes_status_t ptx105r_discover_status(pes_nfc_disc_status_t *out_status)
 static pes_status_t ptx105r_system_check(void)
 {
     uint8_t state = 0;
-    fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
-                                                 StatusType_System, &state);
-    if (FSP_SUCCESS != err) { return PES_ERR_INTERNAL; }
+    ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                              StatusType_System, &state);
+    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
     return (PTX_SYSTEM_STATUS_OK == state) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
 
-/* ── PTX function implementations ──────────────────────────────────── */
+/* ── PTX SDK function implementations ──────────────────────────────── */
 
 pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
 {
     PES_COMMON_UNUSED(device);
 
-    fsp_err_t err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
+    nfc_reader_ptx_cfg_t const * p_cfg = &g_nfc_reader_ptx0_cfg;
 
-    if (FSP_ERR_INVALID_DATA == err)
+    /* Define IoT Reader parameters (mirrors former RM_NFC_READER_PTX_Open) */
+    ptxIoTRd_InitPars_t            init_params;
+    ptxIoTRd_TempSense_Params_t    temp_sensor;
+    ptxIoTRd_ComInterface_Params_t com_interface;
+
+    (void)memset(&init_params, PTX105R_ZERO, sizeof(init_params));
+    (void)memset(&temp_sensor, PTX105R_ZERO, sizeof(temp_sensor));
+    (void)memset(&com_interface, PTX105R_ZERO, sizeof(com_interface));
+
+    /* Temperature-sensor calibration is only performed once per power cycle */
+    if (true == g_start_temp_calibration)
     {
-        (void)RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
-        err = RM_NFC_READER_PTX_Open(&g_nfc_reader_ptx0_ctrl, &g_nfc_reader_ptx0_cfg);
+        temp_sensor.Calibrate = p_cfg->temp_sensor_calibrate;
+        temp_sensor.Tambient  = p_cfg->temp_sensor_ambient;
+        temp_sensor.Tshutdown = p_cfg->temp_sensor_shutdown;
+        g_start_temp_calibration = false;
+    }
+    else
+    {
+        temp_sensor.Tshutdown = PTX105R_SHUTDOWN_TEMP;
     }
 
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    init_params.TemperatureSensor = &temp_sensor;
+    init_params.ComInterface      = &com_interface;
+
+    /* Bring up the low-level peripherals (SPI, GPIO/IRQ, timers) required
+     * by the PTX SDK. These are the same platform-glue calls the FSP
+     * wrapper used to make internally. */
+    if (ptxStatus_Success != ptxPLAT_GPIO_Open(p_cfg->p_gpio_context, p_cfg->p_irq_context, p_cfg->interrupt_pin))
+    {
+        return PES_ERR_INTERNAL;
+    }
+    if (ptxStatus_Success != ptxPLAT_TIMER_Open(p_cfg->p_timer_context))
+    {
+        return PES_ERR_INTERNAL;
+    }
+    if (ptxStatus_Success != ptxPERIPH_APPTIMER_Open(p_cfg->p_app_timer))
+    {
+        return PES_ERR_INTERNAL;
+    }
+    if (ptxStatus_Success != ptxPLAT_SPI_Open(p_cfg->p_comms_instance_ctrl, p_cfg->p_gpio_context))
+    {
+        return PES_ERR_INTERNAL;
+    }
+
+    /* Initiate the IoT-Reader System (PTX SDK) */
+    ptxStatus_t st = ptxIoTRd_Init(p_cfg->iot_reader_context, &init_params);
+    if (ptxStatus_Success != st)
+    {
+        /* Retry once after a Deinit, mirrors the FSP wrapper's recovery path */
+        (void)ptxIoTRd_Deinit(p_cfg->iot_reader_context);
+        st = ptxIoTRd_Init(p_cfg->iot_reader_context, &init_params);
+    }
+
+    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
+
+    g_ptx_opened = true;
+    return PES_OK;
 }
 
 pes_status_t pes_nfc_ptx_close(void)
 {
     g_active_reg = NULL;
-    fsp_err_t err = RM_NFC_READER_PTX_Close(&g_nfc_reader_ptx0_ctrl);
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    ptxStatus_t st = ptxIoTRd_Deinit(g_nfc_reader_ptx0_cfg.iot_reader_context);
+    g_ptx_opened = false;
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+}
+
+bool pes_nfc_ptx_is_open(void)
+{
+    return g_ptx_opened;
 }
 
 pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask)
@@ -203,19 +284,40 @@ pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask)
 
 pes_status_t pes_nfc_ptx_start_polling(void)
 {
-    fsp_err_t err = RM_NFC_READER_PTX_DiscoveryStart(&g_nfc_reader_ptx0_ctrl);
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    nfc_reader_ptx_cfg_t const * p_cfg = &g_nfc_reader_ptx0_cfg;
+
+    ptxIoTRd_DiscConfig_t disc_config;
+    (void)memset(&disc_config, PTX105R_ZERO, sizeof(disc_config));
+
+    disc_config.PollTypeA            = p_cfg->poll_type_a;
+    disc_config.PollTypeB            = p_cfg->poll_type_b;
+    disc_config.PollTypeF212         = p_cfg->poll_type_f;
+    disc_config.PollTypeV            = p_cfg->poll_type_v;
+    disc_config.IdleTime             = p_cfg->idle_time_ms;
+    disc_config.PollTypeADeviceLimit = p_cfg->device_limit;
+    disc_config.PollTypeBDeviceLimit = p_cfg->device_limit;
+    disc_config.PollTypeVDeviceLimit = p_cfg->device_limit;
+    disc_config.PollTypeFDeviceLimit = p_cfg->device_limit;
+    disc_config.Discover_Mode        = p_cfg->discover_mode;
+
+    if (!(disc_config.PollTypeA || disc_config.PollTypeB ||
+          disc_config.PollTypeF212 || disc_config.PollTypeV))
+    {
+        return PES_ERR_INVALID_CFG;
+    }
+
+    ptxStatus_t st = ptxIoTRd_Initiate_Discovery(p_cfg->iot_reader_context, &disc_config);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 pes_status_t pes_nfc_ptx_stop_polling(void)
 {
-    fsp_err_t err = RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl,
-                                                          NFC_READER_PTX_RETURN_IDLE);
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    ptxStatus_t st = ptxIoTRd_Reader_Deactivation(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                                  PTX_IOTRD_RF_DEACTIVATION_TYPE_IDLE);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms,
-                                       pes_nfc_disc_status_t *out_status)
+pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms, pes_nfc_disc_status_t *out_status)
 {
     if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
     *out_status = PES_NFC_DISC_NO_CARD;
@@ -271,9 +373,11 @@ pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
     if (NULL == card_info) { return PES_ERR_INVALID_CFG; }
     (void)memset(card_info, 0, sizeof(*card_info));
 
+    ptxIoTRd_t *iot_rd = g_nfc_reader_ptx0_cfg.iot_reader_context;
+
     ptxIoTRd_CardRegistry_t *reg = NULL;
-    fsp_err_t err = RM_NFC_READER_PTX_CardRegistryGet(&g_nfc_reader_ptx0_ctrl, &reg);
-    if ((FSP_SUCCESS != err) || (NULL == reg)) { return PES_ERR_INTERNAL; }
+    ptxStatus_t st = ptxIoTRd_Get_Card_Registry(iot_rd, &reg);
+    if ((ptxStatus_Success != st) || (NULL == reg)) { return PES_ERR_INTERNAL; }
 
     g_active_reg = reg;
 
@@ -288,8 +392,8 @@ pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
     if (0u == reg->NrCards) { return PES_ERR_NOT_FOUND; }
 
     ptxIoTRd_CardProtocol_t prot = choose_protocol(&reg->Cards[0]);
-    err = RM_NFC_READER_PTX_CardActivate(&g_nfc_reader_ptx0_ctrl, &reg->Cards[0], prot);
-    if (FSP_SUCCESS != err) { return PES_ERR_INTERNAL; }
+    st = ptxIoTRd_Activate_Card(iot_rd, &reg->Cards[0], prot);
+    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
 
     card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
     card_info->protocol  = map_protocol(reg->ActiveCardProtType);
@@ -342,39 +446,34 @@ pes_status_t pes_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
 {
     if ((NULL == tx) || (NULL == rx) || (NULL == rx_len)) { return PES_ERR_INVALID_CFG; }
 
-    nfc_reader_ptx_data_info_t info;
-    info.p_tx_buf  = (uint8_t *)(uintptr_t)tx;
-    info.tx_length = tx_len;
-    info.p_rx_buf  = rx;
-    info.rx_length = *rx_len;
+    ptxStatus_t st = ptxIoTRd_Data_Exchange(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                            (uint8_t *)(uintptr_t)tx, tx_len,
+                                            rx, rx_len, PTX105R_TIMEOUT_RAW);
 
-    fsp_err_t err = RM_NFC_READER_PTX_DataExchange(&g_nfc_reader_ptx0_ctrl, &info);
-    *rx_len = info.rx_length;
-
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 pes_status_t pes_nfc_ptx_deactivate(void)
 {
-    fsp_err_t err = RM_NFC_READER_PTX_ReaderDeactivation(&g_nfc_reader_ptx0_ctrl,
-                                                          NFC_READER_PTX_RETURN_DISCOVER);
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    ptxStatus_t st = ptxIoTRd_Reader_Deactivation(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                                  PTX_IOTRD_RF_DEACTIVATION_TYPE_DISCOVER);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 pes_status_t pes_nfc_ptx_get_system_state(uint8_t *out_state)
 {
     if (NULL == out_state) { return PES_ERR_INVALID_CFG; }
-    fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
-                                                 StatusType_System, out_state);
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                              StatusType_System, out_state);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 pes_status_t pes_nfc_ptx_get_last_rf_error(uint8_t *out_err)
 {
     if (NULL == out_err) { return PES_ERR_INVALID_CFG; }
-    fsp_err_t err = RM_NFC_READER_PTX_StatusGet(&g_nfc_reader_ptx0_ctrl,
-                                                 StatusType_LastRFError, out_err);
-    return (FSP_SUCCESS == err) ? PES_OK : PES_ERR_INTERNAL;
+    ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
+                                              StatusType_LastRFError, out_err);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 void pes_nfc_ptx_wake_waiting_task(void)

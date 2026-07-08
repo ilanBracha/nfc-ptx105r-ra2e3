@@ -3,7 +3,8 @@
  *
  * Hardware Abstraction Layer for the PES NFC Card Reader module.
  * Isolates PES business logic from the vendor-specific NFC stack
- * (currently: Renesas PTX105R via RM_NFC_READER_PTX FSP wrappers).
+ * (currently: Renesas PTX105R, calling the PTX NFC SDK's ptxIoTRd_*
+ * functions directly — no RM_NFC_READER_PTX FSP wrapper).
  *
  * Each function below is implemented directly by the PTX105R backend
  * (pes_nfc_ptx105r.c) and called directly by name — no function-
@@ -44,6 +45,9 @@ typedef struct {
 
 pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device);
 pes_status_t pes_nfc_ptx_close(void);
+/** Returns true if pes_nfc_ptx_open() has succeeded and pes_nfc_ptx_close()
+ * has not since been called. Replaces the FSP ctrl block's `open` flag. */
+bool pes_nfc_ptx_is_open(void);
 pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask);
 pes_status_t pes_nfc_ptx_start_polling(void);
 pes_status_t pes_nfc_ptx_stop_polling(void);
