@@ -254,12 +254,6 @@ struct pes_nfc_card_result_s {
                                        Points to a static string — do NOT free. */
 };
 
-/* Internal NDEF read helper function for Type 4 Tags (T4T) */
-pes_status_t pes_ndef_read_t4t(pes_nfc_card_result_t *result_out);
-
-/* Internal NDEF read helper function for Type 2 Tags (T2T) */
-pes_status_t pes_ndef_read_t2t(pes_nfc_card_result_t *result_out);
-
 /**********************************************************************************************************************
  * API
  **********************************************************************************************************************/

@@ -24,7 +24,6 @@
 #include "hal_data.h"
 #include "r_ioport.h"
 #include "r_sci_uart.h"
-#include "SEGGER_RTT.h"
 #include <string.h>
 #include <stdarg.h>
 #include "ptxCOMMON.h"
@@ -196,7 +195,6 @@ int auc_nfc_card_reader_log_init(void)
         230400u,
         115200u,
     };
-    uint32_t chosen_baud = 0u;
     for (size_t i = 0u; i < (sizeof(k_baud_ladder) / sizeof(k_baud_ladder[0])); i++)
     {
         baud_setting_t bs;
@@ -206,13 +204,9 @@ int auc_nfc_card_reader_log_init(void)
                                                     &bs))
         {
             g_uart0_baud_setting = bs;
-            chosen_baud          = k_baud_ladder[i];
             break;
         }
     }
-    /* Tell RTT what we actually programmed so we can confirm without a scope. */
-    SEGGER_RTT_printf(0, "[user_uart_log] UART baud = %u (requested %u)\r\n",
-                      (unsigned)chosen_baud, (unsigned)AUC_NFC_CARD_READER_LOG_BAUD);
 
     err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
     if (FSP_SUCCESS != err)
@@ -452,24 +446,20 @@ done:
 
 void ptxCommon_PrintF(const char *format, ...)
 {
-    va_list ap1, ap2;
-    va_start(ap1, format);
-    va_copy(ap2, ap1);
+    va_list ap;
+    va_start(ap, format);
 
-    /* RTT: use SEGGER's lightweight formatter (already compiled in) */
-    (void)SEGGER_RTT_vprintf(0, format, &ap1);
-
-    /* UART: format into stack buffer and send */
+    /* UART only (RTT sink removed to reclaim flash): format into stack
+     * buffer and send. */
     char buf[128];
-    int len = auc_nfc_card_reader_log_vsnprintf(buf, sizeof(buf), format, ap2);
+    int len = auc_nfc_card_reader_log_vsnprintf(buf, sizeof(buf), format, ap);
 
     if (len > 0)
     {
         auc_nfc_card_reader_log_write((const uint8_t *)buf, (unsigned)len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned)len);
     }
 
-    va_end(ap2);
-    va_end(ap1);
+    va_end(ap);
 }
 
 void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength, uint8_t addNewLine, uint8_t printASCII)
@@ -584,6 +574,4 @@ void auc_nfc_card_reader_log_print_card_info(const pes_nfc_card_result_t *result
     {
         ptxCommon_PrintF("Records        : (none)\n");
     }
-
-    ptxCommon_PrintF("==============================================\n");
 }

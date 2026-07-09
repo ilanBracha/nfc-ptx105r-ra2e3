@@ -1,14 +1,24 @@
 /**
  * pes_ndef_read.c
  *
- * NDEF message reading from NFC Forum Type 2 and Type 4 Tags using raw
- * protocol commands via the HAL data_exchange vtable.
+ * NDEF message reading for NFC Forum Type 2 Tags (hand-rolled, small
+ * footprint) and Type 4/Type 5 Tags (via the PTX SDK's lean ptxNDEF_T4TOP /
+ * ptxNDEF_T5TOP components). T3T NDEF read is not supported — the generic
+ * PTX SDK NDEF dispatcher (ptxNDEF.c) unconditionally links all four
+ * tag-type operation components (~13 KB flash) which does not fit this
+ * MCU's flash budget; only the T4TOP/T5TOP components are used here.
+ *
+ * Also contains the NDEF message-level decoders (Wi-Fi, Bluetooth,
+ * record parser) which have no SDK equivalent.
  *
  * NO printing — all results go into the caller's pes_nfc_card_result_t.
  */
 
 #include "pes_nfc_card_reader.h"
 #include "pes_nfc_ptx105r.h"
+#include "ptx_IOT_READER.h"
+#include "ptxNDEF_T4TOP.h"
+#include "ptxNDEF_T5TOP.h"
 #include <string.h>
 
 /***********************************************************************************************************************
@@ -18,130 +28,95 @@
 #define TX_BUF_SIZE   PES_NFC_PTX_TX_BUF_SIZE
 
 /***********************************************************************************************************************
- * Internal helper: T4T APDU exchange with SW=9000 check
- **********************************************************************************************************************/
-static bool t4t_exchange(uint8_t *cmd, uint32_t cmd_len,
-                         uint8_t *rx, uint32_t *rx_len)
-{
-    *rx_len = RX_BUF_SIZE;
-    pes_status_t st = pes_nfc_ptx_data_exchange(cmd, cmd_len,
-                                                rx, rx_len);
-    if ((PES_OK != st) || (*rx_len < 2u) ||
-        (0x90u != rx[*rx_len - 2u]) || (0x00u != rx[*rx_len - 1u]))
-    {
-        return false;
-    }
-    return true;
-}
-
-/***********************************************************************************************************************
- * Type 4 Tag NDEF Read
+ * Type 4 Tag NDEF Read — via PTX SDK ptxNDEF_T4TOP component
  **********************************************************************************************************************/
 
 static pes_status_t read_t4t_ndef(pes_nfc_card_result_t *res)
 {
-    uint8_t rx[RX_BUF_SIZE];
-    uint8_t cmd[16];
-    uint32_t rx_len;
+    res->tag_type_name = "ISO-DEP (Type 4 Tag / ISO 14443-4)";
 
-    /* 1. SELECT NDEF Tag Application (AID D2760000850101) */
-    static const uint8_t sel_app[] = {
-        0x00,0xA4,0x04,0x00,0x07,
-        0xD2,0x76,0x00,0x00,0x85,0x01,0x01,0x00
-    };
-    if (!t4t_exchange((uint8_t *)sel_app, (uint32_t)sizeof(sel_app),
-                      rx, &rx_len))
+    pes_status_t st = pes_nfc_ptx_ndef_open();
+    if (PES_OK != st) { return st; }
+
+    struct ptxNDEF_T4TOP *t4t = pes_nfc_ptx_get_ndef_comp();
+
+    ptxStatus_t ptx_st = ptxNDEF_T4TOpCheckMessage(t4t);
+    if (ptxStatus_Success != ptx_st)
     {
+        pes_nfc_ptx_ndef_close();
+        res->ndef_present   = false;
+        res->ndef_len       = 0;
         return PES_ERR_NOT_FOUND;
     }
 
-    /* 2. SELECT Capability Container (EF E103) */
-    static const uint8_t sel_cc[] = {0x00,0xA4,0x00,0x0C,0x02,0xE1,0x03};
-    if (!t4t_exchange((uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc),
-                      rx, &rx_len))
+    uint32_t msg_len = PES_NFC_NDEF_MAX_BYTES;
+    ptx_st = ptxNDEF_T4TOpReadMessage(t4t, res->ndef_data, &msg_len);
+
+    if (ptxStatus_Success == ptx_st)
     {
-        return PES_ERR_NOT_FOUND;
+        res->ndef_len     = (uint16_t)msg_len;
+        res->ndef_present = (msg_len > 0u);
     }
-
-    /* 3. READ CC (15 bytes) */
-    static const uint8_t read_cc[] = {0x00,0xB0,0x00,0x00,0x0F};
-    if (!t4t_exchange((uint8_t *)read_cc, (uint32_t)sizeof(read_cc),
-                      rx, &rx_len) || (rx_len < 17u))
-    {
-        return PES_ERR_NOT_FOUND;
-    }
-
-    /* Parse CC */
-    uint16_t mle     = (uint16_t)(((uint16_t)rx[3] << 8) | rx[4]);
-    uint8_t  fid_hi  = rx[9];
-    uint8_t  fid_lo  = rx[10];
-    uint16_t maxfile = (uint16_t)(((uint16_t)rx[11] << 8) | rx[12]);
-    uint8_t  wa      = rx[14];
-
-    res->data_area_size = (uint32_t)maxfile;
-    res->writeable      = (0x00u == wa);
-    res->tag_type_name  = "ISO-DEP (Type 4 Tag / ISO 14443-4)";
-
-    /* 4. SELECT NDEF file */
-    cmd[0]=0x00; cmd[1]=0xA4; cmd[2]=0x00; cmd[3]=0x0C;
-    cmd[4]=0x02; cmd[5]=fid_hi; cmd[6]=fid_lo;
-    if (!t4t_exchange(cmd, 7u, rx, &rx_len))
-    {
-        return PES_ERR_NOT_FOUND;
-    }
-
-    /* 5. READ NLEN (first 2 bytes) */
-    cmd[0]=0x00; cmd[1]=0xB0; cmd[2]=0x00; cmd[3]=0x00; cmd[4]=0x02;
-    if (!t4t_exchange(cmd, 5u, rx, &rx_len) || (rx_len < 4u))
-    {
-        return PES_ERR_NOT_FOUND;
-    }
-    uint16_t nlen = (uint16_t)(((uint16_t)rx[0] << 8) | rx[1]);
-
-    if (0u == nlen)
+    else
     {
         res->ndef_present = false;
         res->ndef_len     = 0;
-        return PES_OK;
     }
 
-    /* 6. READ the NDEF message body in chunks */
-    uint32_t chunk = ((0u == mle) || (mle > 0xFFu)) ? 0xFFu : (uint32_t)mle;
-    uint32_t total = ((uint32_t)nlen > PES_NFC_NDEF_MAX_BYTES)
-                     ? PES_NFC_NDEF_MAX_BYTES : (uint32_t)nlen;
-    uint32_t got    = 0;
-    uint16_t offset = 2u;
+    /* Extract CC metadata from the SDK T4TOP component */
+    res->data_area_size = t4t->CCParams.NDEFFileSize;
+    res->writeable      = (0x00u == t4t->CCParams.NDEFAccessWrite);
 
-    while (got < total)
-    {
-        uint32_t want = total - got;
-        if (want > chunk) { want = chunk; }
-
-        cmd[0]=0x00; cmd[1]=0xB0;
-        cmd[2]=(uint8_t)(offset >> 8);
-        cmd[3]=(uint8_t)(offset & 0xFFu);
-        cmd[4]=(uint8_t)want;
-        if (!t4t_exchange(cmd, 5u, rx, &rx_len) || (rx_len < 2u))
-        {
-            break;
-        }
-
-        uint32_t data = rx_len - 2u;
-        if (data > want) { data = want; }
-        if (0u == data)  { break; }
-
-        (void)memcpy(&res->ndef_data[got], rx, data);
-        got    += data;
-        offset  = (uint16_t)(offset + data);
-    }
-
-    res->ndef_len     = (uint16_t)got;
-    res->ndef_present = (got > 0u);
+    pes_nfc_ptx_ndef_close();
     return PES_OK;
 }
 
 /***********************************************************************************************************************
- * Type 2 Tag NDEF Read
+ * Type 5 Tag NDEF Read — via PTX SDK ptxNDEF_T5TOP component
+ **********************************************************************************************************************/
+
+static pes_status_t read_t5t_ndef(pes_nfc_card_result_t *res)
+{
+    res->tag_type_name = "NFC Forum Type 5 Tag (T5T/ISO 15693)";
+
+    pes_status_t st = pes_nfc_ptx_ndef_t5t_open();
+    if (PES_OK != st) { return st; }
+
+    struct ptxNDEF_T5TOP *t5t = pes_nfc_ptx_get_ndef_t5t_comp();
+
+    ptxStatus_t ptx_st = ptxNDEF_T5TOpCheckMessage(t5t);
+    if (ptxStatus_Success != ptx_st)
+    {
+        pes_nfc_ptx_ndef_t5t_close();
+        res->ndef_present   = false;
+        res->ndef_len       = 0;
+        return PES_ERR_NOT_FOUND;
+    }
+
+    uint32_t msg_len = PES_NFC_NDEF_MAX_BYTES;
+    ptx_st = ptxNDEF_T5TOpReadMessage(t5t, res->ndef_data, &msg_len);
+
+    if (ptxStatus_Success == ptx_st)
+    {
+        res->ndef_len     = (uint16_t)msg_len;
+        res->ndef_present = (msg_len > 0u);
+    }
+    else
+    {
+        res->ndef_present = false;
+        res->ndef_len     = 0;
+    }
+
+    /* Extract CC metadata from the SDK T5TOP component */
+    res->data_area_size = (uint32_t)t5t->CCParams.MLEN;
+    res->writeable      = (0x00u == t5t->CCParams.WriteAccess);
+
+    pes_nfc_ptx_ndef_t5t_close();
+    return PES_OK;
+}
+
+/***********************************************************************************************************************
+ * Type 2 Tag NDEF Read — hand-rolled (small footprint, proven)
  **********************************************************************************************************************/
 
 static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
@@ -261,8 +236,7 @@ pes_status_t PES_NFCCardReader_ReadCardInfo(pes_nfc_protocol_t protocol,
             return read_t2t_ndef(result);
 
         case PES_NFC_PROT_T5T:
-            result->tag_type_name = "NFC Forum Type 5 Tag (T5T/ISO 15693)";
-            return PES_OK;
+            return read_t5t_ndef(result);
 
         case PES_NFC_PROT_T3T:
             result->tag_type_name = "NFC Forum Type 3 Tag (T3T/FeliCa)";
@@ -276,22 +250,6 @@ pes_status_t PES_NFCCardReader_ReadCardInfo(pes_nfc_protocol_t protocol,
             result->tag_type_name = "Unknown";
             return PES_OK;
     }
-}
-
-/***********************************************************************************************************************
- * Legacy thin wrappers (kept for internal PES use)
- **********************************************************************************************************************/
-
-pes_status_t pes_ndef_read_t4t(pes_nfc_card_result_t *result_out)
-{
-    if (NULL == result_out) { return PES_ERR_INVALID_CFG; }
-    return read_t4t_ndef(result_out);
-}
-
-pes_status_t pes_ndef_read_t2t(pes_nfc_card_result_t *result_out)
-{
-    if (NULL == result_out) { return PES_ERR_INVALID_CFG; }
-    return read_t2t_ndef(result_out);
 }
 
 /***********************************************************************************************************************

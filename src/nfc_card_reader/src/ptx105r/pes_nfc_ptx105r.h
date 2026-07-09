@@ -18,6 +18,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Forward declarations — full definitions in ptxNDEF_T4TOP.h / ptxNDEF_T5TOP.h
+ * (PTX SDK). Do NOT typedef here to avoid collision with the SDK headers'
+ * own typedefs. We use only the lean T4T/T5T NDEF-OP components (not the
+ * generic ptxNDEF dispatcher) — see pes_nfc_ptx105r.c for why. */
+struct ptxNDEF_T4TOP;
+struct ptxNDEF_T5TOP;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -68,6 +75,22 @@ pes_status_t pes_nfc_ptx_deactivate(void);
 pes_status_t pes_nfc_ptx_get_system_state(uint8_t *out_state);
 pes_status_t pes_nfc_ptx_get_last_rf_error(uint8_t *out_err);
 void pes_nfc_ptx_wake_waiting_task(void);
+
+/** Open the SDK T4T NDEF component. Call after activating an ISO-DEP
+ *  (Type 4 Tag) card, before PES_NFCCardReader_ReadCardInfo/WriteNDEF. */
+pes_status_t pes_nfc_ptx_ndef_open(void);
+/** Close the SDK T4T NDEF component (call after NDEF operations are done). */
+void pes_nfc_ptx_ndef_close(void);
+/** Get a pointer to the static ptxNDEF_T4TOP_t instance. Valid after ndef_open(). */
+struct ptxNDEF_T4TOP * pes_nfc_ptx_get_ndef_comp(void);
+
+/** Open the SDK T5T NDEF component. Call after activating a T5T
+ *  (ISO 15693) card, before PES_NFCCardReader_ReadCardInfo/WriteNDEF. */
+pes_status_t pes_nfc_ptx_ndef_t5t_open(void);
+/** Close the SDK T5T NDEF component (call after NDEF operations are done). */
+void pes_nfc_ptx_ndef_t5t_close(void);
+/** Get a pointer to the static ptxNDEF_T5TOP_t instance. Valid after ndef_t5t_open(). */
+struct ptxNDEF_T5TOP * pes_nfc_ptx_get_ndef_t5t_comp(void);
 
 /**********************************************************************************************************************
  * Internal forward declarations

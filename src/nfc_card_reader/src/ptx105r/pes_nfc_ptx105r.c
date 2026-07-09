@@ -23,8 +23,16 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "hal_data.h"
-/* PTX NFC SDK — used directly instead of the RM_NFC_READER_PTX FSP API */
+/* PTX NFC SDK — used directly instead of the RM_NFC_READER_PTX FSP API.
+ * NOTE: We intentionally use only the lean ptxNDEF_T4TOP/T5TOP (Type-4/
+ * Type-5 Tag NDEF Operation) components instead of the generic ptxNDEF
+ * dispatcher. The generic ptxNDEF_Open() unconditionally links
+ * T2TOP+T3TOP+T4TOP+T5TOP (~13 KB flash) which does not fit this MCU's
+ * flash budget. T2T NDEF read/write remains hand-rolled
+ * (pes_ndef_read.c/pes_ndef_write.c); T3T NDEF is not supported. */
 #include "ptx_IOT_READER.h"
+#include "ptxNDEF_T4TOP.h"
+#include "ptxNDEF_T5TOP.h"
 #include "ptxPLAT_GPIO.h"
 #include "ptxPLAT_SPI.h"
 #include "ptxPLAT_TIMER.h"
@@ -42,6 +50,22 @@ static bool g_start_temp_calibration = true;
 
 /* Tracks whether pes_nfc_ptx_open() succeeded (replaces FSP ctrl->open) */
 static bool g_ptx_opened = false;
+
+/***********************************************************************************************************************
+ * SDK T4T NDEF component — static allocation (shared TX/RX buffers).
+ * Lean alternative to the generic ptxNDEF_t dispatcher (see note above).
+ **********************************************************************************************************************/
+static ptxNDEF_T4TOP_t  g_t4t_ndef_comp;
+static uint8_t          g_ndef_tx_buf[PES_NFC_PTX_TX_BUF_SIZE];
+static uint8_t          g_ndef_rx_buf[PES_NFC_PTX_RX_BUF_SIZE];
+
+/***********************************************************************************************************************
+ * SDK T5T NDEF component — static allocation. Shares the TX/RX buffers
+ * above; needs a small dedicated work buffer (block-sized scratch area).
+ **********************************************************************************************************************/
+#define T5T_WORK_BUF_SIZE  32U
+static ptxNDEF_T5TOP_t  g_t5t_ndef_comp;
+static uint8_t          g_t5t_work_buf[T5T_WORK_BUF_SIZE];
 
 /***********************************************************************************************************************
  * Interrupt-driven wait support
@@ -491,4 +515,76 @@ void pes_nfc_ptx_wake_waiting_task(void)
     {
         (void)xTaskNotifyGive(task);
     }
+}
+
+/***********************************************************************************************************************
+ * SDK T4T NDEF component lifecycle (lean — see include-block note above)
+ *
+ * Call pes_nfc_ptx_ndef_open() once per card activation (protocol ==
+ * PES_NFC_PROT_ISODEP), and pes_nfc_ptx_ndef_close() after NDEF
+ * operations are finished.
+ **********************************************************************************************************************/
+
+pes_status_t pes_nfc_ptx_ndef_open(void)
+{
+    ptxNDEF_T4TOP_InitParams_t params;
+    (void)memset(&params, 0, sizeof(params));
+
+    params.RxBuffer                  = g_ndef_rx_buf;
+    params.RxBufferSize              = sizeof(g_ndef_rx_buf);
+    params.T4TInitParams.IotRd       = g_nfc_reader_ptx0_cfg.iot_reader_context;
+    params.T4TInitParams.TxBuffer    = g_ndef_tx_buf;
+    params.T4TInitParams.TxBufferSize = sizeof(g_ndef_tx_buf);
+
+    ptxStatus_t st = ptxNDEF_T4TOpOpen(&g_t4t_ndef_comp, &params);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+}
+
+void pes_nfc_ptx_ndef_close(void)
+{
+    (void)ptxNDEF_T4TOpClose(&g_t4t_ndef_comp);
+}
+
+ptxNDEF_T4TOP_t * pes_nfc_ptx_get_ndef_comp(void)
+{
+    return &g_t4t_ndef_comp;
+}
+
+/***********************************************************************************************************************
+ * SDK T5T NDEF component lifecycle (lean — see include-block note above)
+ *
+ * Call pes_nfc_ptx_ndef_t5t_open() once per card activation (protocol ==
+ * PES_NFC_PROT_T5T), and pes_nfc_ptx_ndef_t5t_close() after NDEF
+ * operations are finished.
+ **********************************************************************************************************************/
+
+pes_status_t pes_nfc_ptx_ndef_t5t_open(void)
+{
+    ptxNDEF_T5TOP_InitParams_t params;
+    (void)memset(&params, 0, sizeof(params));
+
+    params.RxBuffer                   = g_ndef_rx_buf;
+    params.RxBufferSize               = sizeof(g_ndef_rx_buf);
+    params.WorkBuffer                 = g_t5t_work_buf;
+    params.WorkBufferSize             = sizeof(g_t5t_work_buf);
+    params.T5TInitParams.IotRd        = g_nfc_reader_ptx0_cfg.iot_reader_context;
+    params.T5TInitParams.TxBuffer     = g_ndef_tx_buf;
+    params.T5TInitParams.TxBufferSize = sizeof(g_ndef_tx_buf);
+
+    /* Non-addressed mode: correct for the common single-tag-in-field
+     * scenario. (Multi-tag V-type addressing would need the active card's
+     * UID here — omitted to save flash on this tight-budget MCU.) */
+
+    ptxStatus_t st = ptxNDEF_T5TOpOpen(&g_t5t_ndef_comp, &params);
+    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+}
+
+void pes_nfc_ptx_ndef_t5t_close(void)
+{
+    (void)ptxNDEF_T5TOpClose(&g_t5t_ndef_comp);
+}
+
+ptxNDEF_T5TOP_t * pes_nfc_ptx_get_ndef_t5t_comp(void)
+{
+    return &g_t5t_ndef_comp;
 }

@@ -13,7 +13,6 @@
 #include "bsp_pin_cfg.h"
 #include "r_ioport.h"
 #include <string.h>
-#include "SEGGER_RTT.h"
 
 /*
  * ####################################################################################################################
@@ -108,8 +107,6 @@ ptxStatus_t ptxPLAT_SPI_Open (rm_comms_instance_t * spi_comms_instance, ioport_i
                               BSP_IO_PORT_01_PIN_03,
                               ((uint32_t)IOPORT_CFG_PORT_DIRECTION_OUTPUT | (uint32_t)IOPORT_CFG_PORT_OUTPUT_HIGH));
 
-        SEGGER_RTT_printf(0, "[SPI] Pin mux configured: MISO=P100 MOSI=P101 SCK=P102 CS=P103\n");
-
         status = (ptxStatus_t) spi_comms_instance->p_api->open(spi_comms_instance->p_ctrl, spi_comms_instance->p_cfg);
 
         setting_spi_port.SpiInstance      = spi_comms_instance;
@@ -122,8 +119,6 @@ ptxStatus_t ptxPLAT_SPI_Open (rm_comms_instance_t * spi_comms_instance, ioport_i
         setting_spi_port.Nss.PinNumber    = (uint16_t) BSP_IO_PORT_01_PIN_03;
         setting_spi_port.Nss.PortInstance = gpio_instance;
         spi_ctx.SpiPortUsed               = &setting_spi_port;
-
-        SEGGER_RTT_printf(0, "[SPI] Open status=0x%04X, CS pin=0x%04X\n", status, (unsigned)BSP_IO_PORT_01_PIN_03);
     }
     else
     {

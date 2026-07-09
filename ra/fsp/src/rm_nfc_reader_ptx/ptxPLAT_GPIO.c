@@ -14,7 +14,6 @@
 #include "r_ioport.h"
 #include "r_icu.h"
 #include <string.h>
-#include "SEGGER_RTT.h"
 
 /*
  * ####################################################################################################################
@@ -63,7 +62,6 @@ ptxStatus_t ptxPLAT_GPIO_Open (ioport_instance_t       * gpio_instance,
         if ((bsp_io_port_pin_t)BSP_IO_PORT_FF_PIN_FF == interrupt_pin)
         {
             gpio_irq_ctx.PortPin = (bsp_io_port_pin_t)BSP_IO_PORT_00_PIN_15;
-            SEGGER_RTT_printf(0, "[GPIO] IRQ pin overridden: 0xFFFF -> 0x%04X\n", (unsigned)BSP_IO_PORT_00_PIN_15);
         }
         else
         {
@@ -83,7 +81,6 @@ ptxStatus_t ptxPLAT_GPIO_Open (ioport_instance_t       * gpio_instance,
                               gpio_irq_ctx.PortPin,
                               ((uint32_t)IOPORT_CFG_IRQ_ENABLE
                              | (uint32_t)IOPORT_CFG_PORT_DIRECTION_INPUT));
-        SEGGER_RTT_printf(0, "[GPIO] IRQ pin 0x%04X configured as input+IRQ\n", (unsigned)gpio_irq_ctx.PortPin);
     }
     else
     {
@@ -419,5 +416,4 @@ void ptxPLAT_GPIO_IsrCallback (external_irq_callback_args_t * p_args)
      * calls ptxPLAT_TriggerRx() from thread context where SPI I/O
      * works normally.
      */
-    SEGGER_RTT_printf(0, "[ISR] ICU IRQ7 fired\n");
 }

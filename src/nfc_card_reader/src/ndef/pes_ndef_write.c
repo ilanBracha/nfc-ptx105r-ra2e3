@@ -1,8 +1,10 @@
 /**
  * pes_ndef_write.c
  *
- * NDEF message writing / erasing for NFC Forum Type 2 and Type 4 Tags
- * using raw protocol commands via the HAL data_exchange vtable.
+ * NDEF message writing / erasing for NFC Forum Type 2 Tags (hand-rolled,
+ * small footprint) and Type 4/Type 5 Tags (via the PTX SDK's lean
+ * ptxNDEF_T4TOP / ptxNDEF_T5TOP components). T3T NDEF write is not
+ * supported — see pes_ndef_read.c for the flash-budget rationale.
  * Also provides PES_NDEF_BuildTextRecord() for constructing RTD-Text records.
  *
  * NO printing — returns pes_status_t only.
@@ -10,6 +12,9 @@
 
 #include "pes_nfc_card_reader.h"
 #include "pes_nfc_ptx105r.h"
+#include "ptx_IOT_READER.h"
+#include "ptxNDEF_T4TOP.h"
+#include "ptxNDEF_T5TOP.h"
 #include <string.h>
 
 /***********************************************************************************************************************
@@ -18,108 +23,59 @@
 #define RX_BUF_SIZE   PES_NFC_PTX_RX_BUF_SIZE
 
 /***********************************************************************************************************************
- * Internal helper: T4T APDU exchange with SW=9000 check
- **********************************************************************************************************************/
-static bool t4t_exchange(uint8_t *cmd, uint32_t cmd_len,
-                         uint8_t *rx, uint32_t *rx_len)
-{
-    *rx_len = RX_BUF_SIZE;
-    pes_status_t st = pes_nfc_ptx_data_exchange(cmd, cmd_len,
-                                                rx, rx_len);
-    if ((PES_OK != st) || (*rx_len < 2u) ||
-        (0x90u != rx[*rx_len - 2u]) || (0x00u != rx[*rx_len - 1u]))
-    {
-        return false;
-    }
-    return true;
-}
-
-/***********************************************************************************************************************
- * Type 4 Tag NDEF Write/Erase
+ * Type 4 Tag NDEF Write/Erase — via PTX SDK ptxNDEF_T4TOP component
  **********************************************************************************************************************/
 
 static pes_status_t write_t4t_ndef(const uint8_t *ndef, uint16_t ndef_len)
 {
-    uint8_t rx[RX_BUF_SIZE];
-    uint32_t rx_len;
-    uint8_t cmd[5u + 248u];
+    pes_status_t st = pes_nfc_ptx_ndef_open();
+    if (PES_OK != st) { return st; }
 
-    if (ndef_len > 248u) { return PES_ERR_INVALID_CFG; }
+    struct ptxNDEF_T4TOP *t4t = pes_nfc_ptx_get_ndef_comp();
 
-    /* SELECT NDEF Tag Application */
-    static const uint8_t sel_app[] = {
-        0x00,0xA4,0x04,0x00,0x07,
-        0xD2,0x76,0x00,0x00,0x85,0x01,0x01,0x00
-    };
-    if (!t4t_exchange((uint8_t *)sel_app, (uint32_t)sizeof(sel_app),
-                      rx, &rx_len))
+    /* CheckMessage first — the SDK needs CC info before writing */
+    ptxStatus_t ptx_st = ptxNDEF_T4TOpCheckMessage(t4t);
+    if (ptxStatus_Success != ptx_st)
     {
+        pes_nfc_ptx_ndef_close();
         return PES_ERR_NOT_FOUND;
     }
 
-    /* SELECT CC */
-    static const uint8_t sel_cc[] = {0x00,0xA4,0x00,0x0C,0x02,0xE1,0x03};
-    if (!t4t_exchange((uint8_t *)sel_cc, (uint32_t)sizeof(sel_cc),
-                      rx, &rx_len))
-    {
-        return PES_ERR_NOT_FOUND;
-    }
+    uint32_t wlen = ((NULL != ndef) && (ndef_len > 0u)) ? (uint32_t)ndef_len : 0u;
+    ptx_st = ptxNDEF_T4TOpWriteMessage(t4t, (uint8_t *)(uintptr_t)ndef, wlen);
 
-    /* READ CC -> learn NDEF file id and check write access */
-    static const uint8_t read_cc[] = {0x00,0xB0,0x00,0x00,0x0F};
-    if (!t4t_exchange((uint8_t *)read_cc, (uint32_t)sizeof(read_cc),
-                      rx, &rx_len) || (rx_len < 17u))
-    {
-        return PES_ERR_NOT_FOUND;
-    }
-    uint8_t fid_hi = rx[9];
-    uint8_t fid_lo = rx[10];
-    if (0x00u != rx[14])
-    {
-        return PES_ERR_INVALID_CFG;  /* tag is read-only */
-    }
-
-    /* SELECT NDEF file */
-    cmd[0]=0x00; cmd[1]=0xA4; cmd[2]=0x00; cmd[3]=0x0C;
-    cmd[4]=0x02; cmd[5]=fid_hi; cmd[6]=fid_lo;
-    if (!t4t_exchange(cmd, 7u, rx, &rx_len))
-    {
-        return PES_ERR_NOT_FOUND;
-    }
-
-    /* UPDATE BINARY @0: NLEN = 0 (erase / start of partial write) */
-    cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x00;
-    cmd[4]=0x02; cmd[5]=0x00; cmd[6]=0x00;
-    if (!t4t_exchange(cmd, 7u, rx, &rx_len))
-    {
-        return PES_ERR_INTERNAL;
-    }
-
-    if (0u == ndef_len) { return PES_OK; }  /* erase complete */
-
-    /* UPDATE BINARY @2: NDEF body */
-    cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x02;
-    cmd[4]=(uint8_t)ndef_len;
-    (void)memcpy(&cmd[5], ndef, ndef_len);
-    if (!t4t_exchange(cmd, (uint32_t)(5u + ndef_len), rx, &rx_len))
-    {
-        return PES_ERR_INTERNAL;
-    }
-
-    /* UPDATE BINARY @0: NLEN = ndef_len (commit, big-endian) */
-    cmd[0]=0x00; cmd[1]=0xD6; cmd[2]=0x00; cmd[3]=0x00; cmd[4]=0x02;
-    cmd[5]=(uint8_t)(ndef_len >> 8);
-    cmd[6]=(uint8_t)(ndef_len & 0xFFu);
-    if (!t4t_exchange(cmd, 7u, rx, &rx_len))
-    {
-        return PES_ERR_INTERNAL;
-    }
-
-    return PES_OK;
+    pes_nfc_ptx_ndef_close();
+    return (ptxStatus_Success == ptx_st) ? PES_OK : PES_ERR_INTERNAL;
 }
 
 /***********************************************************************************************************************
- * Type 2 Tag NDEF Write/Erase
+ * Type 5 Tag NDEF Write/Erase — via PTX SDK ptxNDEF_T5TOP component
+ **********************************************************************************************************************/
+
+static pes_status_t write_t5t_ndef(const uint8_t *ndef, uint16_t ndef_len)
+{
+    pes_status_t st = pes_nfc_ptx_ndef_t5t_open();
+    if (PES_OK != st) { return st; }
+
+    struct ptxNDEF_T5TOP *t5t = pes_nfc_ptx_get_ndef_t5t_comp();
+
+    /* CheckMessage first — the SDK needs CC info before writing */
+    ptxStatus_t ptx_st = ptxNDEF_T5TOpCheckMessage(t5t);
+    if (ptxStatus_Success != ptx_st)
+    {
+        pes_nfc_ptx_ndef_t5t_close();
+        return PES_ERR_NOT_FOUND;
+    }
+
+    uint32_t wlen = ((NULL != ndef) && (ndef_len > 0u)) ? (uint32_t)ndef_len : 0u;
+    ptx_st = ptxNDEF_T5TOpWriteMessage(t5t, (uint8_t *)(uintptr_t)ndef, wlen);
+
+    pes_nfc_ptx_ndef_t5t_close();
+    return (ptxStatus_Success == ptx_st) ? PES_OK : PES_ERR_INTERNAL;
+}
+
+/***********************************************************************************************************************
+ * Type 2 Tag NDEF Write/Erase — hand-rolled (small footprint, proven)
  **********************************************************************************************************************/
 
 static pes_status_t write_t2t_ndef(const uint8_t *ndef, uint16_t ndef_len)
@@ -186,6 +142,9 @@ pes_status_t PES_NFCCardReader_WriteNDEF(pes_nfc_protocol_t protocol,
 
         case PES_NFC_PROT_ISODEP:
             return write_t4t_ndef(ndef, ndef_len);
+
+        case PES_NFC_PROT_T5T:
+            return write_t5t_ndef(ndef, ndef_len);
 
         default:
             return PES_ERR_INVALID_CFG;  /* protocol not supported */

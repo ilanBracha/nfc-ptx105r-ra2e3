@@ -3,7 +3,6 @@
 #include "auc_nfc_card_reader_cli.h"
 #include "auc_nfc_card_reader.h"
 #include "pes_nfc_card_reader.h"
-#include "SEGGER_RTT.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -35,7 +34,7 @@ void hal_entry(void)
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
     (void) xTask;
-    SEGGER_RTT_printf(0, "\n*** STACK OVERFLOW in task \"%s\" ***\n", pcTaskName);
+    (void) pcTaskName;
     __BKPT(0);
     for (;;) {}
 }

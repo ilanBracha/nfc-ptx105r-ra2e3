@@ -40,7 +40,7 @@
 #define EVENT_LOOP_WAIT_CHUNK_MS 500U
 
 /* Async worker task configuration (static allocation — no heap) */
-#define ASYNC_TASK_STACK_WORDS   (4096U / sizeof(StackType_t))
+#define ASYNC_TASK_STACK_WORDS   (3072U / sizeof(StackType_t))
 #define ASYNC_TASK_PRIORITY      1U
 #define ASYNC_TASK_NAME          "PES_NFC"
 
@@ -229,10 +229,10 @@ static pes_status_t run_event_loop(const pes_nfc_card_reader_cfg_t *cfg,
 
                     /* Build summary string and fire per-card event */
                     (void)pes_card_summary_build(res, summary, sizeof(summary));
+
                     if (NULL != cfg->on_card_event)
                     {
-                        cfg->on_card_event(PES_OK, res, summary,
-                                           cfg->p_card_event_context);
+                        cfg->on_card_event(PES_OK, res, summary, cfg->p_card_event_context);
                     }
                 }
                 else

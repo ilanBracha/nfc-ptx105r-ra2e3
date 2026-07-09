@@ -110,6 +110,7 @@ void auc_nfc_card_reader_utils_blink_for_card_type (auc_nfc_card_reader_utils_ca
 
     /* Clamp to valid range; fall back to "all LEDs" if unknown. */
     uint32_t idx = (uint32_t)cardType;
+
     if (idx >= (uint32_t)(sizeof(cfg) / sizeof(cfg[0])))
     {
         idx = 0u;
