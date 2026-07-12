@@ -1,7 +1,7 @@
 #include "hal_data.h"
-#include "auc_nfc_card_reader_log.h"
-#include "auc_nfc_card_reader_cli.h"
-#include "auc_nfc_card_reader.h"
+#include "app_main_log.h"
+#include "app_main_cli.h"
+#include "app_main.h"
 #include "pes_nfc_card_reader.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -16,10 +16,10 @@ FSP_CPP_FOOTER
  **********************************************************************************************************************/
 void hal_entry(void)
 {
-    /* Start the IoT Reader application.  Under FreeRTOS, auc_nfc_card_reader_entry()
+    /* Start the IoT Reader application.  Under FreeRTOS, app_main_entry()
      * creates the NFC reader task and calls vTaskStartScheduler() — it
      * does not return. */
-    auc_nfc_card_reader_entry();
+    app_main_entry();
 
 #if BSP_TZ_SECURE_BUILD
     /* Enter non-secure code */

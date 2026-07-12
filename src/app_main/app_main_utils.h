@@ -5,14 +5,14 @@
  *      Author: a5154862
  */
 
-#ifndef AUC_NFC_CARD_READER_UTILS_H_
-#define AUC_NFC_CARD_READER_UTILS_H_
+#ifndef APP_MAIN_UTILS_H_
+#define APP_MAIN_UTILS_H_
 
 #include "hal_data.h"
 
-#define AUC_NFC_CARD_READER_UTILS_LED_RD     BSP_IO_PORT_09_PIN_15
-#define AUC_NFC_CARD_READER_UTILS_LED_ACTV   BSP_IO_LEVEL_HIGH
-#define AUC_NFC_CARD_READER_UTILS_LED_INACTV BSP_IO_LEVEL_LOW
+#define APP_MAIN_UTILS_LED_RD     BSP_IO_PORT_09_PIN_15
+#define APP_MAIN_UTILS_LED_ACTV   BSP_IO_LEVEL_HIGH
+#define APP_MAIN_UTILS_LED_INACTV BSP_IO_LEVEL_LOW
 
 /**
  * Selects which LEDs light up and for how long on card detection.
@@ -27,24 +27,24 @@ typedef enum
     UserBoardUtils_CardType_B,      /**< Type-B: LED1 only,  20 ms */
     UserBoardUtils_CardType_F,      /**< Type-F: LED2 only,  20 ms */
     UserBoardUtils_CardType_V,      /**< Type-V: LED3 only,  20 ms */
-} auc_nfc_card_reader_utils_card_type_t;
+} app_main_utils_card_type_t;
 
     /**
      * \brief Set the red status led
      */
-extern void auc_nfc_card_reader_utils_set_stat_led(uint8_t status);
+extern void app_main_utils_set_stat_led(uint8_t status);
 
     /**
      * \brief Blink all on-board user LEDs once on card detection:
      *        LEDs turn ON, hold for 500 µs, then turn OFF.
      */
-extern void auc_nfc_card_reader_utils_blink_leds(void);
+extern void app_main_utils_blink_leds(void);
 
     /**
      * \brief Blink LEDs according to detected card technology type.
      *        Type A -> all 3 LEDs 10 ms | B -> LED1 20 ms |
      *        F -> LED2 20 ms | V -> LED3 20 ms
      */
-extern void auc_nfc_card_reader_utils_blink_for_card_type(auc_nfc_card_reader_utils_card_type_t cardType);
+extern void app_main_utils_blink_for_card_type(app_main_utils_card_type_t cardType);
 
-#endif /* AUC_NFC_CARD_READER_UTILS_H_ */
+#endif /* APP_MAIN_UTILS_H_ */

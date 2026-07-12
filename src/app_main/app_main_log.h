@@ -1,5 +1,5 @@
 /*
- * auc_nfc_card_reader_log.h
+ * app_main_log.h
  *
  * Tiny helper that pipes debug strings out via the FSP-generated `g_uart0`
  * (r_sci_uart) instance.  Used as an additional sink for ptxCommon_PrintF
@@ -7,8 +7,8 @@
  * connected to the PMOD1/Arduino TXD pin (P1_09) in addition to SEGGER RTT.
  */
 
-#ifndef AUC_NFC_CARD_READER_LOG_H_
-#define AUC_NFC_CARD_READER_LOG_H_
+#ifndef APP_MAIN_LOG_H_
+#define APP_MAIN_LOG_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -23,54 +23,54 @@ extern "C" {
  * forwards each received byte to this function instead of (in addition to)
  * the internal RX ring buffer. The callback runs in ISR context.
  */
-typedef void (* auc_nfc_card_reader_log_rx_callback_t)(uint8_t byte);
+typedef void (* app_main_log_rx_callback_t)(uint8_t byte);
 
 /**
  * Open g_uart0 and register the internal TX/RX callback.
  * Safe to call multiple times: the second and later calls are no-ops.
  * Returns 0 on success, non-zero on FSP error.
  */
-int  auc_nfc_card_reader_log_init(void);
+int  app_main_log_init(void);
 
 /**
  * Register a callback that will be invoked from the UART RX ISR for every
  * received byte. Pass NULL to unregister. Only one callback is supported.
  * The callback runs in interrupt context — keep it short.
  */
-void auc_nfc_card_reader_log_rx_callback(auc_nfc_card_reader_log_rx_callback_t cb);
+void app_main_log_rx_callback(app_main_log_rx_callback_t cb);
 
 /**
  * Blocking write of `len` bytes through g_uart0.
  * Returns when the SCI peripheral has finished shifting out the last byte.
  * Silently drops data if Init() has not been called or failed.
  */
-void auc_nfc_card_reader_log_write(const uint8_t * buf, size_t len);
+void app_main_log_write(const uint8_t * buf, size_t len);
 
 /**
  * Convenience wrapper: blocking write of a NUL-terminated string.
  */
-void auc_nfc_card_reader_log_puts(const char * s);
+void app_main_log_puts(const char * s);
 
 /**
  * Non-blocking: returns the number of received bytes currently waiting in the
  * internal RX ring buffer. Safe to call from main context.
  */
-size_t auc_nfc_card_reader_log_rx_available(void);
+size_t app_main_log_rx_available(void);
 
 /**
  * Non-blocking: pop one byte from the RX ring buffer.
  * Returns 1 if a byte was written to *out, 0 if the buffer is empty.
  */
-int auc_nfc_card_reader_log_rx_get(uint8_t * out);
+int app_main_log_rx_get(uint8_t * out);
 
 /**
  * Print formatted card-info block (tag type, UID, size, NDEF) to both
  * RTT and UART.  Pure I/O — no LED or board interaction.
  */
-void auc_nfc_card_reader_log_print_card_info(const pes_nfc_card_result_t * result);
+void app_main_log_print_card_info(const pes_nfc_card_result_t * result);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* AUC_NFC_CARD_READER_LOG_H_ */
+#endif /* APP_MAIN_LOG_H_ */
