@@ -19,7 +19,7 @@
  *    here via R_IOPORT_PinCfg, mirroring the SPI workaround in ptxPLAT_SPI.c
  *    -- the generated g_bsp_pin_cfg does not include those pins.
  */
-
+#include <stdio.h>
 #include "app_main_log.h"
 #include "hal_data.h"
 #include "r_ioport.h"
@@ -511,11 +511,44 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
  * to both RTT and UART.  Pure I/O — no LED or board interaction; the caller
  * is responsible for any visual feedback (blink, etc.).
  */
-void app_main_log_print_card_info(const pes_nfc_card_result_t *result)
+void app_main_log_print_card_info(const pes_nfc_card_result_t * result)
 {
-    if (NULL == result) { return; }
+    char rf_tech[16];
 
-    ptxCommon_PrintF("============ CARD INFO =======================\n");
+    if (NULL == result)
+    {
+        return;
+    }
+
+    switch (result->card_type)
+    {
+        case PES_NFC_CARD_TYPE_ISO14443A:
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_2:
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4A:
+            snprintf(rf_tech, sizeof(rf_tech), "TYPE A");
+            break;
+
+        case PES_NFC_CARD_TYPE_ISO14443B:
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
+            snprintf(rf_tech, sizeof(rf_tech), "TYPE B");
+            break;
+
+        case PES_NFC_CARD_TYPE_FELICA:
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
+            snprintf(rf_tech, sizeof(rf_tech), "TYPE F");
+            break;
+
+        case PES_NFC_CARD_TYPE_ISO15693:
+        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
+            snprintf(rf_tech, sizeof(rf_tech), "TYPE V");
+            break;
+
+        default:
+            snprintf(rf_tech, sizeof(rf_tech), "UNKNOWN");
+            break;
+    }
+
+    ptxCommon_PrintF("RF Technology  : "APP_MAIN_LOG_COL_BRIGHT_CYAN "%s\n" APP_MAIN_LOG_COL_RESET, rf_tech);
 
     /* Tag Type */
     ptxCommon_PrintF("Tag Type       : %s\n",

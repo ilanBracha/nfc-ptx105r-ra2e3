@@ -201,7 +201,7 @@ static void on_nfc_read_done (pes_status_t status,
         return;
     }
 
-    ptxCommon_PrintF(RTT_CTRL_TEXT_BRIGHT_GREEN "\n\n%s" RTT_CTRL_RESET "\n",
+    ptxCommon_PrintF(APP_MAIN_LOG_COL_BRIGHT_GREEN "\n\n%s" APP_MAIN_LOG_COL_RESET "\n",
                      (NULL != summary) ? summary : "CARD DETECTED!");
 
     app_main_card_event(result);

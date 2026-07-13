@@ -18,6 +18,12 @@
 extern "C" {
 #endif
 
+#define APP_MAIN_LOG_COL_RESET        "\x1B[0m"
+#define APP_MAIN_LOG_COL_CLEAR        "\x1B[2J"
+#define APP_MAIN_LOG_COL_BRIGHT_RED   "\x1B[1;31m"
+#define APP_MAIN_LOG_COL_BRIGHT_GREEN "\x1B[1;32m"
+#define APP_MAIN_LOG_COL_BRIGHT_CYAN  "\x1B[1;36m"
+
 /**
  * Signature of an optional RX byte callback. When registered, the UART ISR
  * forwards each received byte to this function instead of (in addition to)
