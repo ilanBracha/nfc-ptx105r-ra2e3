@@ -81,9 +81,9 @@ static volatile uint16_t s_rx_head; /* written by ISR (producer) */
 static volatile uint16_t s_rx_tail; /* written by main (consumer) */
 
 /* TX ring buffer (main producer / ISR consumer). Size MUST be a power of 2.
- * Big enough to hold a full ptxCommon_PrintF line (~256 B) plus some CLI echo
+ * Big enough to hold a full NDEF hex dump (512 bytes * 3 chars + headers)
  * so logging never blocks the main loop. Increase if you see drops. */
-#define APP_MAIN_LOG_TX_BUF_SIZE   512u
+#define APP_MAIN_LOG_TX_BUF_SIZE   2048u
 #define APP_MAIN_LOG_TX_BUF_MASK   (APP_MAIN_LOG_TX_BUF_SIZE - 1u)
 
 static volatile uint8_t  s_tx_buf[APP_MAIN_LOG_TX_BUF_SIZE];
@@ -451,7 +451,7 @@ void ptxCommon_PrintF(const char *format, ...)
 
     /* UART only (RTT sink removed to reclaim flash): format into stack
      * buffer and send. */
-    char buf[128];
+    char buf[256];
     int len = app_main_log_vsnprintf(buf, sizeof(buf), format, ap);
 
     if (len > 0)
