@@ -1,5 +1,5 @@
 /**
- * pes_nfc_ptx105r.c
+ * rs_nfc_ptx105r.c
  *
  * Implementation for the Renesas PTX105R NFC reader, calling the Renesas
  * PTX NFC SDK (ptxIoTRd_* / ptx_IOT_READER.h) directly instead of going
@@ -9,7 +9,7 @@
  * FSP-generated peripheral instances in g_nfc_reader_ptx0_cfg.
  *
  * Each function is a direct, non-static entry point declared in
- * pes_nfc_ptx105r.h and called by name from the rest of the PES NFC Card
+ * rs_nfc_ptx105r.h and called by name from the rest of the RS NFC Card
  * Reader module — no function-pointer vtable indirection.
  *
  * There is no local state-machine (open/idle/discovered/activated) here:
@@ -17,8 +17,8 @@
  * re-implementing the FSP wrapper's defensive state checks.
  */
 
-#include "pes_nfc_ptx105r.h"
-#include "pes_nfc_ptx105r_board.h"
+#include "rs_nfc_ptx105r.h"
+#include "rs_nfc_ptx105r_board.h"
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -29,7 +29,7 @@
  * dispatcher. The generic ptxNDEF_Open() unconditionally links
  * T2TOP+T3TOP+T4TOP+T5TOP (~13 KB flash) which does not fit this MCU's
  * flash budget. T2T NDEF read/write remains hand-rolled
- * (pes_ndef_read.c/pes_ndef_write.c); T3T NDEF is not supported. */
+ * (rs_ndef_read.c/rs_ndef_write.c); T3T NDEF is not supported. */
 #include "ptx_IOT_READER.h"
 #include "ptxNDEF_T4TOP.h"
 #include "ptxNDEF_T5TOP.h"
@@ -48,7 +48,7 @@
 /* Only perform temperature-sensor calibration once per power cycle */
 static bool g_start_temp_calibration = true;
 
-/* Tracks whether pes_nfc_ptx_open() succeeded (replaces FSP ctrl->open) */
+/* Tracks whether rs_nfc_ptx_open() succeeded (replaces FSP ctrl->open) */
 static bool g_ptx_opened = false;
 
 /***********************************************************************************************************************
@@ -56,8 +56,8 @@ static bool g_ptx_opened = false;
  * Lean alternative to the generic ptxNDEF_t dispatcher (see note above).
  **********************************************************************************************************************/
 static ptxNDEF_T4TOP_t  g_t4t_ndef_comp;
-static uint8_t          g_ndef_tx_buf[PES_NFC_PTX_TX_BUF_SIZE];
-static uint8_t          g_ndef_rx_buf[PES_NFC_PTX_RX_BUF_SIZE];
+static uint8_t          g_ndef_tx_buf[RS_NFC_PTX_TX_BUF_SIZE];
+static uint8_t          g_ndef_rx_buf[RS_NFC_PTX_RX_BUF_SIZE];
 
 /***********************************************************************************************************************
  * SDK T5T NDEF component — static allocation. Shares the TX/RX buffers
@@ -75,7 +75,7 @@ static volatile TaskHandle_t g_waiting_task = NULL;
 
 static void ptx105r_irq_wake_cb(external_irq_callback_args_t *p_args)
 {
-    PES_COMMON_UNUSED(p_args);
+    RS_COMMON_UNUSED(p_args);
     if (NULL != g_waiting_task)
     {
         BaseType_t higher_prio_task_woken = pdFALSE;
@@ -88,45 +88,45 @@ static void ptx105r_irq_wake_cb(external_irq_callback_args_t *p_args)
  * Internal helpers
  **********************************************************************************************************************/
 
-static pes_nfc_card_type_t map_card_type(ptxIoTRd_CardParams_t *card,
+static rs_nfc_card_type_t map_card_type(ptxIoTRd_CardParams_t *card,
                                          ptxIoTRd_CardProtocol_t prot)
 {
-    if (NULL == card) { return PES_NFC_CARD_TYPE_UNKNOWN; }
+    if (NULL == card) { return RS_NFC_CARD_TYPE_UNKNOWN; }
 
     switch (card->TechType)
     {
         case Tech_TypeA:
             switch (prot)
             {
-                case Prot_T2T:    return PES_NFC_CARD_TYPE_NFC_TAG_TYPE_2;
-                case Prot_ISODEP: return PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4A;
-                default:          return PES_NFC_CARD_TYPE_ISO14443A;
+                case Prot_T2T:    return RS_NFC_CARD_TYPE_NFC_TAG_TYPE_2;
+                case Prot_ISODEP: return RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4A;
+                default:          return RS_NFC_CARD_TYPE_ISO14443A;
             }
         case Tech_TypeB:
-            return (Prot_ISODEP == prot) ? PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B
-                                         : PES_NFC_CARD_TYPE_ISO14443B;
+            return (Prot_ISODEP == prot) ? RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4B
+                                         : RS_NFC_CARD_TYPE_ISO14443B;
         case Tech_TypeF:
-            return (Prot_T3T == prot) ? PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3
-                                      : PES_NFC_CARD_TYPE_FELICA;
+            return (Prot_T3T == prot) ? RS_NFC_CARD_TYPE_NFC_TAG_TYPE_3
+                                      : RS_NFC_CARD_TYPE_FELICA;
         case Tech_TypeV:
-            return (Prot_T5T == prot) ? PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5
-                                      : PES_NFC_CARD_TYPE_ISO15693;
+            return (Prot_T5T == prot) ? RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5
+                                      : RS_NFC_CARD_TYPE_ISO15693;
         default:
-            return PES_NFC_CARD_TYPE_UNKNOWN;
+            return RS_NFC_CARD_TYPE_UNKNOWN;
     }
 }
 
-static pes_nfc_protocol_t map_protocol(ptxIoTRd_CardProtocol_t prot)
+static rs_nfc_protocol_t map_protocol(ptxIoTRd_CardProtocol_t prot)
 {
     switch (prot)
     {
-        case Prot_T2T:       return PES_NFC_PROT_T2T;
-        case Prot_T3T:       return PES_NFC_PROT_T3T;
-        case Prot_ISODEP:    return PES_NFC_PROT_ISODEP;
-        case Prot_NFCDEP:    return PES_NFC_PROT_NFCDEP;
-        case Prot_T5T:       return PES_NFC_PROT_T5T;
-        case Prot_Extension: return PES_NFC_PROT_EXTENSION;
-        default:             return PES_NFC_PROT_UNDEFINED;
+        case Prot_T2T:       return RS_NFC_PROT_T2T;
+        case Prot_T3T:       return RS_NFC_PROT_T3T;
+        case Prot_ISODEP:    return RS_NFC_PROT_ISODEP;
+        case Prot_NFCDEP:    return RS_NFC_PROT_NFCDEP;
+        case Prot_T5T:       return RS_NFC_PROT_T5T;
+        case Prot_Extension: return RS_NFC_PROT_EXTENSION;
+        default:             return RS_NFC_PROT_UNDEFINED;
     }
 }
 
@@ -170,7 +170,7 @@ static void extract_uid(ptxIoTRd_CardParams_t *card, uint8_t *uid, uint8_t *uid_
         case Tech_TypeA:
         {
             uint8_t len = card->TechParams.CardAParams.NFCID1_LEN;
-            if (len > PES_NFC_UID_MAX_BYTES) { len = PES_NFC_UID_MAX_BYTES; }
+            if (len > RS_NFC_UID_MAX_BYTES) { len = RS_NFC_UID_MAX_BYTES; }
             (void)memcpy(uid, card->TechParams.CardAParams.NFCID1, len);
             *uid_len = len;
             break;
@@ -195,32 +195,32 @@ static void extract_uid(ptxIoTRd_CardParams_t *card, uint8_t *uid, uint8_t *uid_
     }
 }
 
-static pes_status_t ptx105r_discover_status(pes_nfc_disc_status_t *out_status)
+static rs_status_t ptx105r_discover_status(rs_nfc_disc_status_t *out_status)
 {
-    if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
+    if (NULL == out_status) { return RS_ERR_INVALID_CFG; }
 
     uint8_t raw = 0;
     ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                               StatusType_Discover, &raw);
-    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
+    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
 
     switch (raw)
     {
-        case RF_DISCOVER_STATUS_CARD_ACTIVE:     *out_status = PES_NFC_DISC_CARD_ACTIVE; break;
-        case RF_DISCOVER_STATUS_DISCOVER_RUNNING:*out_status = PES_NFC_DISC_RUNNING;     break;
-        case RF_DISCOVER_STATUS_DISCOVER_DONE:   *out_status = PES_NFC_DISC_DONE;        break;
-        default:                                 *out_status = PES_NFC_DISC_NO_CARD;     break;
+        case RF_DISCOVER_STATUS_CARD_ACTIVE:     *out_status = RS_NFC_DISC_CARD_ACTIVE; break;
+        case RF_DISCOVER_STATUS_DISCOVER_RUNNING:*out_status = RS_NFC_DISC_RUNNING;     break;
+        case RF_DISCOVER_STATUS_DISCOVER_DONE:   *out_status = RS_NFC_DISC_DONE;        break;
+        default:                                 *out_status = RS_NFC_DISC_NO_CARD;     break;
     }
-    return PES_OK;
+    return RS_OK;
 }
 
-static pes_status_t ptx105r_system_check(void)
+static rs_status_t ptx105r_system_check(void)
 {
     uint8_t state = 0;
     ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                               StatusType_System, &state);
-    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
-    return (PTX_SYSTEM_STATUS_OK == state) ? PES_OK : PES_ERR_INTERNAL;
+    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
+    return (PTX_SYSTEM_STATUS_OK == state) ? RS_OK : RS_ERR_INTERNAL;
 }
 
 static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
@@ -229,9 +229,9 @@ static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
  * PTX SDK function implementations
  **********************************************************************************************************************/
 
-pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
+rs_status_t rs_nfc_ptx_open(rs_nfc_reader_device_t device)
 {
-    PES_COMMON_UNUSED(device);
+    RS_COMMON_UNUSED(device);
 
     nfc_reader_ptx_cfg_t const * p_cfg = &g_nfc_reader_ptx0_cfg;
 
@@ -265,19 +265,19 @@ pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
      * wrapper used to make internally. */
     if (ptxStatus_Success != ptxPLAT_GPIO_Open(p_cfg->p_gpio_context, p_cfg->p_irq_context, p_cfg->interrupt_pin))
     {
-        return PES_ERR_INTERNAL;
+        return RS_ERR_INTERNAL;
     }
     if (ptxStatus_Success != ptxPLAT_TIMER_Open(p_cfg->p_timer_context))
     {
-        return PES_ERR_INTERNAL;
+        return RS_ERR_INTERNAL;
     }
     if (ptxStatus_Success != ptxPERIPH_APPTIMER_Open(p_cfg->p_app_timer))
     {
-        return PES_ERR_INTERNAL;
+        return RS_ERR_INTERNAL;
     }
     if (ptxStatus_Success != ptxPLAT_SPI_Open(p_cfg->p_comms_instance_ctrl, p_cfg->p_gpio_context))
     {
-        return PES_ERR_INTERNAL;
+        return RS_ERR_INTERNAL;
     }
 
     /* Initiate the IoT-Reader System (PTX SDK) */
@@ -289,32 +289,32 @@ pes_status_t pes_nfc_ptx_open(pes_nfc_reader_device_t device)
         st = ptxIoTRd_Init(p_cfg->iot_reader_context, &init_params);
     }
 
-    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
+    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
 
     g_ptx_opened = true;
-    return PES_OK;
+    return RS_OK;
 }
 
-pes_status_t pes_nfc_ptx_close(void)
+rs_status_t rs_nfc_ptx_close(void)
 {
     g_active_reg = NULL;
     ptxStatus_t st = ptxIoTRd_Deinit(g_nfc_reader_ptx0_cfg.iot_reader_context);
     g_ptx_opened = false;
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-bool pes_nfc_ptx_is_open(void)
+bool rs_nfc_ptx_is_open(void)
 {
     return g_ptx_opened;
 }
 
-pes_status_t pes_nfc_ptx_configure_polling(pes_nfc_tech_mask_t tech_mask)
+rs_status_t rs_nfc_ptx_configure_polling(rs_nfc_tech_mask_t tech_mask)
 {
-    PES_COMMON_UNUSED(tech_mask);
-    return PES_OK;
+    RS_COMMON_UNUSED(tech_mask);
+    return RS_OK;
 }
 
-pes_status_t pes_nfc_ptx_start_polling(void)
+rs_status_t rs_nfc_ptx_start_polling(void)
 {
     nfc_reader_ptx_cfg_t const * p_cfg = &g_nfc_reader_ptx0_cfg;
 
@@ -335,27 +335,27 @@ pes_status_t pes_nfc_ptx_start_polling(void)
     if (!(disc_config.PollTypeA || disc_config.PollTypeB ||
           disc_config.PollTypeF212 || disc_config.PollTypeV))
     {
-        return PES_ERR_INVALID_CFG;
+        return RS_ERR_INVALID_CFG;
     }
 
     ptxStatus_t st = ptxIoTRd_Initiate_Discovery(p_cfg->iot_reader_context, &disc_config);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_ptx_stop_polling(void)
+rs_status_t rs_nfc_ptx_stop_polling(void)
 {
     ptxStatus_t st = ptxIoTRd_Reader_Deactivation(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                                   PTX_IOTRD_RF_DEACTIVATION_TYPE_IDLE);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms, pes_nfc_disc_status_t *out_status)
+rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms, rs_nfc_disc_status_t *out_status)
 {
-    if (NULL == out_status) { return PES_ERR_INVALID_CFG; }
-    *out_status = PES_NFC_DISC_NO_CARD;
+    if (NULL == out_status) { return RS_ERR_INVALID_CFG; }
+    *out_status = RS_NFC_DISC_NO_CARD;
 
-    pes_status_t sys = ptx105r_system_check();
-    if (PES_OK != sys) { return sys; }
+    rs_status_t sys = ptx105r_system_check();
+    if (RS_OK != sys) { return sys; }
 
     if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
     {
@@ -372,7 +372,7 @@ pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms, pes_nfc_disc_status_
 
     (void)ulTaskNotifyTake(pdTRUE, 0);
 
-    pes_status_t st = PES_OK;
+    rs_status_t st = RS_OK;
 
     for (;;)
     {
@@ -381,9 +381,9 @@ pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms, pes_nfc_disc_status_
         (void)g_ext_irq.p_api->callbackSet(g_ext_irq.p_ctrl, ptxPLAT_GPIO_IsrCallback, NULL, NULL);
 
         st = ptx105r_discover_status(out_status);
-        if (PES_OK != st) { break; }
+        if (RS_OK != st) { break; }
 
-        if (PES_NFC_DISC_NO_CARD != *out_status)
+        if (RS_NFC_DISC_NO_CARD != *out_status)
         {
             break;
         }
@@ -400,16 +400,16 @@ pes_status_t pes_nfc_ptx_wait_for_card(uint32_t timeout_ms, pes_nfc_disc_status_
     return st;
 }
 
-pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
+rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t *card_info)
 {
-    if (NULL == card_info) { return PES_ERR_INVALID_CFG; }
+    if (NULL == card_info) { return RS_ERR_INVALID_CFG; }
     (void)memset(card_info, 0, sizeof(*card_info));
 
     ptxIoTRd_t *iot_rd = g_nfc_reader_ptx0_cfg.iot_reader_context;
 
     ptxIoTRd_CardRegistry_t *reg = NULL;
     ptxStatus_t st = ptxIoTRd_Get_Card_Registry(iot_rd, &reg);
-    if ((ptxStatus_Success != st) || (NULL == reg)) { return PES_ERR_INTERNAL; }
+    if ((ptxStatus_Success != st) || (NULL == reg)) { return RS_ERR_INTERNAL; }
 
     g_active_reg = reg;
 
@@ -418,50 +418,50 @@ pes_status_t pes_nfc_ptx_activate_card(pes_nfc_ptx_card_info_t *card_info)
         card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
         card_info->protocol  = map_protocol(reg->ActiveCardProtType);
         extract_uid(reg->ActiveCard, card_info->uid, &card_info->uid_len);
-        return PES_OK;
+        return RS_OK;
     }
 
-    if (0u == reg->NrCards) { return PES_ERR_NOT_FOUND; }
+    if (0u == reg->NrCards) { return RS_ERR_NOT_FOUND; }
 
     ptxIoTRd_CardProtocol_t prot = choose_protocol(&reg->Cards[0]);
     st = ptxIoTRd_Activate_Card(iot_rd, &reg->Cards[0], prot);
-    if (ptxStatus_Success != st) { return PES_ERR_INTERNAL; }
+    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
 
     card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
     card_info->protocol  = map_protocol(reg->ActiveCardProtType);
     extract_uid(reg->ActiveCard, card_info->uid, &card_info->uid_len);
-    return PES_OK;
+    return RS_OK;
 }
 
-pes_status_t pes_nfc_ptx_get_card_type(pes_nfc_card_type_t *out_type)
+rs_status_t rs_nfc_ptx_get_card_type(rs_nfc_card_type_t *out_type)
 {
-    if (NULL == out_type) { return PES_ERR_INVALID_CFG; }
+    if (NULL == out_type) { return RS_ERR_INVALID_CFG; }
 
     if (NULL == g_active_reg || NULL == g_active_reg->ActiveCard)
     {
-        *out_type = PES_NFC_CARD_TYPE_UNKNOWN;
-        return PES_ERR_NOT_FOUND;
+        *out_type = RS_NFC_CARD_TYPE_UNKNOWN;
+        return RS_ERR_NOT_FOUND;
     }
 
     *out_type = map_card_type(g_active_reg->ActiveCard, g_active_reg->ActiveCardProtType);
-    return PES_OK;
+    return RS_OK;
 }
 
-pes_status_t pes_nfc_ptx_get_uid(uint8_t *uid, uint8_t *uid_len)
+rs_status_t rs_nfc_ptx_get_uid(uint8_t *uid, uint8_t *uid_len)
 {
-    if ((NULL == uid) || (NULL == uid_len)) { return PES_ERR_INVALID_CFG; }
+    if ((NULL == uid) || (NULL == uid_len)) { return RS_ERR_INVALID_CFG; }
 
     if (NULL == g_active_reg || NULL == g_active_reg->ActiveCard)
     {
         *uid_len = 0;
-        return PES_ERR_NOT_FOUND;
+        return RS_ERR_NOT_FOUND;
     }
 
     extract_uid(g_active_reg->ActiveCard, uid, uid_len);
-    return PES_OK;
+    return RS_OK;
 }
 
-void pes_nfc_ptx_sleep(uint32_t ms)
+void rs_nfc_ptx_sleep(uint32_t ms)
 {
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     {
@@ -473,42 +473,42 @@ void pes_nfc_ptx_sleep(uint32_t ms)
     }
 }
 
-pes_status_t pes_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
+rs_status_t rs_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
                                        uint8_t *rx, uint32_t *rx_len)
 {
-    if ((NULL == tx) || (NULL == rx) || (NULL == rx_len)) { return PES_ERR_INVALID_CFG; }
+    if ((NULL == tx) || (NULL == rx) || (NULL == rx_len)) { return RS_ERR_INVALID_CFG; }
 
     ptxStatus_t st = ptxIoTRd_Data_Exchange(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                             (uint8_t *)(uintptr_t)tx, tx_len,
                                             rx, rx_len, PTX105R_TIMEOUT_RAW);
 
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_ptx_deactivate(void)
+rs_status_t rs_nfc_ptx_deactivate(void)
 {
     ptxStatus_t st = ptxIoTRd_Reader_Deactivation(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                                   PTX_IOTRD_RF_DEACTIVATION_TYPE_DISCOVER);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_ptx_get_system_state(uint8_t *out_state)
+rs_status_t rs_nfc_ptx_get_system_state(uint8_t *out_state)
 {
-    if (NULL == out_state) { return PES_ERR_INVALID_CFG; }
+    if (NULL == out_state) { return RS_ERR_INVALID_CFG; }
     ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                               StatusType_System, out_state);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-pes_status_t pes_nfc_ptx_get_last_rf_error(uint8_t *out_err)
+rs_status_t rs_nfc_ptx_get_last_rf_error(uint8_t *out_err)
 {
-    if (NULL == out_err) { return PES_ERR_INVALID_CFG; }
+    if (NULL == out_err) { return RS_ERR_INVALID_CFG; }
     ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                               StatusType_LastRFError, out_err);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-void pes_nfc_ptx_wake_waiting_task(void)
+void rs_nfc_ptx_wake_waiting_task(void)
 {
     TaskHandle_t task = g_waiting_task;
     if (NULL != task)
@@ -520,12 +520,12 @@ void pes_nfc_ptx_wake_waiting_task(void)
 /***********************************************************************************************************************
  * SDK T4T NDEF component lifecycle (lean — see include-block note above)
  *
- * Call pes_nfc_ptx_ndef_open() once per card activation (protocol ==
- * PES_NFC_PROT_ISODEP), and pes_nfc_ptx_ndef_close() after NDEF
+ * Call rs_nfc_ptx_ndef_open() once per card activation (protocol ==
+ * RS_NFC_PROT_ISODEP), and rs_nfc_ptx_ndef_close() after NDEF
  * operations are finished.
  **********************************************************************************************************************/
 
-pes_status_t pes_nfc_ptx_ndef_open(void)
+rs_status_t rs_nfc_ptx_ndef_open(void)
 {
     ptxNDEF_T4TOP_InitParams_t params;
     (void)memset(&params, 0, sizeof(params));
@@ -537,15 +537,15 @@ pes_status_t pes_nfc_ptx_ndef_open(void)
     params.T4TInitParams.TxBufferSize = sizeof(g_ndef_tx_buf);
 
     ptxStatus_t st = ptxNDEF_T4TOpOpen(&g_t4t_ndef_comp, &params);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-void pes_nfc_ptx_ndef_close(void)
+void rs_nfc_ptx_ndef_close(void)
 {
     (void)ptxNDEF_T4TOpClose(&g_t4t_ndef_comp);
 }
 
-ptxNDEF_T4TOP_t * pes_nfc_ptx_get_ndef_comp(void)
+ptxNDEF_T4TOP_t * rs_nfc_ptx_get_ndef_comp(void)
 {
     return &g_t4t_ndef_comp;
 }
@@ -553,12 +553,12 @@ ptxNDEF_T4TOP_t * pes_nfc_ptx_get_ndef_comp(void)
 /***********************************************************************************************************************
  * SDK T5T NDEF component lifecycle (lean — see include-block note above)
  *
- * Call pes_nfc_ptx_ndef_t5t_open() once per card activation (protocol ==
- * PES_NFC_PROT_T5T), and pes_nfc_ptx_ndef_t5t_close() after NDEF
+ * Call rs_nfc_ptx_ndef_t5t_open() once per card activation (protocol ==
+ * RS_NFC_PROT_T5T), and rs_nfc_ptx_ndef_t5t_close() after NDEF
  * operations are finished.
  **********************************************************************************************************************/
 
-pes_status_t pes_nfc_ptx_ndef_t5t_open(void)
+rs_status_t rs_nfc_ptx_ndef_t5t_open(void)
 {
     ptxNDEF_T5TOP_InitParams_t params;
     (void)memset(&params, 0, sizeof(params));
@@ -576,15 +576,15 @@ pes_status_t pes_nfc_ptx_ndef_t5t_open(void)
      * UID here — omitted to save flash on this tight-budget MCU.) */
 
     ptxStatus_t st = ptxNDEF_T5TOpOpen(&g_t5t_ndef_comp, &params);
-    return (ptxStatus_Success == st) ? PES_OK : PES_ERR_INTERNAL;
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-void pes_nfc_ptx_ndef_t5t_close(void)
+void rs_nfc_ptx_ndef_t5t_close(void)
 {
     (void)ptxNDEF_T5TOpClose(&g_t5t_ndef_comp);
 }
 
-ptxNDEF_T5TOP_t * pes_nfc_ptx_get_ndef_t5t_comp(void)
+ptxNDEF_T5TOP_t * rs_nfc_ptx_get_ndef_t5t_comp(void)
 {
     return &g_t5t_ndef_comp;
 }

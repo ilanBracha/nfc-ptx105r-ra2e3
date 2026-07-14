@@ -1,0 +1,130 @@
+/**
+ * rs_nfc_ptx105r.h
+ *
+ * Hardware Abstraction Layer for the RS NFC Reader module.
+ * Isolates RS business logic from the vendor-specific NFC stack
+ * (currently: Renesas PTX105R, calling the PTX NFC SDK's ptxIoTRd_*
+ * functions directly — no RM_NFC_READER_PTX FSP wrapper).
+ *
+ * Each function below is implemented directly by the PTX105R backend
+ * (rs_nfc_ptx105r.c) and called directly by name — no function-
+ * pointer vtable indirection.
+ */
+
+#ifndef RS_NFC_PTX105R_H
+#define RS_NFC_PTX105R_H
+
+#include "rs_nfc_reader.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+/* Forward declarations — full definitions in ptxNDEF_T4TOP.h / ptxNDEF_T5TOP.h
+ * (PTX SDK). Do NOT typedef here to avoid collision with the SDK headers'
+ * own typedefs. We use only the lean T4T/T5T NDEF-OP components (not the
+ * generic ptxNDEF dispatcher) — see rs_nfc_ptx105r.c for why. */
+struct ptxNDEF_T4TOP;
+struct ptxNDEF_T5TOP;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**********************************************************************************************************************
+ * Discovery status
+ **********************************************************************************************************************/
+typedef enum {
+    RS_NFC_DISC_NO_CARD = 0,
+    RS_NFC_DISC_CARD_ACTIVE,
+    RS_NFC_DISC_RUNNING,
+    RS_NFC_DISC_DONE,
+} rs_nfc_disc_status_t;
+
+/**********************************************************************************************************************
+ * Activated card info (filled after activation)
+ **********************************************************************************************************************/
+#define RS_NFC_PTX_RX_BUF_SIZE   300U
+#define RS_NFC_PTX_TX_BUF_SIZE   280U
+
+typedef struct {
+    rs_nfc_card_type_t card_type;
+    rs_nfc_protocol_t  protocol;
+    uint8_t             uid[RS_NFC_UID_MAX_BYTES];
+    uint8_t             uid_len;
+} rs_nfc_ptx_card_info_t;
+
+/**********************************************************************************************************************
+ * PTX functions
+ **********************************************************************************************************************/
+rs_status_t rs_nfc_ptx_open(rs_nfc_reader_device_t device);
+rs_status_t rs_nfc_ptx_close(void);
+/** Returns true if rs_nfc_ptx_open() has succeeded and rs_nfc_ptx_close()
+ * has not since been called. Replaces the FSP ctrl block's `open` flag. */
+bool rs_nfc_ptx_is_open(void);
+rs_status_t rs_nfc_ptx_configure_polling(rs_nfc_tech_mask_t tech_mask);
+rs_status_t rs_nfc_ptx_start_polling(void);
+rs_status_t rs_nfc_ptx_stop_polling(void);
+rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms,
+                                       rs_nfc_disc_status_t *out_status);
+rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t *card_info);
+rs_status_t rs_nfc_ptx_get_card_type(rs_nfc_card_type_t *out_type);
+rs_status_t rs_nfc_ptx_get_uid(uint8_t *uid, uint8_t *uid_len);
+void rs_nfc_ptx_sleep(uint32_t ms);
+rs_status_t rs_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
+                                       uint8_t *rx, uint32_t *rx_len);
+rs_status_t rs_nfc_ptx_deactivate(void);
+rs_status_t rs_nfc_ptx_get_system_state(uint8_t *out_state);
+rs_status_t rs_nfc_ptx_get_last_rf_error(uint8_t *out_err);
+void rs_nfc_ptx_wake_waiting_task(void);
+
+/** Open the SDK T4T NDEF component. Call after activating an ISO-DEP
+ *  (Type 4 Tag) card, before RS_NFCReader_ReadCardInfo/WriteNDEF. */
+rs_status_t rs_nfc_ptx_ndef_open(void);
+/** Close the SDK T4T NDEF component (call after NDEF operations are done). */
+void rs_nfc_ptx_ndef_close(void);
+/** Get a pointer to the static ptxNDEF_T4TOP_t instance. Valid after ndef_open(). */
+struct ptxNDEF_T4TOP * rs_nfc_ptx_get_ndef_comp(void);
+
+/** Open the SDK T5T NDEF component. Call after activating a T5T
+ *  (ISO 15693) card, before RS_NFCReader_ReadCardInfo/WriteNDEF. */
+rs_status_t rs_nfc_ptx_ndef_t5t_open(void);
+/** Close the SDK T5T NDEF component (call after NDEF operations are done). */
+void rs_nfc_ptx_ndef_t5t_close(void);
+/** Get a pointer to the static ptxNDEF_T5TOP_t instance. Valid after ndef_t5t_open(). */
+struct ptxNDEF_T5TOP * rs_nfc_ptx_get_ndef_t5t_comp(void);
+
+/**********************************************************************************************************************
+ * Internal forward declarations
+ **********************************************************************************************************************/
+
+/* rs_nfc_detect.c */
+rs_status_t rs_nfc_detect_wait(uint32_t timeout_ms,
+                                 rs_nfc_disc_status_t *out_status);
+
+/* rs_retry.c */
+rs_status_t rs_nfc_retry(const void *cfg, void *result_out,
+                           uint8_t max_retries);
+
+/* rs_timeout.c */
+void rs_timeout_sleep_ms(uint32_t ms);
+
+/* rs_nfc_reader.c  (used by retry) */
+rs_status_t rs_nfc_reader_try_once(const void *cfg, void *result_out);
+
+/* rs_nfc_reader.c — stop flag (checked by detect_wait & event loop) */
+bool rs_nfc_reader_is_stop_requested(void);
+
+/* rs_nfc_reader.c — card summary */
+uint32_t rs_card_summary_build(const rs_nfc_card_result_t *res,
+                                char *buf, uint32_t buf_size);
+
+/* rs_nfc_uid.c */
+uint32_t rs_nfc_uid_to_hex(const uint8_t *uid, uint8_t uid_len,
+                            char *out, uint32_t out_size);
+uint32_t rs_nfc_uid_to_hex_colon(const uint8_t *uid, uint8_t uid_len,
+                                  char *out, uint32_t out_size);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* RS_NFC_PTX105R_H */

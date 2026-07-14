@@ -1,16 +1,16 @@
 /**
- * pes_nfc_uid.c
+ * rs_nfc_uid.c
  *
- * UID formatting utilities for the PES NFC Card Reader module.
+ * UID formatting utilities for the RS NFC Reader module.
  * Pure data transforms — NO printing or logging.
  */
 
-#include "pes_nfc_ptx105r.h"
+#include "rs_nfc_ptx105r.h"
 #include <stdint.h>
 
 static const char HEX_DIGITS[] = "0123456789ABCDEF";
 
-uint32_t pes_nfc_uid_to_hex(const uint8_t *uid, uint8_t uid_len,
+uint32_t rs_nfc_uid_to_hex(const uint8_t *uid, uint8_t uid_len,
                             char *out, uint32_t out_size)
 {
     if ((NULL == uid) || (NULL == out) || (0u == out_size))
@@ -32,7 +32,7 @@ uint32_t pes_nfc_uid_to_hex(const uint8_t *uid, uint8_t uid_len,
     return pos;
 }
 
-uint32_t pes_nfc_uid_to_hex_colon(const uint8_t *uid, uint8_t uid_len,
+uint32_t rs_nfc_uid_to_hex_colon(const uint8_t *uid, uint8_t uid_len,
                                   char *out, uint32_t out_size)
 {
     if ((NULL == uid) || (NULL == out) || (0u == out_size))

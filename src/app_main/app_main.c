@@ -39,7 +39,7 @@
 
     Description : IoT Reader demo application for PTX1xxR NFC Platform.
                   Thin application layer — all NFC protocol logic lives in the
-                  PES NFC Card Reader module (src/nfc_card_reader/).
+                  RS NFC Reader module (src/nfc_reader/).
 */
 
 /*
@@ -58,7 +58,7 @@
 #include "ptx_IOT_READER.h"
 #include "app_main.h"
 #include "app_main_log.h"
-#include "pes_nfc_card_reader.h"
+#include "rs_nfc_reader.h"
 
 /*
  * ####################################################################################################################
@@ -75,7 +75,7 @@
  * DATA EXCHANGE (CLI write/erase + card info + raw demo exchange)
  * ####################################################################################################################
  */
-static void app_main_card_event (const pes_nfc_card_result_t *result)
+static void app_main_card_event (const rs_nfc_card_result_t *result)
 {
     if (NULL == result) { return; }
 
@@ -84,7 +84,7 @@ static void app_main_card_event (const pes_nfc_card_result_t *result)
     {
         uint8_t      is_write = app_main_cli_is_write_armed();
         const char  *op_name  = is_write ? "Write" : "Erase";
-        pes_status_t op_st    = PES_OK;
+        rs_status_t op_st    = RS_OK;
 
         if (0u != is_write)
         {
@@ -93,47 +93,47 @@ static void app_main_card_event (const pes_nfc_card_result_t *result)
             uint8_t     ndef_buf[APP_MAIN_CLI_WRITE_TEXT_MAX + 7u];
             uint16_t    ndef_len = 0u;
 
-            op_st = PES_NDEF_BuildTextRecord(txt, txt_len, ndef_buf, &ndef_len);
-            if (PES_OK == op_st)
+            op_st = RS_NDEF_BuildTextRecord(txt, txt_len, ndef_buf, &ndef_len);
+            if (RS_OK == op_st)
             {
-                op_st = PES_NFCCardReader_WriteNDEF(result->protocol,
+                op_st = RS_NFCReader_WriteNDEF(result->protocol,
                                                      ndef_buf, ndef_len);
             }
         }
         else
         {
-            op_st = PES_NFCCardReader_EraseNDEF(result->protocol);
+            op_st = RS_NFCReader_EraseNDEF(result->protocol);
         }
 
         ptxCommon_PrintF("%s on protocol 0x%02X: %s\n",
                          op_name, (unsigned)result->protocol,
-                         (PES_OK == op_st) ? "OK" : "ERROR");
+                         (RS_OK == op_st) ? "OK" : "ERROR");
 
         app_main_cli_clr_write_armed();
         app_main_cli_clr_erase_armed();
         return;
     }
 
-    /* Read card info via PES - Cast away const — 
-     * PES_NFCCardReader_ReadCardInfo populates the
+    /* Read card info via RS - Cast away const — 
+     * RS_NFCReader_ReadCardInfo populates the
      * extended fields (data_area_size, writeable, tag_type_name, ndef_*).
-     * The result was handed to us by PES and is still alive. */
-    (void)PES_NFCCardReader_ReadCardInfo(result->protocol,
-                                         (pes_nfc_card_result_t *)result);
+     * The result was handed to us by RS and is still alive. */
+    (void)RS_NFCReader_ReadCardInfo(result->protocol,
+                                         (rs_nfc_card_result_t *)result);
 
     /* LED blink by card type (board feedback kept out of the log module) */
     {
         app_main_utils_card_type_t led_ct;
         switch (result->card_type)
         {
-            case PES_NFC_CARD_TYPE_ISO14443B:
-            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
+            case RS_NFC_CARD_TYPE_ISO14443B:
+            case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
                 led_ct = UserBoardUtils_CardType_B; break;
-            case PES_NFC_CARD_TYPE_FELICA:
-            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
+            case RS_NFC_CARD_TYPE_FELICA:
+            case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
                 led_ct = UserBoardUtils_CardType_F; break;
-            case PES_NFC_CARD_TYPE_ISO15693:
-            case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
+            case RS_NFC_CARD_TYPE_ISO15693:
+            case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
                 led_ct = UserBoardUtils_CardType_V; break;
             default:
                 led_ct = UserBoardUtils_CardType_A; break;
@@ -144,15 +144,15 @@ static void app_main_card_event (const pes_nfc_card_result_t *result)
     app_main_log_print_card_info(result);
 
     /* Raw protocol exchange */
-    if ((PES_NFC_PROT_ISODEP != result->protocol) &&
-        (PES_NFC_PROT_UNDEFINED != result->protocol))
+    if ((RS_NFC_PROT_ISODEP != result->protocol) &&
+        (RS_NFC_PROT_UNDEFINED != result->protocol))
     {
         static uint8_t tx_buf[APP_MAIN_TX_BUF_SIZE];
         static uint8_t rx_buf[APP_MAIN_RX_BUF_SIZE];
         uint32_t tx_len = 0u;
         uint32_t rx_len = APP_MAIN_RX_BUF_SIZE;
 
-        pes_status_t st = PES_NFCCardReader_RawExchange(
+        rs_status_t st = RS_NFCReader_RawExchange(
             result->protocol,
             result->uid, result->uid_len,
             tx_buf, &tx_len,
@@ -161,7 +161,7 @@ static void app_main_card_event (const pes_nfc_card_result_t *result)
         ptxCommon_PrintF("=========== DATA EXCHANGE ================\n");
         ptxCommon_PrintF("TX = ");
         ptxCommon_Print_Buffer(tx_buf, 0, tx_len, 1, 0);
-        if (PES_OK == st)
+        if (RS_OK == st)
         {
             ptxCommon_PrintF("RX = ");
             ptxCommon_Print_Buffer(rx_buf, 0, rx_len, 1, 0);
@@ -180,8 +180,8 @@ static void app_main_card_event (const pes_nfc_card_result_t *result)
  * CALLBACKS
  * ####################################################################################################################
  */
-static void on_nfc_read_done (pes_status_t status,
-                              const pes_nfc_card_result_t *result,
+static void on_nfc_read_done (rs_status_t status,
+                              const rs_nfc_card_result_t *result,
                               const char *summary,
                               void *p_context)
 {
@@ -210,10 +210,10 @@ static void on_nfc_read_done (pes_status_t status,
     app_main_utils_set_stat_led(BSP_IO_LEVEL_LOW);
 }
 
-static void on_nfc_operation_done (pes_status_t status, void *p_context)
+static void on_nfc_operation_done (rs_status_t status, void *p_context)
 {
     (void)p_context;
-    ptxCommon_PrintF("PES_NFCCardReader_Read completed (status=%d)\n", (int)status);
+    ptxCommon_PrintF("RS_NFCReader_Read completed (status=%d)\n", (int)status);
     g_ioport.p_api->pinWrite(g_ioport.p_ctrl, APP_MAIN_UTILS_LED_RD, APP_MAIN_UTILS_LED_INACTV);
 }
 
@@ -233,33 +233,33 @@ void app_main_init (void)
 {
     g_ioport.p_api->pinWrite(g_ioport.p_ctrl, APP_MAIN_UTILS_LED_RD, APP_MAIN_UTILS_LED_ACTV);
 
-    ptxCommon_PrintF("System Initialization (PES NFC Card Reader) ... starting\n");
+    ptxCommon_PrintF("System Initialization (RS NFC Reader) ... starting\n");
 
-    pes_nfc_card_reader_cfg_t cfg;
+    rs_nfc_reader_cfg_t cfg;
     (void)memset(&cfg, 0, sizeof(cfg));
-    cfg.reader                = PES_NFC_READER_PTX105R;
-    cfg.tech_mask             = PES_NFC_TECH_ALL;
+    cfg.reader                = RS_NFC_READER_PTX105R;
+    cfg.tech_mask             = RS_NFC_TECH_ALL;
     cfg.timeout_ms            = UINT32_MAX;
     cfg.retry_count           = 0u;
     cfg.read_ndef             = true;
-    cfg.max_ndef_bytes        = PES_NFC_NDEF_MAX_BYTES;
+    cfg.max_ndef_bytes        = RS_NFC_NDEF_MAX_BYTES;
     cfg.callback              = on_nfc_operation_done;
     cfg.p_context             = NULL;
     cfg.on_card_event         = on_nfc_read_done;
     cfg.p_card_event_context  = NULL;
     cfg.validate_dependencies = false;
 
-    static pes_nfc_card_result_t result;
+    static rs_nfc_card_result_t result;
     (void)memset(&result, 0, sizeof(result));
 
-    pes_status_t st = PES_NFCCardReader_Read(&cfg, &result);
-    if (PES_OK != st)
+    rs_status_t st = RS_NFCReader_Read(&cfg, &result);
+    if (RS_OK != st)
     {
-        ptxCommon_PrintF("PES_NFCCardReader_Read launch FAILED (status=%d)\n",
+        ptxCommon_PrintF("RS_NFCReader_Read launch FAILED (status=%d)\n",
                          (int)st);
     }
     else
     {
-        ptxCommon_PrintF("PES NFC Card Reader launched (non-blocking)\n");
+        ptxCommon_PrintF("RS NFC Reader launched (non-blocking)\n");
     }
 }

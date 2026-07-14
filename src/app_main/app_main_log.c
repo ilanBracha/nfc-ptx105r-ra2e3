@@ -507,11 +507,11 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
  * APPLICATION-LEVEL CARD-INFO PRINTER
  * ####################################################################################################################
  *
- * Reads fields from pes_nfc_card_result_t and formats a human-readable block
+ * Reads fields from rs_nfc_card_result_t and formats a human-readable block
  * to both RTT and UART.  Pure I/O — no LED or board interaction; the caller
  * is responsible for any visual feedback (blink, etc.).
  */
-void app_main_log_print_card_info(const pes_nfc_card_result_t * result)
+void app_main_log_print_card_info(const rs_nfc_card_result_t * result)
 {
     char rf_tech[16];
 
@@ -522,24 +522,24 @@ void app_main_log_print_card_info(const pes_nfc_card_result_t * result)
 
     switch (result->card_type)
     {
-        case PES_NFC_CARD_TYPE_ISO14443A:
-        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_2:
-        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4A:
+        case RS_NFC_CARD_TYPE_ISO14443A:
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_2:
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4A:
             snprintf(rf_tech, sizeof(rf_tech), "TYPE A");
             break;
 
-        case PES_NFC_CARD_TYPE_ISO14443B:
-        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
+        case RS_NFC_CARD_TYPE_ISO14443B:
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
             snprintf(rf_tech, sizeof(rf_tech), "TYPE B");
             break;
 
-        case PES_NFC_CARD_TYPE_FELICA:
-        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
+        case RS_NFC_CARD_TYPE_FELICA:
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
             snprintf(rf_tech, sizeof(rf_tech), "TYPE F");
             break;
 
-        case PES_NFC_CARD_TYPE_ISO15693:
-        case PES_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
+        case RS_NFC_CARD_TYPE_ISO15693:
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
             snprintf(rf_tech, sizeof(rf_tech), "TYPE V");
             break;
 

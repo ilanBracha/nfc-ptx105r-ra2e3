@@ -1,11 +1,11 @@
 /**
- * pes_nfc_ptx105r_board.h
+ * rs_nfc_ptx105r_board.h
  *
- * Integrator-supplied board symbols used by pes_nfc_ptx105r.c.
+ * Integrator-supplied board symbols used by rs_nfc_ptx105r.c.
  */
 
-#ifndef PES_NFC_PTX105R_BOARD_H
-#define PES_NFC_PTX105R_BOARD_H
+#ifndef RS_NFC_PTX105R_BOARD_H
+#define RS_NFC_PTX105R_BOARD_H
 
 #include "hal_data.h"
 
@@ -20,4 +20,4 @@ extern const external_irq_instance_t g_ext_irq;
 }
 #endif
 
-#endif /* PES_NFC_PTX105R_BOARD_H */
+#endif /* RS_NFC_PTX105R_BOARD_H */

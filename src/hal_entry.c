@@ -1,8 +1,5 @@
 #include "hal_data.h"
-#include "app_main_log.h"
-#include "app_main_cli.h"
 #include "app_main.h"
-#include "pes_nfc_card_reader.h"
 #include "FreeRTOS.h"
 #include "task.h"
 

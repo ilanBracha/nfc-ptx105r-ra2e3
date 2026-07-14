@@ -1,5 +1,5 @@
 /**
- * pes_ndef_read.c
+ * rs_ndef_read.c
  *
  * NDEF message reading for NFC Forum Type 2 Tags (hand-rolled, small
  * footprint) and Type 4/Type 5 Tags (via the PTX SDK's lean ptxNDEF_T4TOP /
@@ -11,11 +11,11 @@
  * Also contains the NDEF message-level decoders (Wi-Fi, Bluetooth,
  * record parser) which have no SDK equivalent.
  *
- * NO printing — all results go into the caller's pes_nfc_card_result_t.
+ * NO printing — all results go into the caller's rs_nfc_card_result_t.
  */
 
-#include "pes_nfc_card_reader.h"
-#include "pes_nfc_ptx105r.h"
+#include "rs_nfc_reader.h"
+#include "rs_nfc_ptx105r.h"
 #include "ptx_IOT_READER.h"
 #include "ptxNDEF_T4TOP.h"
 #include "ptxNDEF_T5TOP.h"
@@ -24,32 +24,32 @@
 /***********************************************************************************************************************
  * Constants
  **********************************************************************************************************************/
-#define RX_BUF_SIZE   PES_NFC_PTX_RX_BUF_SIZE
-#define TX_BUF_SIZE   PES_NFC_PTX_TX_BUF_SIZE
+#define RX_BUF_SIZE   RS_NFC_PTX_RX_BUF_SIZE
+#define TX_BUF_SIZE   RS_NFC_PTX_TX_BUF_SIZE
 
 /***********************************************************************************************************************
  * Type 4 Tag NDEF Read — via PTX SDK ptxNDEF_T4TOP component
  **********************************************************************************************************************/
 
-static pes_status_t read_t4t_ndef(pes_nfc_card_result_t *res)
+static rs_status_t read_t4t_ndef(rs_nfc_card_result_t *res)
 {
     res->tag_type_name = "ISO-DEP (Type 4 Tag / ISO 14443-4)";
 
-    pes_status_t st = pes_nfc_ptx_ndef_open();
-    if (PES_OK != st) { return st; }
+    rs_status_t st = rs_nfc_ptx_ndef_open();
+    if (RS_OK != st) { return st; }
 
-    struct ptxNDEF_T4TOP *t4t = pes_nfc_ptx_get_ndef_comp();
+    struct ptxNDEF_T4TOP *t4t = rs_nfc_ptx_get_ndef_comp();
 
     ptxStatus_t ptx_st = ptxNDEF_T4TOpCheckMessage(t4t);
     if (ptxStatus_Success != ptx_st)
     {
-        pes_nfc_ptx_ndef_close();
+        rs_nfc_ptx_ndef_close();
         res->ndef_present   = false;
         res->ndef_len       = 0;
-        return PES_ERR_NOT_FOUND;
+        return RS_ERR_NOT_FOUND;
     }
 
-    uint32_t msg_len = PES_NFC_NDEF_MAX_BYTES;
+    uint32_t msg_len = RS_NFC_NDEF_MAX_BYTES;
     ptx_st = ptxNDEF_T4TOpReadMessage(t4t, res->ndef_data, &msg_len);
 
     if (ptxStatus_Success == ptx_st)
@@ -67,33 +67,33 @@ static pes_status_t read_t4t_ndef(pes_nfc_card_result_t *res)
     res->data_area_size = t4t->CCParams.NDEFFileSize;
     res->writeable      = (0x00u == t4t->CCParams.NDEFAccessWrite);
 
-    pes_nfc_ptx_ndef_close();
-    return PES_OK;
+    rs_nfc_ptx_ndef_close();
+    return RS_OK;
 }
 
 /***********************************************************************************************************************
  * Type 5 Tag NDEF Read — via PTX SDK ptxNDEF_T5TOP component
  **********************************************************************************************************************/
 
-static pes_status_t read_t5t_ndef(pes_nfc_card_result_t *res)
+static rs_status_t read_t5t_ndef(rs_nfc_card_result_t *res)
 {
     res->tag_type_name = "NFC Forum Type 5 Tag (T5T/ISO 15693)";
 
-    pes_status_t st = pes_nfc_ptx_ndef_t5t_open();
-    if (PES_OK != st) { return st; }
+    rs_status_t st = rs_nfc_ptx_ndef_t5t_open();
+    if (RS_OK != st) { return st; }
 
-    struct ptxNDEF_T5TOP *t5t = pes_nfc_ptx_get_ndef_t5t_comp();
+    struct ptxNDEF_T5TOP *t5t = rs_nfc_ptx_get_ndef_t5t_comp();
 
     ptxStatus_t ptx_st = ptxNDEF_T5TOpCheckMessage(t5t);
     if (ptxStatus_Success != ptx_st)
     {
-        pes_nfc_ptx_ndef_t5t_close();
+        rs_nfc_ptx_ndef_t5t_close();
         res->ndef_present   = false;
         res->ndef_len       = 0;
-        return PES_ERR_NOT_FOUND;
+        return RS_ERR_NOT_FOUND;
     }
 
-    uint32_t msg_len = PES_NFC_NDEF_MAX_BYTES;
+    uint32_t msg_len = RS_NFC_NDEF_MAX_BYTES;
     ptx_st = ptxNDEF_T5TOpReadMessage(t5t, res->ndef_data, &msg_len);
 
     if (ptxStatus_Success == ptx_st)
@@ -111,15 +111,15 @@ static pes_status_t read_t5t_ndef(pes_nfc_card_result_t *res)
     res->data_area_size = (uint32_t)t5t->CCParams.MLEN;
     res->writeable      = (0x00u == t5t->CCParams.WriteAccess);
 
-    pes_nfc_ptx_ndef_t5t_close();
-    return PES_OK;
+    rs_nfc_ptx_ndef_t5t_close();
+    return RS_OK;
 }
 
 /***********************************************************************************************************************
  * Type 2 Tag NDEF Read — hand-rolled (small footprint, proven)
  **********************************************************************************************************************/
 
-static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
+static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
 {
     uint8_t rx[RX_BUF_SIZE];
     uint8_t cmd[2];
@@ -129,16 +129,16 @@ static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
     /* READ block 3 -> CC (response = blocks 3..6, 16 bytes) */
     cmd[0] = 0x30; cmd[1] = 0x03;
     rx_len = RX_BUF_SIZE;
-    pes_status_t st = pes_nfc_ptx_data_exchange(cmd, 2u, rx, &rx_len);
-    if ((PES_OK != st) || (rx_len < 4u))
+    rs_status_t st = rs_nfc_ptx_data_exchange(cmd, 2u, rx, &rx_len);
+    if ((RS_OK != st) || (rx_len < 4u))
     {
-        return PES_ERR_NOT_FOUND;
+        return RS_ERR_NOT_FOUND;
     }
 
     /* CC: [0]=magic(0xE1) [1]=version [2]=size(x8) [3]=access */
     if (0xE1u != rx[0])
     {
-        return PES_ERR_NOT_FOUND;  /* not NDEF formatted */
+        return RS_ERR_NOT_FOUND;  /* not NDEF formatted */
     }
 
     uint32_t data_area  = (uint32_t)rx[2] * 8u;
@@ -159,8 +159,8 @@ static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
     {
         cmd[0] = 0x30; cmd[1] = block;
         rx_len = RX_BUF_SIZE;
-        st = pes_nfc_ptx_data_exchange(cmd, 2u, rx, &rx_len);
-        if ((PES_OK != st) || (rx_len < 4u))
+        st = rs_nfc_ptx_data_exchange(cmd, 2u, rx, &rx_len);
+        if ((RS_OK != st) || (rx_len < 4u))
         {
             break;
         }
@@ -194,12 +194,12 @@ static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
         if (0x03u == t)  /* NDEF Message TLV */
         {
             if ((p + l) > got) { l = got - p; }
-            uint32_t copy = (l > PES_NFC_NDEF_MAX_BYTES)
-                            ? PES_NFC_NDEF_MAX_BYTES : l;
+            uint32_t copy = (l > RS_NFC_NDEF_MAX_BYTES)
+                            ? RS_NFC_NDEF_MAX_BYTES : l;
             (void)memcpy(res->ndef_data, &data_buf[p], copy);
             res->ndef_len     = (uint16_t)copy;
             res->ndef_present = (copy > 0u);
-            return PES_OK;
+            return RS_OK;
         }
 
         p += l;  /* skip Lock/Memory/other TLVs */
@@ -208,17 +208,17 @@ static pes_status_t read_t2t_ndef(pes_nfc_card_result_t *res)
     /* No NDEF TLV found */
     res->ndef_present = false;
     res->ndef_len     = 0;
-    return PES_OK;
+    return RS_OK;
 }
 
 /***********************************************************************************************************************
  * Public API
  **********************************************************************************************************************/
 
-pes_status_t PES_NFCCardReader_ReadCardInfo(pes_nfc_protocol_t protocol,
-                                            pes_nfc_card_result_t *result)
+rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
+                                            rs_nfc_card_result_t *result)
 {
-    if (NULL == result) { return PES_ERR_INVALID_CFG; }
+    if (NULL == result) { return RS_ERR_INVALID_CFG; }
 
     /* Clear the extended fields */
     result->ndef_present   = false;
@@ -229,26 +229,26 @@ pes_status_t PES_NFCCardReader_ReadCardInfo(pes_nfc_protocol_t protocol,
 
     switch (protocol)
     {
-        case PES_NFC_PROT_ISODEP:
+        case RS_NFC_PROT_ISODEP:
             return read_t4t_ndef(result);
 
-        case PES_NFC_PROT_T2T:
+        case RS_NFC_PROT_T2T:
             return read_t2t_ndef(result);
 
-        case PES_NFC_PROT_T5T:
+        case RS_NFC_PROT_T5T:
             return read_t5t_ndef(result);
 
-        case PES_NFC_PROT_T3T:
+        case RS_NFC_PROT_T3T:
             result->tag_type_name = "NFC Forum Type 3 Tag (T3T/FeliCa)";
-            return PES_OK;
+            return RS_OK;
 
-        case PES_NFC_PROT_NFCDEP:
+        case RS_NFC_PROT_NFCDEP:
             result->tag_type_name = "NFC-DEP (Peer-to-Peer)";
-            return PES_OK;
+            return RS_OK;
 
         default:
             result->tag_type_name = "Unknown";
-            return PES_OK;
+            return RS_OK;
     }
 }
 
@@ -260,7 +260,7 @@ pes_status_t PES_NFCCardReader_ReadCardInfo(pes_nfc_protocol_t protocol,
  * BER-TLV search
  **********************************************************************************************************************/
 
-bool PES_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
+bool RS_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
                       const uint8_t **val, uint32_t *val_len)
 {
     uint32_t i = 0;
@@ -298,7 +298,7 @@ bool PES_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
             *val_len = cl;
             return true;
         }
-        if (constr && PES_NDEF_TlvFind(&buf[i], cl, tag, val, val_len))
+        if (constr && RS_NDEF_TlvFind(&buf[i], cl, tag, val, val_len))
         {
             return true;
         }
@@ -311,7 +311,7 @@ bool PES_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
  * String helpers
  **********************************************************************************************************************/
 
-bool PES_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
+bool RS_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
                          const char *str)
 {
     uint32_t n = 0;
@@ -324,7 +324,7 @@ bool PES_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
     return true;
 }
 
-bool PES_NDEF_StartsWith(const char *str, uint32_t str_len,
+bool RS_NDEF_StartsWith(const char *str, uint32_t str_len,
                          const char *prefix)
 {
     uint32_t n = 0;
@@ -340,28 +340,28 @@ bool PES_NDEF_StartsWith(const char *str, uint32_t str_len,
  * NDEF message decoder
  **********************************************************************************************************************/
 
-pes_status_t PES_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
-                                    pes_ndef_decoded_t *out)
+rs_status_t RS_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
+                                    rs_ndef_decoded_t *out)
 {
-    if ((NULL == out)) { return PES_ERR_INVALID_CFG; }
+    if ((NULL == out)) { return RS_ERR_INVALID_CFG; }
     (void)memset(out, 0, sizeof(*out));
 
     if ((NULL == msg) || (0u == len))
     {
-        return PES_ERR_NOT_FOUND;
+        return RS_ERR_NOT_FOUND;
     }
 
     uint32_t pos = 0;
 
     while (pos < len)
     {
-        if (out->record_count >= PES_NDEF_MAX_RECORDS)
+        if (out->record_count >= RS_NDEF_MAX_RECORDS)
         {
             out->truncated = true;
             break;
         }
 
-        pes_ndef_record_t *rec = &out->records[out->record_count];
+        rs_ndef_record_t *rec = &out->records[out->record_count];
         uint8_t hdr = msg[pos++];
         rec->flags = hdr;
         rec->tnf   = (uint8_t)(hdr & 0x07u);
@@ -399,8 +399,8 @@ pes_status_t PES_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
         }
 
         if ((pos + type_len) > len) { break; }
-        uint8_t copy_type = (type_len <= PES_NDEF_MAX_TYPE_LEN)
-                            ? type_len : PES_NDEF_MAX_TYPE_LEN;
+        uint8_t copy_type = (type_len <= RS_NDEF_MAX_TYPE_LEN)
+                            ? type_len : RS_NDEF_MAX_TYPE_LEN;
         (void)memcpy(rec->type, &msg[pos], copy_type);
         rec->type_len = type_len;
         pos += type_len;
@@ -418,7 +418,7 @@ pes_status_t PES_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
         if (me) { break; }
     }
 
-    return PES_OK;
+    return RS_OK;
 }
 
 /***********************************************************************************************************************
@@ -445,10 +445,10 @@ static bool wsc_find(const uint8_t *buf, uint32_t len, uint16_t want,
     return false;
 }
 
-pes_status_t PES_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
-                                 pes_wifi_info_t *out)
+rs_status_t RS_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
+                                 rs_wifi_info_t *out)
 {
-    if (NULL == out) { return PES_ERR_INVALID_CFG; }
+    if (NULL == out) { return RS_ERR_INVALID_CFG; }
     (void)memset(out, 0, sizeof(*out));
 
     const uint8_t *v;
@@ -456,10 +456,10 @@ pes_status_t PES_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
 
     if (!wsc_find(payload, len, 0x1045u, &v, &vl))
     {
-        return PES_ERR_NOT_FOUND;
+        return RS_ERR_NOT_FOUND;
     }
-    uint8_t copy = (vl <= PES_NDEF_WIFI_SSID_MAX)
-                   ? (uint8_t)vl : PES_NDEF_WIFI_SSID_MAX;
+    uint8_t copy = (vl <= RS_NDEF_WIFI_SSID_MAX)
+                   ? (uint8_t)vl : RS_NDEF_WIFI_SSID_MAX;
     (void)memcpy(out->ssid, v, copy);
     out->ssid[copy]  = '\0';
     out->ssid_len    = copy;
@@ -476,8 +476,8 @@ pes_status_t PES_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
 
     if (wsc_find(payload, len, 0x1027u, &v, &vl))
     {
-        uint8_t pc = (vl <= PES_NDEF_WIFI_PASS_MAX)
-                     ? (uint8_t)vl : PES_NDEF_WIFI_PASS_MAX;
+        uint8_t pc = (vl <= RS_NDEF_WIFI_PASS_MAX)
+                     ? (uint8_t)vl : RS_NDEF_WIFI_PASS_MAX;
         (void)memcpy(out->password, v, pc);
         out->password[pc] = '\0';
         out->password_len = pc;
@@ -489,17 +489,17 @@ pes_status_t PES_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
         out->mac_present = true;
     }
 
-    return PES_OK;
+    return RS_OK;
 }
 
 /***********************************************************************************************************************
  * Bluetooth OOB decoder
  **********************************************************************************************************************/
 
-pes_status_t PES_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
-                                      bool is_le, pes_bt_info_t *out)
+rs_status_t RS_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
+                                      bool is_le, rs_bt_info_t *out)
 {
-    if (NULL == out) { return PES_ERR_INVALID_CFG; }
+    if (NULL == out) { return RS_ERR_INVALID_CFG; }
     (void)memset(out, 0, sizeof(*out));
     out->is_le = is_le;
 
@@ -523,7 +523,7 @@ pes_status_t PES_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
         if ((0x09u == adt) || (0x08u == adt))
         {
             uint8_t nc = (uint8_t)(l - 1u);
-            if (nc > PES_NDEF_BT_NAME_MAX) { nc = PES_NDEF_BT_NAME_MAX; }
+            if (nc > RS_NDEF_BT_NAME_MAX) { nc = RS_NDEF_BT_NAME_MAX; }
             (void)memcpy(out->local_name, &payload[i + 2u], nc);
             out->local_name[nc] = '\0';
             out->name_len = nc;
@@ -531,5 +531,5 @@ pes_status_t PES_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
         i += (uint32_t)l + 1u;
     }
 
-    return PES_OK;
+    return RS_OK;
 }

@@ -12,7 +12,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "pes_nfc_card_reader.h"
+#include "rs_nfc_reader.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,7 +73,7 @@ int app_main_log_rx_get(uint8_t * out);
  * Print formatted card-info block (tag type, UID, size, NDEF) to both
  * RTT and UART.  Pure I/O — no LED or board interaction.
  */
-void app_main_log_print_card_info(const pes_nfc_card_result_t * result);
+void app_main_log_print_card_info(const rs_nfc_card_result_t * result);
 
 #ifdef __cplusplus
 }
