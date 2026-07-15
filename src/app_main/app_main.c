@@ -84,7 +84,7 @@ static void app_main_card_event (const rs_nfc_card_result_t *result)
     {
         uint8_t      is_write = app_main_cli_is_write_armed();
         const char  *op_name  = is_write ? "Write" : "Erase";
-        rs_status_t op_st    = RS_OK;
+        rs_status_t op_st     = RS_OK;
 
         if (0u != is_write)
         {
@@ -118,28 +118,7 @@ static void app_main_card_event (const rs_nfc_card_result_t *result)
      * RS_NFCReader_ReadCardInfo populates the
      * extended fields (data_area_size, writeable, tag_type_name, ndef_*).
      * The result was handed to us by RS and is still alive. */
-    (void)RS_NFCReader_ReadCardInfo(result->protocol,
-                                         (rs_nfc_card_result_t *)result);
-
-    /* LED blink by card type (board feedback kept out of the log module) */
-    {
-        app_main_utils_card_type_t led_ct;
-        switch (result->card_type)
-        {
-            case RS_NFC_CARD_TYPE_ISO14443B:
-            case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
-                led_ct = UserBoardUtils_CardType_B; break;
-            case RS_NFC_CARD_TYPE_FELICA:
-            case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
-                led_ct = UserBoardUtils_CardType_F; break;
-            case RS_NFC_CARD_TYPE_ISO15693:
-            case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
-                led_ct = UserBoardUtils_CardType_V; break;
-            default:
-                led_ct = UserBoardUtils_CardType_A; break;
-        }
-        app_main_utils_blink_for_card_type(led_ct);
-    }
+    (void)RS_NFCReader_ReadCardInfo(result->protocol, (rs_nfc_card_result_t *)result);
 
     app_main_log_print_card_info(result);
 
@@ -187,7 +166,7 @@ static void on_nfc_read_done (rs_status_t status,
 {
     (void)p_context;
 
-    app_main_utils_set_stat_led(BSP_IO_LEVEL_HIGH);
+    app_main_utils_led_set_all(BSP_IO_LEVEL_HIGH);
 
     /* Informational / warning / fatal events (result == NULL) */
     if (NULL == result)
@@ -197,7 +176,7 @@ static void on_nfc_read_done (rs_status_t status,
             ptxCommon_PrintF("%s\n", summary);
         }
 
-        app_main_utils_set_stat_led(BSP_IO_LEVEL_LOW);
+        app_main_utils_led_set_all(BSP_IO_LEVEL_LOW);
         return;
     }
 
@@ -207,14 +186,13 @@ static void on_nfc_read_done (rs_status_t status,
     app_main_card_event(result);
     (void)status;
 
-    app_main_utils_set_stat_led(BSP_IO_LEVEL_LOW);
+    app_main_utils_led_set_all(BSP_IO_LEVEL_LOW);
 }
 
 static void on_nfc_operation_done (rs_status_t status, void *p_context)
 {
     (void)p_context;
     ptxCommon_PrintF("RS_NFCReader_Read completed (status=%d)\n", (int)status);
-    g_ioport.p_api->pinWrite(g_ioport.p_ctrl, APP_MAIN_UTILS_LED_RD, APP_MAIN_UTILS_LED_INACTV);
 }
 
 /*
@@ -224,6 +202,7 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
  */
 void app_main_entry (void)
 {
+    app_main_utils_led_init();
     app_main_log_init();
     app_main_cli_init();
     app_main_init();
@@ -231,12 +210,13 @@ void app_main_entry (void)
 
 void app_main_init (void)
 {
-    g_ioport.p_api->pinWrite(g_ioport.p_ctrl, APP_MAIN_UTILS_LED_RD, APP_MAIN_UTILS_LED_ACTV);
+    rs_nfc_card_result_t result;
+    rs_status_t st = RS_OK;
 
     ptxCommon_PrintF("System Initialization (RS NFC Reader) ... starting\n");
 
     rs_nfc_reader_cfg_t cfg;
-    (void)memset(&cfg, 0, sizeof(cfg));
+    memset(&cfg, 0, sizeof(cfg));
     cfg.reader                = RS_NFC_READER_PTX105R;
     cfg.tech_mask             = RS_NFC_TECH_ALL;
     cfg.timeout_ms            = UINT32_MAX;
@@ -249,14 +229,13 @@ void app_main_init (void)
     cfg.p_card_event_context  = NULL;
     cfg.validate_dependencies = false;
 
-    static rs_nfc_card_result_t result;
-    (void)memset(&result, 0, sizeof(result));
+    memset(&result, 0, sizeof(result));
 
-    rs_status_t st = RS_NFCReader_Read(&cfg, &result);
+    st = RS_NFCReader_Read(&cfg, &result);
+
     if (RS_OK != st)
     {
-        ptxCommon_PrintF("RS_NFCReader_Read launch FAILED (status=%d)\n",
-                         (int)st);
+        ptxCommon_PrintF("RS_NFCReader_Read launch FAILED (status=%d)\n", (int)st);
     }
     else
     {
