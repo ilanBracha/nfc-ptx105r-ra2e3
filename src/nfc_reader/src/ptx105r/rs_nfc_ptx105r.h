@@ -18,10 +18,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Forward declarations — full definitions in ptxNDEF_T4TOP.h / ptxNDEF_T5TOP.h
- * (PTX SDK). Do NOT typedef here to avoid collision with the SDK headers'
- * own typedefs. We use only the lean T4T/T5T NDEF-OP components (not the
- * generic ptxNDEF dispatcher) — see rs_nfc_ptx105r.c for why. */
+/* Forward declarations — full definitions in ptxNDEF_T3TOP.h / ptxNDEF_T4TOP.h /
+ * ptxNDEF_T5TOP.h (PTX SDK). Do NOT typedef here to avoid collision with the
+ * SDK headers' own typedefs. We use the lean T3T/T4T/T5T NDEF-OP components
+ * (not the generic ptxNDEF dispatcher) — see rs_nfc_ptx105r.c for why. */
+struct ptxNDEF_T3TOP;
 struct ptxNDEF_T4TOP;
 struct ptxNDEF_T5TOP;
 
@@ -83,6 +84,15 @@ rs_status_t rs_nfc_ptx_ndef_open(void);
 void rs_nfc_ptx_ndef_close(void);
 /** Get a pointer to the static ptxNDEF_T4TOP_t instance. Valid after ndef_open(). */
 struct ptxNDEF_T4TOP * rs_nfc_ptx_get_ndef_comp(void);
+
+/** Open the SDK T3T NDEF component. Call after activating a T3T
+ *  (FeliCa / Type 3 Tag) card, before RS_NFCReader_ReadCardInfo.
+ *  Reads NFCID2 and MRTI timing values from the active card registry. */
+rs_status_t rs_nfc_ptx_ndef_t3t_open(void);
+/** Close the SDK T3T NDEF component (call after NDEF operations are done). */
+void rs_nfc_ptx_ndef_t3t_close(void);
+/** Get a pointer to the static ptxNDEF_T3TOP_t instance. Valid after ndef_t3t_open(). */
+struct ptxNDEF_T3TOP * rs_nfc_ptx_get_ndef_t3t_comp(void);
 
 /** Open the SDK T5T NDEF component. Call after activating a T5T
  *  (ISO 15693) card, before RS_NFCReader_ReadCardInfo/WriteNDEF. */

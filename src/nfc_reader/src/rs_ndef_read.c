@@ -2,11 +2,11 @@
  * rs_ndef_read.c
  *
  * NDEF message reading for NFC Forum Type 2 Tags (hand-rolled, small
- * footprint) and Type 4/Type 5 Tags (via the PTX SDK's lean ptxNDEF_T4TOP /
- * ptxNDEF_T5TOP components). T3T NDEF read is not supported — the generic
- * PTX SDK NDEF dispatcher (ptxNDEF.c) unconditionally links all four
- * tag-type operation components (~13 KB flash) which does not fit this
- * MCU's flash budget; only the T4TOP/T5TOP components are used here.
+ * footprint) and Type 3/Type 4/Type 5 Tags (via the PTX SDK's lean
+ * ptxNDEF_T3TOP / ptxNDEF_T4TOP / ptxNDEF_T5TOP components). We use
+ * the individual tag-type NDEF-OP components instead of the generic
+ * ptxNDEF dispatcher (ptxNDEF.c) which unconditionally links all four
+ * tag-type operation components (~13 KB flash).
  *
  * Also contains the NDEF message-level decoders (Wi-Fi, Bluetooth,
  * record parser) which have no SDK equivalent.
@@ -17,6 +17,7 @@
 #include "rs_nfc_reader.h"
 #include "rs_nfc_ptx105r.h"
 #include "ptx_IOT_READER.h"
+#include "ptxNDEF_T3TOP.h"
 #include "ptxNDEF_T4TOP.h"
 #include "ptxNDEF_T5TOP.h"
 #include <string.h>
@@ -116,9 +117,55 @@ static rs_status_t read_t5t_ndef(rs_nfc_card_result_t *res)
 }
 
 /***********************************************************************************************************************
- * Type 2 Tag NDEF Read — hand-rolled (small footprint, proven)
+ * Type 3 Tag NDEF Read — via PTX SDK ptxNDEF_T3TOP component
  **********************************************************************************************************************/
 
+static rs_status_t read_t3t_ndef (rs_nfc_card_result_t *res)
+{
+    res->tag_type_name = "NFC Forum Type 3 Tag (T3T/FeliCa)";
+
+    rs_status_t st = rs_nfc_ptx_ndef_t3t_open();
+    if (RS_OK != st) { return st; }
+
+    struct ptxNDEF_T3TOP *t3t = rs_nfc_ptx_get_ndef_t3t_comp();
+
+    ptxStatus_t ptx_st = ptxNDEF_T3TOpCheckMessage(t3t);
+    if (ptxStatus_Success != ptx_st)
+    {
+        rs_nfc_ptx_ndef_t3t_close();
+        res->ndef_present   = false;
+        res->ndef_len       = 0;
+        return RS_ERR_NOT_FOUND;
+    }
+
+    uint32_t msg_len = RS_NFC_NDEF_MAX_BYTES;
+    ptx_st = ptxNDEF_T3TOpReadMessage(t3t, res->ndef_data, &msg_len);
+
+    if (ptxStatus_Success == ptx_st)
+    {
+        res->ndef_len     = (uint16_t)msg_len;
+        res->ndef_present = (msg_len > 0u);
+    }
+    else
+    {
+        res->ndef_present = false;
+        res->ndef_len     = 0;
+    }
+
+    /* Extract CC metadata from the SDK T3TOP component.
+     * NmaxB is the maximum number of 16-byte blocks available for NDEF data.
+     * RWFlag: 0x00 = read-only, non-zero = read/write. */
+    res->data_area_size = (uint32_t)t3t->CCParams.NmaxB * PTX_T3T_BLOCK_SIZE;
+    res->writeable      = (0x00u != t3t->CCParams.RWFlag);
+
+    rs_nfc_ptx_ndef_t3t_close();
+
+    return RS_OK;
+}
+
+/***********************************************************************************************************************
+ * Type 2 Tag NDEF Read — hand-rolled (small footprint, proven)
+ **********************************************************************************************************************/
 static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
 {
     uint8_t rx[RX_BUF_SIZE];
@@ -239,8 +286,7 @@ rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
             return read_t5t_ndef(result);
 
         case RS_NFC_PROT_T3T:
-            result->tag_type_name = "NFC Forum Type 3 Tag (T3T/FeliCa)";
-            return RS_OK;
+            return read_t3t_ndef(result);
 
         case RS_NFC_PROT_NFCDEP:
             result->tag_type_name = "NFC-DEP (Peer-to-Peer)";

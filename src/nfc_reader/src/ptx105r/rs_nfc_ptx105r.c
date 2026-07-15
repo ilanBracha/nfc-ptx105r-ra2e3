@@ -24,13 +24,14 @@
 #include "task.h"
 #include "hal_data.h"
 /* PTX NFC SDK — used directly instead of the RM_NFC_READER_PTX FSP API.
- * NOTE: We intentionally use only the lean ptxNDEF_T4TOP/T5TOP (Type-4/
- * Type-5 Tag NDEF Operation) components instead of the generic ptxNDEF
- * dispatcher. The generic ptxNDEF_Open() unconditionally links
+ * NOTE: We intentionally use the lean ptxNDEF_T3TOP/T4TOP/T5TOP (Type-3/
+ * Type-4/Type-5 Tag NDEF Operation) components instead of the generic
+ * ptxNDEF dispatcher. The generic ptxNDEF_Open() unconditionally links
  * T2TOP+T3TOP+T4TOP+T5TOP (~13 KB flash) which does not fit this MCU's
  * flash budget. T2T NDEF read/write remains hand-rolled
- * (rs_ndef_read.c/rs_ndef_write.c); T3T NDEF is not supported. */
+ * (rs_ndef_read.c/rs_ndef_write.c). */
 #include "ptx_IOT_READER.h"
+#include "ptxNDEF_T3TOP.h"
 #include "ptxNDEF_T4TOP.h"
 #include "ptxNDEF_T5TOP.h"
 #include "ptxPLAT_GPIO.h"
@@ -58,6 +59,12 @@ static bool g_ptx_opened = false;
 static ptxNDEF_T4TOP_t  g_t4t_ndef_comp;
 static uint8_t          g_ndef_tx_buf[RS_NFC_PTX_TX_BUF_SIZE];
 static uint8_t          g_ndef_rx_buf[RS_NFC_PTX_RX_BUF_SIZE];
+
+/***********************************************************************************************************************
+ * SDK T3T NDEF component — static allocation. Shares the TX/RX buffers
+ * above. NFCID2 and MRTI are extracted from the active card at open time.
+ **********************************************************************************************************************/
+static ptxNDEF_T3TOP_t  g_t3t_ndef_comp;
 
 /***********************************************************************************************************************
  * SDK T5T NDEF component — static allocation. Shares the TX/RX buffers
@@ -588,3 +595,52 @@ ptxNDEF_T5TOP_t * rs_nfc_ptx_get_ndef_t5t_comp(void)
 {
     return &g_t5t_ndef_comp;
 }
+
+/***********************************************************************************************************************
+ * SDK T3T NDEF component lifecycle
+ *
+ * Call rs_nfc_ptx_ndef_t3t_open() once per card activation (protocol ==
+ * RS_NFC_PROT_T3T), and rs_nfc_ptx_ndef_t3t_close() after NDEF
+ * operations are finished. NFCID2 and MRTI timing parameters are read
+ * from the active card's SENSF_RES — the card must already be activated.
+ **********************************************************************************************************************/
+
+rs_status_t rs_nfc_ptx_ndef_t3t_open (void)
+{
+    /* Guard: need an activated FeliCa / T3T card in the registry */
+    if ((NULL == g_active_reg) || (NULL == g_active_reg->ActiveCard))
+    {
+        return RS_ERR_NOT_FOUND;
+    }
+
+    ptxNDEF_T3TOP_InitParams_t params;
+    (void)memset(&params, 0, sizeof(params));
+
+    params.RxBuffer                    = g_ndef_rx_buf;
+    params.RxBufferSize                = sizeof(g_ndef_rx_buf);
+    params.T3TInitParams.IotRd         = g_nfc_reader_ptx0_cfg.iot_reader_context;
+    params.T3TInitParams.TxBuffer      = g_ndef_tx_buf;
+    params.T3TInitParams.TxBufferSize  = sizeof(g_ndef_tx_buf);
+
+    /* NFCID2 starts at SENSF_RES[2] (8 bytes) */
+    params.T3TInitParams.NFCID2        = &g_active_reg->ActiveCard->TechParams.CardFParams.SENSF_RES[2];
+    params.T3TInitParams.NFCID2Len     = g_active_reg->ActiveCard->TechParams.CardFParams.SENSF_RES_LEN;
+    /* MRTI_Check and MRTI_Update are at SENSF_RES[15] and SENSF_RES[16] */
+    params.T3TInitParams.MRTI_Check    = g_active_reg->ActiveCard->TechParams.CardFParams.SENSF_RES[15];
+    params.T3TInitParams.MRTI_Update   = g_active_reg->ActiveCard->TechParams.CardFParams.SENSF_RES[16];
+
+    ptxStatus_t st = ptxNDEF_T3TOpOpen(&g_t3t_ndef_comp, &params);
+
+    return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
+}
+
+void rs_nfc_ptx_ndef_t3t_close (void)
+{
+    (void)ptxNDEF_T3TOpClose(&g_t3t_ndef_comp);
+}
+
+ptxNDEF_T3TOP_t * rs_nfc_ptx_get_ndef_t3t_comp (void)
+{
+    return &g_t3t_ndef_comp;
+}
+
