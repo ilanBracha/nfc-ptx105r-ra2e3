@@ -23,14 +23,9 @@
 #include "app_main_log.h"
 #include "hal_data.h"
 #include "r_ioport.h"
-#include "r_sci_uart.h"
 #include <string.h>
 #include <stdarg.h>
 #include "ptxCOMMON.h"
-
-/* The FSP-generated baud setting struct lives in ra_gen/hal_data.c and is
- * NOT const, so we can rewrite it in place before opening g_uart0. */
-extern baud_setting_t g_uart0_baud_setting;
 
 /*
  * SCI9 routes to P1_09 (TXD9) / P1_10 (RXD9) on the RA2E3 FPB.
@@ -46,20 +41,6 @@ extern baud_setting_t g_uart0_baud_setting;
 #endif
 #ifndef APP_MAIN_LOG_RXD_PIN
 #define APP_MAIN_LOG_RXD_PIN  BSP_IO_PORT_01_PIN_10
-#endif
-
-/* Target baud rate. The FSP-generated g_uart0_baud_setting in ra_gen/hal_data.c
- * is for 115200; we override it at runtime so this stays decoupled from the
- * Configurator. J-Link OB VCOM on the FPB-RA2E3 supports up to ~1 Mbps.
- * Common values: 115200, 230400, 460800, 921600. */
-#ifndef APP_MAIN_LOG_BAUD
-#define APP_MAIN_LOG_BAUD     460800u
-#endif
-
-/* Max baud-rate error tolerated by BaudCalculate, in 1/1000 of a percent.
- * 5000 == 5%. The FSP example uses 5000 and it picks the best divider. */
-#ifndef APP_MAIN_LOG_BAUD_ERR_X1000
-#define APP_MAIN_LOG_BAUD_ERR_X1000  5000u
 #endif
 
 /*
@@ -180,33 +161,6 @@ int app_main_log_init(void)
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
                           APP_MAIN_LOG_RXD_PIN,
                           ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
-
-    /* Override the FSP-generated baud rate (typically 115200) with our own,
-     * BEFORE open() so the FSP applies our divider directly. Try the requested
-     * rate first; if it cannot be achieved within tolerance, walk down a
-     * fallback ladder so we *always* boot with a known, predictable rate
-     * (no silent stay-at-115200). Bit-rate modulation is enabled for max
-     * flexibility on RA2E3 (small SCI source clock). */
-    static const uint32_t k_baud_ladder[] =
-    {
-        (uint32_t)APP_MAIN_LOG_BAUD,
-        921600u,
-        460800u,
-        230400u,
-        115200u,
-    };
-    for (size_t i = 0u; i < (sizeof(k_baud_ladder) / sizeof(k_baud_ladder[0])); i++)
-    {
-        baud_setting_t bs;
-        if (FSP_SUCCESS == R_SCI_UART_BaudCalculate(k_baud_ladder[i],
-                                                    true, /* bitrate modulation */
-                                                    (uint32_t)APP_MAIN_LOG_BAUD_ERR_X1000,
-                                                    &bs))
-        {
-            g_uart0_baud_setting = bs;
-            break;
-        }
-    }
 
     err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
     if (FSP_SUCCESS != err)
