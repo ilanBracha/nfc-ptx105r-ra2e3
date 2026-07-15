@@ -7,7 +7,6 @@
  * application interacts exclusively through the RS public API:
  *
  *   - RS_NFCReader_Read()         : run the interrupt-driven detect/read loop
- *   - RS_NFCReader_DataExchange() : raw exchange with the active card
  *   - RS_NFCReader_Stop()         : request graceful stop
  *
  * Operating modes (selected via cfg fields):
@@ -435,12 +434,6 @@ rs_status_t RS_NFCReader_Stop(void)
      * next timeout expiry or IRQ event. */
     rs_nfc_ptx_wake_waiting_task();
     return RS_OK;
-}
-
-rs_status_t RS_NFCReader_DataExchange(const uint8_t *tx, uint32_t tx_len,
-                                            uint8_t *rx, uint32_t *rx_len)
-{
-    return rs_nfc_ptx_data_exchange(tx, tx_len, rx, rx_len);
 }
 
 /***********************************************************************************************************************

@@ -36,11 +36,7 @@
 #define APP_MAIN_CLI_COLOR_KNRM  "\x1B[0m"
 #define APP_MAIN_CLI_COLOR_KRED  "\x1B[31m"
 #define APP_MAIN_CLI_COLOR_KGRN  "\x1B[32m"
-#define APP_MAIN_CLI_COLOR_KYEL  "\x1B[33m"
-#define APP_MAIN_CLI_COLOR_KBLU  "\x1B[34m"
-#define APP_MAIN_CLI_COLOR_KMAG  "\x1B[35m"
 #define APP_MAIN_CLI_COLOR_KCYN  "\x1B[36m"
-#define APP_MAIN_CLI_COLOR_KWHT  "\x1B[37m"
 #define APP_MAIN_CLI_LINE_MAX    120u
 #define APP_MAIN_CLI_PROMPT      "$ "
 #define APP_MAIN_CLI_NEWLINE     "\r\n"
@@ -71,16 +67,6 @@ static char              s_pending_line[APP_MAIN_CLI_LINE_MAX + 1u];
 static volatile uint8_t  s_line_ready = 0u;
 
 static uint8_t           s_initialized = 0u;
-
-/* One-shot "erase the next activated tag" request. Set by the `erase` CLI
- * command; consumed by the NFC main loop once it has an active tag. */
-static volatile uint8_t  s_erase_armed = 0u;
-
-/* One-shot "write a Text record to the next activated tag" request. Set by the
- * `write "..."` CLI command; consumed by the NFC main loop. */
-static volatile uint8_t s_write_armed    = 0u;
-static char             s_write_text[APP_MAIN_CLI_WRITE_TEXT_MAX + 1u];
-static uint16_t         s_write_text_len = 0u;
 
 /*
  * ####################################################################################################################
@@ -128,71 +114,6 @@ static void app_main_cli_cmd_version (const char *args)
     app_main_cli_write("PTX IoT Reader (RA2E3 FPB) - CLI v1.0" APP_MAIN_CLI_NEWLINE);
 }
 
-static void app_main_cli_cmd_write (const char *args)
-{
-    /* Expect: write "text to write"
-     * The opening quote is mandatory so users can include spaces; the closing
-     * quote terminates the payload (no escape sequences). */
-    const char *p = args;
-    while ((*p == ' ') || (*p == '\t')) { p++; }
-    if (*p != '"')
-    {
-        app_main_cli_write("usage: write \"text to write\"" APP_MAIN_CLI_NEWLINE);
-        return;
-    }
-    p++;
-    const char *start = p;
-    while ((*p != '\0') && (*p != '"')) { p++; }
-    if (*p != '"')
-    {
-        app_main_cli_write("write: missing closing '\"'" APP_MAIN_CLI_NEWLINE);
-        return;
-    }
-    size_t len = (size_t)(p - start);
-    if (0u == len)
-    {
-        app_main_cli_clr_write_armed();
-        app_main_cli_write("write: disarmed" APP_MAIN_CLI_NEWLINE);
-        return;
-    }
-    if (len > APP_MAIN_CLI_WRITE_TEXT_MAX)
-    {
-        app_main_cli_write("write: text too long (max 96 bytes)" APP_MAIN_CLI_NEWLINE);
-        return;
-    }
-
-    app_main_cli_arm_write_next(start, (uint16_t)len);
-    /* Arming write supersedes any pending erase. */
-    s_erase_armed = 0u;
-
-    app_main_cli_write("write: armed - present a TAG to write the NDEF Text record" APP_MAIN_CLI_NEWLINE);
-    app_main_cli_write("       (type 'write \"\"' to cancel)" APP_MAIN_CLI_NEWLINE);
-}
-
-static void app_main_cli_cmd_erase (const char *args)
-{
-    (void)args;
-    /* Toggle: a second `erase` cancels a pending arm. Arming erase also clears
-     * any pending write since the unified NFC hook treats write as the
-     * dominant op. */
-    taskENTER_CRITICAL();
-    if ((0u != s_erase_armed) || (0u != s_write_armed))
-    {
-        s_erase_armed    = 0u;
-        s_write_armed    = 0u;
-        s_write_text_len = 0u;
-        taskEXIT_CRITICAL();
-        app_main_cli_write("erase: disarmed (no tag will be erased)" APP_MAIN_CLI_NEWLINE);
-    }
-    else
-    {
-        s_erase_armed = 1u;
-        taskEXIT_CRITICAL();
-        app_main_cli_write("erase: armed - present a TAG to erase its NDEF content" APP_MAIN_CLI_NEWLINE);
-        app_main_cli_write("       (type 'erase' again to cancel)" APP_MAIN_CLI_NEWLINE);
-    }
-}
-
 static void app_main_cli_cmd_help (const char *args)
 {
     (void)args;
@@ -220,8 +141,6 @@ static const cli_cmd_t s_cmds[] =
     { "?",       app_main_cli_cmd_help,    "alias of 'help'"                },
     { "menu",    app_main_cli_cmd_menu,    "reprint the menu"               },
     { "version", app_main_cli_cmd_version, "firmware identification"        },
-    { "write",   app_main_cli_cmd_write,   "write \"text\" to next tag"     },
-    { "erase",   app_main_cli_cmd_erase,   "arm: erase NDEF of the next tag"},
     { "reboot",  app_main_cli_cmd_reboot,  "soft-reset the MCU"             },
 };
 
@@ -384,60 +303,4 @@ void app_main_cli_poll (void)
 {
     /* Legacy API kept for backward compatibility. Equivalent to Process(). */
     app_main_cli_process();
-}
-
-void app_main_cli_arm_erase_next (void)
-{
-    s_erase_armed = 1u;
-}
-
-uint8_t app_main_cli_is_erase_armed (void)
-{
-    return s_erase_armed;
-}
-
-void app_main_cli_clr_erase_armed (void)
-{
-    s_erase_armed = 0u;
-}
-
-void app_main_cli_arm_write_next (const char *text, uint16_t text_len)
-{
-    taskENTER_CRITICAL();
-
-    if ((NULL == text) || (0u == text_len) || (text_len > APP_MAIN_CLI_WRITE_TEXT_MAX))
-    {
-        s_write_armed    = 0u;
-        s_write_text_len = 0u;
-        taskEXIT_CRITICAL();
-        return;
-    }
-
-    (void)memcpy(s_write_text, text, text_len);
-    s_write_text[text_len] = '\0';
-    s_write_text_len       = text_len;
-    s_write_armed          = 1u;
-    taskEXIT_CRITICAL();
-}
-
-uint8_t app_main_cli_is_write_armed (void)
-{
-    return s_write_armed;
-}
-
-const char * app_main_cli_get_write_text (uint16_t *out_len)
-{
-    taskENTER_CRITICAL();
-    if (NULL != out_len) { *out_len = s_write_text_len; }
-    const char *p = s_write_text;
-    taskEXIT_CRITICAL();
-    return p;
-}
-
-void app_main_cli_clr_write_armed (void)
-{
-    taskENTER_CRITICAL();
-    s_write_armed    = 0u;
-    s_write_text_len = 0u;
-    taskEXIT_CRITICAL();
 }

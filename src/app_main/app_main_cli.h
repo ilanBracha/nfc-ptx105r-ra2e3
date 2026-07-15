@@ -24,8 +24,6 @@
 extern "C" {
 #endif
 
-#define APP_MAIN_CLI_WRITE_TEXT_MAX 96u
-
 /**
  * Maximum number of characters in a single CLI input line (not counting the
  * terminating NUL). Lines longer than this are truncated.
@@ -55,26 +53,6 @@ void app_main_cli_poll(void);
  * Print the menu again (useful from anywhere, e.g. after a long log burst).
  */
 void app_main_cli_print_menu(void);
-
-/**
- * Arm a one-shot "erase the next tag" request from the CLI side. The NFC
- * read loop should poll app_main_cli_is_erase_armed() once a tag has been activated
- * and, if armed, perform the erase and then call app_main_cli_clr_erase_armed().
- */
-void    app_main_cli_arm_erase_next (void);
-uint8_t app_main_cli_is_erase_armed (void);
-void    app_main_cli_clr_erase_armed(void);
-
-/**
- * One-shot "write a Text record to the next tag" request. app_main_cli_arm_write_next
- * stores a copy of `text` (max USER_CLI_WRITE_TEXT_MAX bytes) and arms the flag.
- * The NFC loop polls app_main_cli_is_write_armed(), retrieves the payload via
- * app_main_cli_get_write_text(), performs the write, and calls app_main_cli_clr_write_armed().
- */
-void         app_main_cli_arm_write_next (const char * text, uint16_t text_len);
-uint8_t      app_main_cli_is_write_armed (void);
-const char * app_main_cli_get_write_text (uint16_t * out_len);
-void         app_main_cli_clr_write_armed(void);
 
 #ifdef __cplusplus
 }

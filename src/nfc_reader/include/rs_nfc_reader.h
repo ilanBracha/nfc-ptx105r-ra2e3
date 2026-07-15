@@ -283,19 +283,6 @@ rs_status_t RS_NFCReader_Read(const rs_nfc_reader_cfg_t * cfg, rs_nfc_card_resul
  */
 rs_status_t RS_NFCReader_Stop(void);
 
-/* Raw data exchange with the currently-activated card. Use this from inside
- * an on_card_event callback to issue protocol-specific frames (T2T READ,
- * T3T CHECK, T5T READ_SINGLE_BLOCK, ISO-DEP APDUs, raw NDEF write, ...).
- *
- * tx       : pointer to the TX frame
- * tx_len   : TX frame length in bytes
- * rx       : caller-supplied RX buffer
- * rx_len   : IN  = capacity of rx buffer
- *            OUT = number of bytes received
- *
- * Returns RS_OK on success, RS_ERR_* on failure. */
-rs_status_t RS_NFCReader_DataExchange(const uint8_t *tx, uint32_t tx_len, uint8_t *rx, uint32_t *rx_len);
-
 /**
  * Validates NFC card reader configuration and optional dependency state.
  *
@@ -335,41 +322,6 @@ rs_status_t RS_NFCReader_Validate(const rs_nfc_reader_cfg_t *cfg);
  */
 rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
                                             rs_nfc_card_result_t *result);
-
-/**
- * Write an NDEF message to the currently-activated card.
- * Dispatches to T2T or T4T write based on `protocol`.
- *
- * @param[in] protocol  Active RF protocol.
- * @param[in] ndef      NDEF message bytes (may be NULL when ndef_len==0).
- * @param[in] ndef_len  Length in bytes (max 248). 0 is equivalent to erase.
- * @return RS_OK on success.
- */
-rs_status_t RS_NFCReader_WriteNDEF(rs_nfc_protocol_t protocol,
-                                         const uint8_t *ndef,
-                                         uint16_t ndef_len);
-
-/**
- * Erase the NDEF message on the currently-activated card (set NLEN=0).
- * Convenience wrapper around RS_NFCReader_WriteNDEF with ndef_len==0.
- *
- * @param[in] protocol  Active RF protocol.
- * @return RS_OK on success.
- */
-rs_status_t RS_NFCReader_EraseNDEF(rs_nfc_protocol_t protocol);
-
-/**
- * Build a single NFC Forum well-known Text NDEF record (RTD-Text, "en",
- * UTF-8) into the caller-supplied buffer.
- *
- * @param[in]  text      UTF-8 text payload (not NUL-terminated).
- * @param[in]  text_len  Length of text in bytes (max 248).
- * @param[out] out       Destination buffer (must have room for text_len+7).
- * @param[out] out_len   Receives the total record length.
- * @return RS_OK on success; RS_ERR_INVALID_CFG on bad params.
- */
-rs_status_t RS_NDEF_BuildTextRecord(const char *text, uint16_t text_len,
-                                      uint8_t *out, uint16_t *out_len);
 
 /**
  * Perform a protocol-specific raw demo exchange with the activated card.

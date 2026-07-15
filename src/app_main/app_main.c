@@ -72,47 +72,12 @@
 
 /*
  * ####################################################################################################################
- * DATA EXCHANGE (CLI write/erase + card info + raw demo exchange)
+ * DATA EXCHANGE (card info + raw demo exchange)
  * ####################################################################################################################
  */
 static void app_main_card_event (const rs_nfc_card_result_t *result)
 {
     if (NULL == result) { return; }
-
-    /* CLI: one-shot write / erase */
-    if ((0u != app_main_cli_is_write_armed()) || (0u != app_main_cli_is_erase_armed()))
-    {
-        uint8_t      is_write = app_main_cli_is_write_armed();
-        const char  *op_name  = is_write ? "Write" : "Erase";
-        rs_status_t op_st     = RS_OK;
-
-        if (0u != is_write)
-        {
-            uint16_t    txt_len = 0u;
-            const char *txt     = app_main_cli_get_write_text(&txt_len);
-            uint8_t     ndef_buf[APP_MAIN_CLI_WRITE_TEXT_MAX + 7u];
-            uint16_t    ndef_len = 0u;
-
-            op_st = RS_NDEF_BuildTextRecord(txt, txt_len, ndef_buf, &ndef_len);
-            if (RS_OK == op_st)
-            {
-                op_st = RS_NFCReader_WriteNDEF(result->protocol,
-                                                     ndef_buf, ndef_len);
-            }
-        }
-        else
-        {
-            op_st = RS_NFCReader_EraseNDEF(result->protocol);
-        }
-
-        ptxCommon_PrintF("%s on protocol 0x%02X: %s\n",
-                         op_name, (unsigned)result->protocol,
-                         (RS_OK == op_st) ? "OK" : "ERROR");
-
-        app_main_cli_clr_write_armed();
-        app_main_cli_clr_erase_armed();
-        return;
-    }
 
     /* Read card info via RS - Cast away const — 
      * RS_NFCReader_ReadCardInfo populates the
