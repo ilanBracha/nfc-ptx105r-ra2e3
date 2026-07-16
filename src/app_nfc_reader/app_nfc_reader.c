@@ -52,7 +52,6 @@
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "app_nfc_reader_utils.h"
 #include "app_nfc_reader_cli.h"
 #include "ptxCOMMON.h"
 #include "ptx_IOT_READER.h"
@@ -69,6 +68,47 @@
 /* RX/TX buffer sizes — used for raw-exchange print buffers */
 #define APP_NFC_READER_RX_BUF_SIZE  300u
 #define APP_NFC_READER_TX_BUF_SIZE  280u
+
+/*
+ * ####################################################################################################################
+ * LED UTILITIES
+ * ####################################################################################################################
+ */
+#if defined(APP_NFC_READER_LED_EN)
+/* LED pins mapped for RA2E3 FPB */
+static const bsp_io_port_pin_t led_pins[] =
+{
+    APP_NFC_READER_LED_1,
+    APP_NFC_READER_LED_2,
+};
+
+static const uint32_t LED_COUNT = (uint32_t)(sizeof(led_pins) / sizeof(led_pins[0]));
+
+/* Configure all LED pins as outputs (called once). */
+void app_nfc_reader_led_init (void)
+{
+    for (uint32_t i = 0; i < LED_COUNT; i++)
+    {
+        g_ioport.p_api->pinCfg(g_ioport.p_ctrl, led_pins[i],
+                               (uint32_t)IOPORT_CFG_PORT_DIRECTION_OUTPUT | (uint32_t)IOPORT_CFG_PORT_OUTPUT_LOW);
+    }
+}
+
+/*
+ * Drive every LED known to this module to the requested level.
+ *
+ * NOTE: `g_bsp_pin_cfg` (used by R_IOPORT_Open at boot) does not include
+ * the on-board LED pins (P02_13, P09_14). app_nfc_reader_led_init() configures them
+ * here at first use as outputs.
+ */
+void app_nfc_reader_led_set_all (bsp_io_level_t level)
+{
+    for (uint32_t i = 0; i < LED_COUNT; i++)
+    {
+        (void)g_ioport.p_api->pinWrite(g_ioport.p_ctrl, led_pins[i], level);
+    }
+}
+#endif /* APP_NFC_READER_LED_EN */
 
 /*
  * ####################################################################################################################
@@ -131,7 +171,9 @@ static void on_nfc_read_done (rs_status_t status,
 {
     (void)p_context;
 
-    app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_HIGH);
+#if defined(APP_NFC_READER_LED_EN)
+    app_nfc_reader_led_set_all(BSP_IO_LEVEL_HIGH);
+#endif
 
     /* Informational / warning / fatal events (result == NULL) */
     if (NULL == result)
@@ -141,7 +183,9 @@ static void on_nfc_read_done (rs_status_t status,
             ptxCommon_PrintF("%s\n", summary);
         }
 
-        app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_LOW);
+#if defined(APP_NFC_READER_LED_EN)
+        app_nfc_reader_led_set_all(BSP_IO_LEVEL_LOW);
+#endif
         return;
     }
 
@@ -151,7 +195,9 @@ static void on_nfc_read_done (rs_status_t status,
     app_nfc_reader_card_event(result);
     (void)status;
 
-    app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_LOW);
+#if defined(APP_NFC_READER_LED_EN)
+    app_nfc_reader_led_set_all(BSP_IO_LEVEL_LOW);
+#endif
 }
 
 static void on_nfc_operation_done (rs_status_t status, void *p_context)
@@ -167,7 +213,9 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
  */
 void app_nfc_reader_entry (void)
 {
-    app_nfc_reader_utils_led_init();
+#if defined(APP_NFC_READER_LED_EN)
+    app_nfc_reader_led_init();
+#endif
     app_nfc_reader_log_init();
     app_nfc_reader_cli_init();
     app_nfc_reader_init();

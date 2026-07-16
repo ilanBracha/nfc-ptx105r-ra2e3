@@ -20,7 +20,6 @@
 
 #include "app_nfc_reader_cli.h"
 #include "app_nfc_reader_log.h"
-#include "app_nfc_reader_utils.h"
 #include "hal_data.h"
 #include "FreeRTOS.h"
 #include "task.h"

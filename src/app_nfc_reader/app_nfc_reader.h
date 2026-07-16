@@ -44,6 +44,7 @@
 #define APP_NFC_READER_H_
 
 #include "SEGGER_RTT.h" /* Import RTT Library */
+#include "hal_data.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,6 +56,16 @@ extern "C" {
  * ####################################################################################################################
  */
 
+/* Enable on-board LED feedback (comment out to disable LED code entirely). */
+#define APP_NFC_READER_LED_EN
+
+#if defined(APP_NFC_READER_LED_EN)
+#define APP_NFC_READER_LED_1      BSP_IO_PORT_02_PIN_13
+#define APP_NFC_READER_LED_2      BSP_IO_PORT_09_PIN_14
+
+void app_nfc_reader_led_init(void);
+void app_nfc_reader_led_set_all(bsp_io_level_t level);
+#endif /* APP_NFC_READER_LED_EN */
 
 /**
  * \brief IoT Reader application.
