@@ -1,5 +1,5 @@
 #include "hal_data.h"
-#include "app_main.h"
+#include "app_nfc_reader.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -13,10 +13,10 @@ FSP_CPP_FOOTER
  **********************************************************************************************************************/
 void hal_entry(void)
 {
-    /* Start the IoT Reader application.  Under FreeRTOS, app_main_entry()
+    /* Start the IoT Reader application.  Under FreeRTOS, app_nfc_reader_entry()
      * creates the NFC reader task and calls vTaskStartScheduler() — it
      * does not return. */
-    app_main_entry();
+    app_nfc_reader_entry();
 
 #if BSP_TZ_SECURE_BUILD
     /* Enter non-secure code */

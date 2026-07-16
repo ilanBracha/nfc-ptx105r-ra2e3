@@ -1,25 +1,25 @@
 /*
- * app_main_utils.c
+ * app_nfc_reader_utils.c
  *
  *  Created on: 1 Apr 2025
  *      Author: a5154862
  */
 
-#include "app_main_utils.h"
+#include "app_nfc_reader_utils.h"
 
 /* LED pins shared by both utilities.
  * Mapped for RA2E3 FPB
  */
 static const bsp_io_port_pin_t led_pins[] =
 {
-    APP_MAIN_UTILS_LED_1,
-    APP_MAIN_UTILS_LED_2,
+    APP_NFC_READER_UTILS_LED_1,
+    APP_NFC_READER_UTILS_LED_2,
 };
 
 static const uint32_t LED_COUNT = (uint32_t)(sizeof(led_pins) / sizeof(led_pins[0]));
 
 /* Configure all LED pins as outputs (called once). */
-void app_main_utils_led_init (void)
+void app_nfc_reader_utils_led_init (void)
 {
     for (uint32_t i = 0; i < LED_COUNT; i++)
     {
@@ -35,10 +35,10 @@ void app_main_utils_led_init (void)
  * bare RA2E3 FPB even when no PMOD daughter-board is attached.
  *
  * NOTE: `g_bsp_pin_cfg` (used by R_IOPORT_Open at boot) does not include
- * the on-board LED pins (P02_13, P09_14). app_main_utils_led_init() configures them
+ * the on-board LED pins (P02_13, P09_14). app_nfc_reader_utils_led_init() configures them
  * here at first use as outputs.
  */
-void app_main_utils_led_set_all(bsp_io_level_t level)
+void app_nfc_reader_utils_led_set_all(bsp_io_level_t level)
 {
     for (uint32_t i = 0; i < LED_COUNT; i++)
     {
@@ -52,10 +52,9 @@ void app_main_utils_led_set_all(bsp_io_level_t level)
  * Called by the CLI `blink` command and on card-detection events.
  * (The hold time used to be 500 µs which is far too short to be visible.)
  */
-void app_main_utils_blink_leds(void)
+void app_nfc_reader_utils_blink_leds(void)
 {
-    app_main_utils_led_set_all(BSP_IO_LEVEL_HIGH);
+    app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_HIGH);
     R_BSP_SoftwareDelay(150U, BSP_DELAY_UNITS_MILLISECONDS);
-    app_main_utils_led_set_all(BSP_IO_LEVEL_LOW);
+    app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_LOW);
 }
-

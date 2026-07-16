@@ -1,4 +1,4 @@
-/*
+﻿/*
  * user_uart_log.c
  *
  * Implementation of the UART debug-log sink. See user_uart_log.h.
@@ -8,19 +8,19 @@
  *    care what the FSP pin/UART tab set as the callback (typically the
  *    generated "NULL" stub). That keeps the helper self-contained and survives
  *    project regeneration.
- *  - TX is fully non-blocking: app_main_log_write() copies into an internal
+ *  - TX is fully non-blocking: app_nfc_reader_log_write() copies into an internal
  *    ring buffer and returns immediately. The SCI TX_COMPLETE ISR chain-loads
  *    the next contiguous chunk until the ring drains. If the ring fills up
  *    (very long burst at <115200 baud) the excess bytes are dropped so the
  *    debug log can never throttle the main loop or RTT.
  *  - RX bytes are collected in a separate ring buffer from the RX_CHAR event
- *    and consumed by user_cli via app_main_log_rx_get().
+ *    and consumed by user_cli via app_nfc_reader_log_rx_get().
  *  - The pin mux for P1_09 (TXD9) / P1_10 (RXD9) on the RA2E3 FPB is forced
  *    here via R_IOPORT_PinCfg, mirroring the SPI workaround in ptxPLAT_SPI.c
  *    -- the generated g_bsp_pin_cfg does not include those pins.
  */
 #include <stdio.h>
-#include "app_main_log.h"
+#include "app_nfc_reader_log.h"
 #include "hal_data.h"
 #include "r_ioport.h"
 #include <string.h>
@@ -36,11 +36,11 @@
  * peripheral is opened but its signals never reach the package pins. We force
  * the mux here, mirroring the SPI workaround in ptxPLAT_SPI.c.
  */
-#ifndef APP_MAIN_LOG_TXD_PIN
-#define APP_MAIN_LOG_TXD_PIN  BSP_IO_PORT_01_PIN_09
+#ifndef app_nfc_reader_log_TXD_PIN
+#define app_nfc_reader_log_TXD_PIN  BSP_IO_PORT_01_PIN_09
 #endif
-#ifndef APP_MAIN_LOG_RXD_PIN
-#define APP_MAIN_LOG_RXD_PIN  BSP_IO_PORT_01_PIN_10
+#ifndef app_nfc_reader_log_RXD_PIN
+#define app_nfc_reader_log_RXD_PIN  BSP_IO_PORT_01_PIN_10
 #endif
 
 /*
@@ -51,23 +51,23 @@
 static volatile uint8_t s_uart_initialized = 0u;
 
 /* Optional per-byte RX callback (registered by CLI layer). */
-static app_main_log_rx_callback_t s_rx_callback = NULL;
+static app_nfc_reader_log_rx_callback_t s_rx_callback = NULL;
 
 /* RX ring buffer (ISR producer / main consumer). Size MUST be a power of 2. */
-#define APP_MAIN_LOG_RX_BUF_SIZE   128u
-#define APP_MAIN_LOG_RX_BUF_MASK   (APP_MAIN_LOG_RX_BUF_SIZE - 1u)
+#define app_nfc_reader_log_RX_BUF_SIZE   128u
+#define app_nfc_reader_log_RX_BUF_MASK   (app_nfc_reader_log_RX_BUF_SIZE - 1u)
 
-static volatile uint8_t  s_rx_buf[APP_MAIN_LOG_RX_BUF_SIZE];
+static volatile uint8_t  s_rx_buf[app_nfc_reader_log_RX_BUF_SIZE];
 static volatile uint16_t s_rx_head; /* written by ISR (producer) */
 static volatile uint16_t s_rx_tail; /* written by main (consumer) */
 
 /* TX ring buffer (main producer / ISR consumer). Size MUST be a power of 2.
  * Big enough to hold a full NDEF hex dump (512 bytes * 3 chars + headers)
  * so logging never blocks the main loop. Increase if you see drops. */
-#define APP_MAIN_LOG_TX_BUF_SIZE   2048u
-#define APP_MAIN_LOG_TX_BUF_MASK   (APP_MAIN_LOG_TX_BUF_SIZE - 1u)
+#define app_nfc_reader_log_TX_BUF_SIZE   2048u
+#define app_nfc_reader_log_TX_BUF_MASK   (app_nfc_reader_log_TX_BUF_SIZE - 1u)
 
-static volatile uint8_t  s_tx_buf[APP_MAIN_LOG_TX_BUF_SIZE];
+static volatile uint8_t  s_tx_buf[app_nfc_reader_log_TX_BUF_SIZE];
 static volatile uint16_t s_tx_head;     /* next write index (main)  */
 static volatile uint16_t s_tx_tail;     /* next byte to be sent     */
 static volatile uint16_t s_tx_chunk;    /* bytes in current FSP write */
@@ -76,15 +76,15 @@ static volatile uint8_t  s_tx_busy;     /* 1 while FSP write in flight */
 /* Forward decl: kick the next contiguous chunk if idle. May be called from
  * either main (after enqueue) or ISR (on TX_COMPLETE). Caller must guarantee
  * mutual exclusion (we disable IRQs around the main-side call). */
-static void app_main_log_tx_locked(void);
-void app_main_log_write(const uint8_t *buf, size_t len);
+static void app_nfc_reader_log_tx_locked(void);
+void app_nfc_reader_log_write(const uint8_t *buf, size_t len);
 
 /*
  * ####################################################################################################################
  * CALLBACK
  * ####################################################################################################################
  */
-static void app_main_log_uart_cb (uart_callback_args_t *p_args)
+static void app_nfc_reader_log_uart_cb (uart_callback_args_t *p_args)
 {
     if (NULL == p_args)
     {
@@ -97,11 +97,11 @@ static void app_main_log_uart_cb (uart_callback_args_t *p_args)
         {
             /* Previous chunk fully shifted out. Advance tail and start the
              * next contiguous chunk if any data is still pending. */
-            uint16_t tail = (uint16_t)((s_tx_tail + s_tx_chunk) & APP_MAIN_LOG_TX_BUF_MASK);
+            uint16_t tail = (uint16_t)((s_tx_tail + s_tx_chunk) & app_nfc_reader_log_TX_BUF_MASK);
             s_tx_tail  = tail;
             s_tx_chunk = 0u;
             s_tx_busy  = 0u;
-            app_main_log_tx_locked();
+            app_nfc_reader_log_tx_locked();
             break;
         }
 
@@ -115,8 +115,8 @@ static void app_main_log_uart_cb (uart_callback_args_t *p_args)
                 s_rx_callback(rxb);
             }
 
-            /* Always store in ring buffer for app_main_log_rx_get() consumers. */
-            uint16_t next = (uint16_t)((s_rx_head + 1u) & APP_MAIN_LOG_RX_BUF_MASK);
+            /* Always store in ring buffer for app_nfc_reader_log_rx_get() consumers. */
+            uint16_t next = (uint16_t)((s_rx_head + 1u) & app_nfc_reader_log_RX_BUF_MASK);
             if (next != s_rx_tail)
             {
                 s_rx_buf[s_rx_head] = rxb;
@@ -143,7 +143,7 @@ static void app_main_log_uart_cb (uart_callback_args_t *p_args)
  * API
  * ####################################################################################################################
  */
-int app_main_log_init(void)
+int app_nfc_reader_log_init(void)
 {
     if (0u != s_uart_initialized)
     {
@@ -156,10 +156,10 @@ int app_main_log_init(void)
      * driver was already opened from R_BSP_WarmStart() POST_C, so this just
      * overrides the two PFS registers we need. */
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
-                          APP_MAIN_LOG_TXD_PIN,
+                          app_nfc_reader_log_TXD_PIN,
                           ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
-                          APP_MAIN_LOG_RXD_PIN,
+                          app_nfc_reader_log_RXD_PIN,
                           ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
 
     err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
@@ -169,7 +169,7 @@ int app_main_log_init(void)
     }
 
     /* Hook our own callback so we observe UART_EVENT_TX_COMPLETE. */
-    err = g_uart0.p_api->callbackSet(g_uart0.p_ctrl, app_main_log_uart_cb, NULL, NULL);
+    err = g_uart0.p_api->callbackSet(g_uart0.p_ctrl, app_nfc_reader_log_uart_cb, NULL, NULL);
     if (FSP_SUCCESS != err)
     {
         (void)g_uart0.p_api->close(g_uart0.p_ctrl);
@@ -187,7 +187,7 @@ int app_main_log_init(void)
 /* Dispatch the next contiguous chunk (tail .. min(head, end-of-ring)) to the
  * FSP UART driver. Safe to call when interrupts are masked OR from the ISR
  * itself (where they're effectively masked at this priority anyway). */
-static void app_main_log_tx_locked (void)
+static void app_nfc_reader_log_tx_locked (void)
 {
     if (s_tx_busy)
     {
@@ -201,7 +201,7 @@ static void app_main_log_tx_locked (void)
     }
 
     /* Contiguous span from tail up to either head or the end of the ring. */
-    uint16_t end = (head > tail) ? head : (uint16_t)APP_MAIN_LOG_TX_BUF_SIZE;
+    uint16_t end = (head > tail) ? head : (uint16_t)app_nfc_reader_log_TX_BUF_SIZE;
     uint16_t len = (uint16_t)(end - tail);
 
     s_tx_chunk = len;
@@ -219,7 +219,7 @@ static void app_main_log_tx_locked (void)
     }
 }
 
-void app_main_log_write(const uint8_t *buf, size_t len)
+void app_nfc_reader_log_write(const uint8_t *buf, size_t len)
 {
     if ((0u == s_uart_initialized) || (NULL == buf) || (0u == len))
     {
@@ -236,7 +236,7 @@ void app_main_log_write(const uint8_t *buf, size_t len)
     uint16_t tail = s_tx_tail;
     for (size_t i = 0u; i < len; i++)
     {
-        uint16_t next = (uint16_t)((head + 1u) & APP_MAIN_LOG_TX_BUF_MASK);
+        uint16_t next = (uint16_t)((head + 1u) & app_nfc_reader_log_TX_BUF_MASK);
         if (next == tail)
         {
             break; /* ring full -- drop remainder */
@@ -245,20 +245,20 @@ void app_main_log_write(const uint8_t *buf, size_t len)
         head = next;
     }
     s_tx_head = head;
-    app_main_log_tx_locked();
+    app_nfc_reader_log_tx_locked();
     __enable_irq();
 }
 
-void app_main_log_puts(const char *s)
+void app_nfc_reader_log_puts(const char *s)
 {
     if (NULL == s)
     {
         return;
     }
-    app_main_log_write((const uint8_t *)s, strlen(s));
+    app_nfc_reader_log_write((const uint8_t *)s, strlen(s));
 }
 
-size_t app_main_log_rx_available(void)
+size_t app_nfc_reader_log_rx_available(void)
 {
     if (0u == s_uart_initialized)
     {
@@ -266,10 +266,10 @@ size_t app_main_log_rx_available(void)
     }
     uint16_t head = s_rx_head;
     uint16_t tail = s_rx_tail;
-    return (size_t)((head - tail) & APP_MAIN_LOG_RX_BUF_MASK);
+    return (size_t)((head - tail) & app_nfc_reader_log_RX_BUF_MASK);
 }
 
-int app_main_log_rx_get(uint8_t *out)
+int app_nfc_reader_log_rx_get(uint8_t *out)
 {
     if ((0u == s_uart_initialized) || (NULL == out))
     {
@@ -281,11 +281,11 @@ int app_main_log_rx_get(uint8_t *out)
         return 0;
     }
     *out = s_rx_buf[tail];
-    s_rx_tail = (uint16_t)((tail + 1u) & APP_MAIN_LOG_RX_BUF_MASK);
+    s_rx_tail = (uint16_t)((tail + 1u) & app_nfc_reader_log_RX_BUF_MASK);
     return 1;
 }
 
-void app_main_log_rx_callback(app_main_log_rx_callback_t cb)
+void app_nfc_reader_log_rx_callback(app_nfc_reader_log_rx_callback_t cb)
 {
     s_rx_callback = cb;
 }
@@ -302,7 +302,7 @@ void app_main_log_rx_callback(app_main_log_rx_callback_t cb)
  */
 
 /* Minimal format-to-buffer: supports %s %c %d %u %x %X %02X %04X %02d %04d %p %% and width/zero-pad for integers */
-static int app_main_log_vsnprintf (char *buf, unsigned max, const char *fmt, va_list ap)
+static int app_nfc_reader_log_vsnprintf (char *buf, unsigned max, const char *fmt, va_list ap)
 {
     unsigned pos = 0u;
 #define PUT(c) do { if (pos < (max - 1u)) { buf[pos] = (c); } pos++; } while(0)
@@ -406,11 +406,11 @@ void ptxCommon_PrintF(const char *format, ...)
     /* UART only (RTT sink removed to reclaim flash): format into stack
      * buffer and send. */
     char buf[256];
-    int len = app_main_log_vsnprintf(buf, sizeof(buf), format, ap);
+    int len = app_nfc_reader_log_vsnprintf(buf, sizeof(buf), format, ap);
 
     if (len > 0)
     {
-        app_main_log_write((const uint8_t *)buf, (unsigned)len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned)len);
+        app_nfc_reader_log_write((const uint8_t *)buf, (unsigned)len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned)len);
     }
 
     va_end(ap);
@@ -462,10 +462,10 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
  * ####################################################################################################################
  *
  * Reads fields from rs_nfc_card_result_t and formats a human-readable block
- * to both RTT and UART.  Pure I/O — no LED or board interaction; the caller
+ * to both RTT and UART.  Pure I/O â€” no LED or board interaction; the caller
  * is responsible for any visual feedback (blink, etc.).
  */
-void app_main_log_print_card_info(const rs_nfc_card_result_t * result)
+void app_nfc_reader_log_print_card_info(const rs_nfc_card_result_t * result)
 {
     char rf_tech[16];
 
@@ -502,7 +502,7 @@ void app_main_log_print_card_info(const rs_nfc_card_result_t * result)
             break;
     }
 
-    ptxCommon_PrintF("RF Technology  : "APP_MAIN_LOG_COL_BRIGHT_CYAN "%s\n" APP_MAIN_LOG_COL_RESET, rf_tech);
+    ptxCommon_PrintF("RF Technology  : "APP_NFC_READER_LOG_COL_BRIGHT_CYAN "%s\n" APP_NFC_READER_LOG_COL_RESET, rf_tech);
 
     /* Tag Type */
     ptxCommon_PrintF("Tag Type       : %s\n",

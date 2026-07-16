@@ -35,7 +35,7 @@
 
     Project     : PTX1K
     Module      : IOT_READER Demo
-    File        : app_main.c
+    File        : app_nfc_reader.c
 
     Description : IoT Reader demo application for PTX1xxR NFC Platform.
                   Thin application layer — all NFC protocol logic lives in the
@@ -52,12 +52,12 @@
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "app_main_utils.h"
-#include "app_main_cli.h"
+#include "app_nfc_reader_utils.h"
+#include "app_nfc_reader_cli.h"
 #include "ptxCOMMON.h"
 #include "ptx_IOT_READER.h"
-#include "app_main.h"
-#include "app_main_log.h"
+#include "app_nfc_reader.h"
+#include "app_nfc_reader_log.h"
 #include "rs_nfc_reader.h"
 
 /*
@@ -67,15 +67,15 @@
  */
 
 /* RX/TX buffer sizes — used for raw-exchange print buffers */
-#define APP_MAIN_RX_BUF_SIZE  300u
-#define APP_MAIN_TX_BUF_SIZE  280u
+#define APP_NFC_READER_RX_BUF_SIZE  300u
+#define APP_NFC_READER_TX_BUF_SIZE  280u
 
 /*
  * ####################################################################################################################
  * DATA EXCHANGE (card info + raw demo exchange)
  * ####################################################################################################################
  */
-static void app_main_card_event (const rs_nfc_card_result_t *result)
+static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
 {
     if (NULL == result) { return; }
 
@@ -85,16 +85,16 @@ static void app_main_card_event (const rs_nfc_card_result_t *result)
      * The result was handed to us by RS and is still alive. */
     (void)rs_nfc_reader_ReadCardInfo(result->protocol, (rs_nfc_card_result_t *)result);
 
-    app_main_log_print_card_info(result);
+    app_nfc_reader_log_print_card_info(result);
 
     /* Raw protocol exchange */
     if ((RS_NFC_PROT_ISODEP != result->protocol) &&
         (RS_NFC_PROT_UNDEFINED != result->protocol))
     {
-        static uint8_t tx_buf[APP_MAIN_TX_BUF_SIZE];
-        static uint8_t rx_buf[APP_MAIN_RX_BUF_SIZE];
+        static uint8_t tx_buf[APP_NFC_READER_TX_BUF_SIZE];
+        static uint8_t rx_buf[APP_NFC_READER_RX_BUF_SIZE];
         uint32_t tx_len = 0u;
-        uint32_t rx_len = APP_MAIN_RX_BUF_SIZE;
+        uint32_t rx_len = APP_NFC_READER_RX_BUF_SIZE;
 
         rs_status_t st = rs_nfc_reader_RawExchange(
             result->protocol,
@@ -131,7 +131,7 @@ static void on_nfc_read_done (rs_status_t status,
 {
     (void)p_context;
 
-    app_main_utils_led_set_all(BSP_IO_LEVEL_HIGH);
+    app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_HIGH);
 
     /* Informational / warning / fatal events (result == NULL) */
     if (NULL == result)
@@ -141,17 +141,17 @@ static void on_nfc_read_done (rs_status_t status,
             ptxCommon_PrintF("%s\n", summary);
         }
 
-        app_main_utils_led_set_all(BSP_IO_LEVEL_LOW);
+        app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_LOW);
         return;
     }
 
-    ptxCommon_PrintF(APP_MAIN_LOG_COL_BRIGHT_GREEN "\n\n%s" APP_MAIN_LOG_COL_RESET "\n",
+    ptxCommon_PrintF(APP_NFC_READER_LOG_COL_BRIGHT_GREEN "\n\n%s" APP_NFC_READER_LOG_COL_RESET "\n",
                      (NULL != summary) ? summary : "CARD DETECTED!");
 
-    app_main_card_event(result);
+    app_nfc_reader_card_event(result);
     (void)status;
 
-    app_main_utils_led_set_all(BSP_IO_LEVEL_LOW);
+    app_nfc_reader_utils_led_set_all(BSP_IO_LEVEL_LOW);
 }
 
 static void on_nfc_operation_done (rs_status_t status, void *p_context)
@@ -165,15 +165,15 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
  * APPLICATION ENTRY POINT
  * ####################################################################################################################
  */
-void app_main_entry (void)
+void app_nfc_reader_entry (void)
 {
-    app_main_utils_led_init();
-    app_main_log_init();
-    app_main_cli_init();
-    app_main_init();
+    app_nfc_reader_utils_led_init();
+    app_nfc_reader_log_init();
+    app_nfc_reader_cli_init();
+    app_nfc_reader_init();
 }
 
-void app_main_init (void)
+void app_nfc_reader_init (void)
 {
     rs_nfc_card_result_t result;
     rs_status_t st = RS_OK;

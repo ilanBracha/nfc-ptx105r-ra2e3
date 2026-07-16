@@ -35,13 +35,13 @@
 
     Project     : PTX1K
     Module      : IOT_READER Demo
-    File        : app_main.h
+    File        : app_nfc_reader.h
 
     Description :
 */
 
-#ifndef APP_MAIN_H_
-#define APP_MAIN_H_
+#ifndef APP_NFC_READER_H_
+#define APP_NFC_READER_H_
 
 #include "SEGGER_RTT.h" /* Import RTT Library */
 
@@ -62,12 +62,11 @@ extern "C" {
  * This function is the entry point for the IoT Reader application with discovery loop.
  *
  */
-void app_main_init(void);
-void app_main_entry(void);
+void app_nfc_reader_init(void);
+void app_nfc_reader_entry(void);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* Guard */
-
