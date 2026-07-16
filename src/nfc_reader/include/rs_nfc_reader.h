@@ -200,6 +200,13 @@ typedef struct {
     bool read_ndef;
     uint16_t max_ndef_bytes;
 
+    /* Opt-in demo: after activation, perform a protocol-appropriate raw
+     * frame exchange (T2T READ / T3T CHECK / T5T READ_SINGLE_BLOCK / NFC-DEP
+     * SYMM). The TX/RX frames are exposed to the on_card_event callback via
+     * the result->raw_exchange fields. No effect for ISO-DEP or when
+     * on_card_event is NULL. Default: false. */
+    bool run_raw_exchange;
+
     /* Non-blocking support:
      * callback == NULL -> blocking (Read blocks until done)
      * callback != NULL -> non-blocking (Read returns immediately,
@@ -228,6 +235,23 @@ typedef struct {
 #define RS_NFC_UID_MAX_BYTES       10U
 #define RS_NFC_NDEF_MAX_BYTES      512U
 
+/**
+ * Snapshot of the last raw protocol exchange performed on an activated card.
+ * Populated only when cfg->run_raw_exchange = true and the active protocol
+ * supports it (i.e. NOT ISO-DEP / UNDEFINED). The tx / rx pointers reference
+ * RS-internal static buffers and MUST NOT be retained past the
+ * on_card_event callback (same contract as `summary`). Consumers must check
+ * `valid` before using any other field.
+ */
+typedef struct {
+    bool           valid;
+    rs_status_t    status;
+    const uint8_t *tx;
+    uint32_t       tx_len;
+    const uint8_t *rx;
+    uint32_t       rx_len;
+} rs_nfc_raw_exchange_t;
+
 struct rs_nfc_card_result_s {
     rs_nfc_card_type_t card_type;
     rs_nfc_protocol_t  protocol;     /* active RF protocol */
@@ -245,6 +269,10 @@ struct rs_nfc_card_result_s {
     const char *tag_type_name;    /**< Human-readable tag type, e.g.
                                        "NFC Forum Type 2 Tag (T2T)".
                                        Points to a static string — do NOT free. */
+
+    /* Last raw exchange (see rs_nfc_raw_exchange_t doc). Check
+     * raw_exchange.valid before use. */
+    rs_nfc_raw_exchange_t raw_exchange;
 };
 
 /**********************************************************************************************************************

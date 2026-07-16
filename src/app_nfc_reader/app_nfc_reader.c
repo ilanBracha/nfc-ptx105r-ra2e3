@@ -65,10 +65,6 @@
  * ####################################################################################################################
  */
 
-/* RX/TX buffer sizes — used for raw-exchange print buffers */
-#define APP_NFC_READER_RX_BUF_SIZE  300u
-#define APP_NFC_READER_TX_BUF_SIZE  280u
-
 /*
  * ####################################################################################################################
  * LED UTILITIES
@@ -119,41 +115,28 @@ static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
 {
     if (NULL == result) { return; }
 
-    /* Read card info via RS - Cast away const — 
-     * rs_nfc_reader_ReadCardInfo populates the
-     * extended fields (data_area_size, writeable, tag_type_name, ndef_*).
-     * The result was handed to us by RS and is still alive. */
-    (void)rs_nfc_reader_ReadCardInfo(result->protocol, (rs_nfc_card_result_t *)result);
-
+    /* All extended fields (ndef_*, data_area_size, writeable, tag_type_name)
+     * and the optional raw-exchange TX/RX frames are pre-populated by
+     * rs_nfc_reader_Read() before firing the per-card event, so the app
+     * only needs to consume `result` — no further RS calls required. */
     app_nfc_reader_log_print_card_info(result);
 
-    /* Raw protocol exchange */
-    if ((RS_NFC_PROT_ISODEP != result->protocol) &&
-        (RS_NFC_PROT_UNDEFINED != result->protocol))
+    /* Raw protocol exchange (populated by RS when cfg.run_raw_exchange = true
+     * and the protocol is not ISO-DEP / UNDEFINED). */
+    if (result->raw_exchange.valid)
     {
-        static uint8_t tx_buf[APP_NFC_READER_TX_BUF_SIZE];
-        static uint8_t rx_buf[APP_NFC_READER_RX_BUF_SIZE];
-        uint32_t tx_len = 0u;
-        uint32_t rx_len = APP_NFC_READER_RX_BUF_SIZE;
-
-        rs_status_t st = rs_nfc_reader_RawExchange(
-            result->protocol,
-            result->uid, result->uid_len,
-            tx_buf, &tx_len,
-            rx_buf, &rx_len);
-
         ptxCommon_PrintF("=========== DATA EXCHANGE ================\n");
         ptxCommon_PrintF("TX = ");
-        ptxCommon_Print_Buffer(tx_buf, 0, tx_len, 1, 0);
-        if (RS_OK == st)
+        ptxCommon_Print_Buffer((uint8_t *)result->raw_exchange.tx, 0, result->raw_exchange.tx_len, 1, 0);
+        if (RS_OK == result->raw_exchange.status)
         {
             ptxCommon_PrintF("RX = ");
-            ptxCommon_Print_Buffer(rx_buf, 0, rx_len, 1, 0);
+            ptxCommon_Print_Buffer((uint8_t *)result->raw_exchange.rx, 0, result->raw_exchange.rx_len, 1, 0);
         }
         else
         {
             ptxCommon_PrintF("ERROR - RF-Exchange failed (status=%d)\n",
-                             (int)st);
+                             (int)result->raw_exchange.status);
         }
         ptxCommon_PrintF("==========================================\n");
     }
@@ -235,6 +218,7 @@ void app_nfc_reader_init (void)
     cfg.retry_count           = 0u;
     cfg.read_ndef             = true;
     cfg.max_ndef_bytes        = RS_NFC_NDEF_MAX_BYTES;
+    cfg.run_raw_exchange      = true;
     cfg.callback              = on_nfc_operation_done;
     cfg.p_context             = NULL;
     cfg.on_card_event         = on_nfc_read_done;

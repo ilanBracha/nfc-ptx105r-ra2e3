@@ -47,6 +47,16 @@
 #define PTX_SYS_STATUS_OK                       0x00u
 #define PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT 0x06u
 
+/* Static buffers for the optional per-card raw demo exchange.
+ * Sized to match the frames built inside rs_nfc_reader_RawExchange
+ * (largest = T5T READ_SINGLE_BLOCK = 11 bytes TX; RX capped by HAL).
+ * Only one Read() runs at a time (async re-entrancy is guarded by
+ * g_async_ctx.active), so a single set of static buffers is safe. */
+#define RAW_TX_BUF_SIZE  280U
+#define RAW_RX_BUF_SIZE  300U
+static uint8_t g_raw_tx_buf[RAW_TX_BUF_SIZE];
+static uint8_t g_raw_rx_buf[RAW_RX_BUF_SIZE];
+
 /***********************************************************************************************************************
  * Per-call orchestrator state
  **********************************************************************************************************************/
@@ -224,6 +234,29 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                     if (cfg->read_ndef)
                     {
                         (void)rs_nfc_reader_ReadCardInfo(res->protocol, res);
+                    }
+
+                    /* Optional raw demo exchange — result exposed to app
+                     * via res->raw_exchange so the app does not need to call
+                     * rs_nfc_reader_RawExchange itself. Prior memset() has
+                     * already zero-initialised res->raw_exchange. */
+                    if (cfg->run_raw_exchange &&
+                        (RS_NFC_PROT_ISODEP    != res->protocol) &&
+                        (RS_NFC_PROT_UNDEFINED != res->protocol))
+                    {
+                        uint32_t tx_len = 0u;
+                        uint32_t rx_len = RAW_RX_BUF_SIZE;
+                        rs_status_t rst = rs_nfc_reader_RawExchange(
+                                              res->protocol,
+                                              res->uid, res->uid_len,
+                                              g_raw_tx_buf, &tx_len,
+                                              g_raw_rx_buf, &rx_len);
+                        res->raw_exchange.valid  = true;
+                        res->raw_exchange.status = rst;
+                        res->raw_exchange.tx     = g_raw_tx_buf;
+                        res->raw_exchange.tx_len = tx_len;
+                        res->raw_exchange.rx     = g_raw_rx_buf;
+                        res->raw_exchange.rx_len = (RS_OK == rst) ? rx_len : 0u;
                     }
 
                     /* Build summary string and fire per-card event */
