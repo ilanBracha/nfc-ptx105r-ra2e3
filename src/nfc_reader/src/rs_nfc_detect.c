@@ -23,7 +23,7 @@ rs_status_t rs_nfc_detect_wait(uint32_t timeout_ms, rs_nfc_disc_status_t *out_st
      * rs_nfc_ptx_wait_for_card. */
 
     /* Block (zero-CPU) until the reader's IRQ line signals an event or
-     * the timeout elapses. If RS_NFCReader_Stop() is called while
+     * the timeout elapses. If rs_nfc_reader_Stop() is called while
      * we are blocked, it sends a task notification to wake us
      * immediately so we can observe the stop flag. */
     rs_status_t st = rs_nfc_ptx_wait_for_card(timeout_ms, out_status);

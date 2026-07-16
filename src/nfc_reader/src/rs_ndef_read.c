@@ -262,7 +262,7 @@ static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
  * Public API
  **********************************************************************************************************************/
 
-rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
+rs_status_t rs_nfc_reader_ReadCardInfo(rs_nfc_protocol_t protocol,
                                             rs_nfc_card_result_t *result)
 {
     if (NULL == result) { return RS_ERR_INVALID_CFG; }
@@ -306,7 +306,7 @@ rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
  * BER-TLV search
  **********************************************************************************************************************/
 
-bool RS_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
+bool rs_ndef_tlv_find(const uint8_t *buf, uint32_t len, uint16_t tag,
                       const uint8_t **val, uint32_t *val_len)
 {
     uint32_t i = 0;
@@ -344,7 +344,7 @@ bool RS_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
             *val_len = cl;
             return true;
         }
-        if (constr && RS_NDEF_TlvFind(&buf[i], cl, tag, val, val_len))
+        if (constr && rs_ndef_tlv_find(&buf[i], cl, tag, val, val_len))
         {
             return true;
         }
@@ -357,7 +357,7 @@ bool RS_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
  * String helpers
  **********************************************************************************************************************/
 
-bool RS_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
+bool rs_ndef_type_equals(const uint8_t *type, uint8_t type_len,
                          const char *str)
 {
     uint32_t n = 0;
@@ -370,7 +370,7 @@ bool RS_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
     return true;
 }
 
-bool RS_NDEF_StartsWith(const char *str, uint32_t str_len,
+bool rs_ndef_starts_with(const char *str, uint32_t str_len,
                          const char *prefix)
 {
     uint32_t n = 0;
@@ -386,7 +386,7 @@ bool RS_NDEF_StartsWith(const char *str, uint32_t str_len,
  * NDEF message decoder
  **********************************************************************************************************************/
 
-rs_status_t RS_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
+rs_status_t rs_ndef_decode_message(const uint8_t *msg, uint32_t len,
                                     rs_ndef_decoded_t *out)
 {
     if ((NULL == out)) { return RS_ERR_INVALID_CFG; }
@@ -491,7 +491,7 @@ static bool wsc_find(const uint8_t *buf, uint32_t len, uint16_t want,
     return false;
 }
 
-rs_status_t RS_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
+rs_status_t rs_ndef_decode_wifi(const uint8_t *payload, uint32_t len,
                                  rs_wifi_info_t *out)
 {
     if (NULL == out) { return RS_ERR_INVALID_CFG; }
@@ -542,7 +542,7 @@ rs_status_t RS_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
  * Bluetooth OOB decoder
  **********************************************************************************************************************/
 
-rs_status_t RS_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
+rs_status_t rs_ndef_decode_bluetooth(const uint8_t *payload, uint32_t len,
                                       bool is_le, rs_bt_info_t *out)
 {
     if (NULL == out) { return RS_ERR_INVALID_CFG; }

@@ -90,30 +90,23 @@ typedef struct {
     bool     is_le;
 } rs_bt_info_t;
 
-rs_status_t RS_NDEF_DecodeMessage(const uint8_t *msg, uint32_t len,
+rs_status_t rs_ndef_decode_message(const uint8_t *msg, uint32_t len,
                                     rs_ndef_decoded_t *out);
 
-rs_status_t RS_NDEF_DecodeWifi(const uint8_t *payload, uint32_t len,
+rs_status_t rs_ndef_decode_wifi(const uint8_t *payload, uint32_t len,
                                  rs_wifi_info_t *out);
 
-rs_status_t RS_NDEF_DecodeBluetooth(const uint8_t *payload, uint32_t len,
+rs_status_t rs_ndef_decode_bluetooth(const uint8_t *payload, uint32_t len,
                                       bool is_le, rs_bt_info_t *out);
 
-bool RS_NDEF_TlvFind(const uint8_t *buf, uint32_t len, uint16_t tag,
+bool rs_ndef_tlv_find(const uint8_t *buf, uint32_t len, uint16_t tag,
                       const uint8_t **val, uint32_t *val_len);
 
-bool RS_NDEF_TypeEquals(const uint8_t *type, uint8_t type_len,
+bool rs_ndef_type_equals(const uint8_t *type, uint8_t type_len,
                          const char *str);
 
-bool RS_NDEF_StartsWith(const char *str, uint32_t str_len,
+bool rs_ndef_starts_with(const char *str, uint32_t str_len,
                          const char *prefix);
-
-/**********************************************************************************************************************
- * Device selection
- **********************************************************************************************************************/
-typedef enum {
-    RS_NFC_READER_PTX105R = 0,
-} rs_nfc_reader_device_t;
 
 /**********************************************************************************************************************
  * Technology mask
@@ -165,8 +158,8 @@ typedef enum {
  * Operation-end callback (non-blocking mode)
  **********************************************************************************************************************/
 /**
- * Fired once when a non-blocking RS_NFCReader_Read() completes
- * (timeout, fatal error, or RS_NFCReader_Stop() was called).
+ * Fired once when a non-blocking rs_nfc_reader_Read() completes
+ * (timeout, fatal error, or rs_nfc_reader_Stop() was called).
  */
 typedef void (*rs_nfc_callback_t)(rs_status_t status, void *p_context);
 
@@ -180,7 +173,7 @@ typedef struct rs_nfc_card_result_s rs_nfc_card_result_t;
  * Per-card event callback
  **********************************************************************************************************************/
 /*
- * Fired by RS_NFCReader_Read() each time a card is detected, activated
+ * Fired by rs_nfc_reader_Read() each time a card is detected, activated
  * and (optionally) NDEF-read. The application MUST treat result/summary as
  * read-only and MUST NOT retain pointers past the call: both buffers are
  * reused on the next iteration of the read loop.
@@ -194,12 +187,11 @@ typedef void (*rs_nfc_card_event_cb_t)(rs_status_t status,
  * Configuration
  **********************************************************************************************************************/
 typedef struct {
-    /* Reader device selection */
-    rs_nfc_reader_device_t reader;
-
-    /* Polling configuration */
+    /* Polling configuration: Must be within [RS_NFC_POLLING_INTERVAL_MIN_MS, RS_NFC_POLLING_INTERVAL_MAX_MS]. */
+    uint32_t polling_interval_ms;
     rs_nfc_tech_mask_t tech_mask;
-    /* Run duration of RS_NFCReader_Read() in milliseconds.
+
+    /* Run duration of rs_nfc_reader_Read() in milliseconds.
      * Set to UINT32_MAX to loop forever (never return). */
     uint32_t timeout_ms;
     uint8_t retry_count;
@@ -229,6 +221,7 @@ typedef struct {
     bool validate_dependencies;
 } rs_nfc_reader_cfg_t;
 
+
 /**********************************************************************************************************************
  * Result
  **********************************************************************************************************************/
@@ -246,7 +239,7 @@ struct rs_nfc_card_result_s {
     int8_t rssi_dbm; /* optional, HAL may return 0 if unsupported */
     uint32_t read_time_ms;
 
-    /* Extended card-info fields (populated by RS_NFCReader_ReadCardInfo) */
+    /* Extended card-info fields (populated by rs_nfc_reader_ReadCardInfo) */
     uint32_t    data_area_size;   /**< Tag capacity in bytes (from CC)       */
     bool        writeable;        /**< true if tag write-access is granted   */
     const char *tag_type_name;    /**< Human-readable tag type, e.g.
@@ -273,7 +266,7 @@ struct rs_nfc_card_result_s {
  * In both modes, if on_card_event is set the orchestrator runs in
  * continuous-loop mode and fires one event per detected card.
  */
-rs_status_t RS_NFCReader_Read(const rs_nfc_reader_cfg_t * cfg, rs_nfc_card_result_t * result_out);
+rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t * cfg, rs_nfc_card_result_t * result_out);
 
 /**
  * Request graceful stop of a running Read (blocking or non-blocking).
@@ -281,7 +274,7 @@ rs_status_t RS_NFCReader_Read(const rs_nfc_reader_cfg_t * cfg, rs_nfc_card_resul
  * Safe to call even when no operation is in flight.
  * @return RS_OK always.
  */
-rs_status_t RS_NFCReader_Stop(void);
+rs_status_t rs_nfc_reader_Stop(void);
 
 /**
  * Validates NFC card reader configuration and optional dependency state.
@@ -305,7 +298,7 @@ rs_status_t RS_NFCReader_Stop(void);
  *         RS_ERR_INVALID_CFG if configuration is incomplete or invalid.
  *         RS_ERR_DEPENDENCY if a runtime dependency check fails.
  */
-rs_status_t RS_NFCReader_Validate(const rs_nfc_reader_cfg_t *cfg);
+rs_status_t rs_nfc_reader_Validate(const rs_nfc_reader_cfg_t *cfg);
 
 /**
  * Read structured card information (CC, NDEF message, tag type, size,
@@ -320,8 +313,8 @@ rs_status_t RS_NFCReader_Validate(const rs_nfc_reader_cfg_t *cfg);
  * @param[in,out] result     Result struct to populate. Must not be NULL.
  * @return RS_OK on success; RS_ERR_NOT_FOUND if not NDEF formatted.
  */
-rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
-                                            rs_nfc_card_result_t *result);
+rs_status_t rs_nfc_reader_ReadCardInfo(rs_nfc_protocol_t protocol,
+                                      rs_nfc_card_result_t *result);
 
 /**
  * Perform a protocol-specific raw demo exchange with the activated card.
@@ -337,10 +330,10 @@ rs_status_t RS_NFCReader_ReadCardInfo(rs_nfc_protocol_t protocol,
  * @param[out] rx_len    IN: capacity; OUT: received length.
  * @return RS_OK on success.
  */
-rs_status_t RS_NFCReader_RawExchange(rs_nfc_protocol_t protocol,
-                                           const uint8_t *uid, uint8_t uid_len,
-                                           uint8_t *tx, uint32_t *tx_len,
-                                           uint8_t *rx, uint32_t *rx_len);
+rs_status_t rs_nfc_reader_RawExchange(rs_nfc_protocol_t protocol,
+                                     const uint8_t *uid, uint8_t uid_len,
+                                     uint8_t *tx, uint32_t *tx_len,
+                                     uint8_t *rx, uint32_t *rx_len);
 
 #ifdef __cplusplus
 }

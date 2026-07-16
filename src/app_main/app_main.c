@@ -80,10 +80,10 @@ static void app_main_card_event (const rs_nfc_card_result_t *result)
     if (NULL == result) { return; }
 
     /* Read card info via RS - Cast away const — 
-     * RS_NFCReader_ReadCardInfo populates the
+     * rs_nfc_reader_ReadCardInfo populates the
      * extended fields (data_area_size, writeable, tag_type_name, ndef_*).
      * The result was handed to us by RS and is still alive. */
-    (void)RS_NFCReader_ReadCardInfo(result->protocol, (rs_nfc_card_result_t *)result);
+    (void)rs_nfc_reader_ReadCardInfo(result->protocol, (rs_nfc_card_result_t *)result);
 
     app_main_log_print_card_info(result);
 
@@ -96,7 +96,7 @@ static void app_main_card_event (const rs_nfc_card_result_t *result)
         uint32_t tx_len = 0u;
         uint32_t rx_len = APP_MAIN_RX_BUF_SIZE;
 
-        rs_status_t st = RS_NFCReader_RawExchange(
+        rs_status_t st = rs_nfc_reader_RawExchange(
             result->protocol,
             result->uid, result->uid_len,
             tx_buf, &tx_len,
@@ -157,7 +157,7 @@ static void on_nfc_read_done (rs_status_t status,
 static void on_nfc_operation_done (rs_status_t status, void *p_context)
 {
     (void)p_context;
-    ptxCommon_PrintF("RS_NFCReader_Read completed (status=%d)\n", (int)status);
+    ptxCommon_PrintF("rs_nfc_reader_Read completed (status=%d)\n", (int)status);
 }
 
 /*
@@ -182,7 +182,6 @@ void app_main_init (void)
 
     rs_nfc_reader_cfg_t cfg;
     memset(&cfg, 0, sizeof(cfg));
-    cfg.reader                = RS_NFC_READER_PTX105R;
     cfg.tech_mask             = RS_NFC_TECH_ALL;
     cfg.timeout_ms            = UINT32_MAX;
     cfg.retry_count           = 0u;
@@ -196,11 +195,11 @@ void app_main_init (void)
 
     memset(&result, 0, sizeof(result));
 
-    st = RS_NFCReader_Read(&cfg, &result);
+    st = rs_nfc_reader_Read(&cfg, &result);
 
     if (RS_OK != st)
     {
-        ptxCommon_PrintF("RS_NFCReader_Read launch FAILED (status=%d)\n", (int)st);
+        ptxCommon_PrintF("rs_nfc_reader_Read launch FAILED (status=%d)\n", (int)st);
     }
     else
     {

@@ -236,10 +236,8 @@ static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
  * PTX SDK function implementations
  **********************************************************************************************************************/
 
-rs_status_t rs_nfc_ptx_open(rs_nfc_reader_device_t device)
+rs_status_t rs_nfc_ptx_open (void)
 {
-    RS_COMMON_UNUSED(device);
-
     nfc_reader_ptx_cfg_t const * p_cfg = &g_nfc_reader_ptx0_cfg;
 
     /* Define IoT Reader parameters (mirrors former RM_NFC_READER_PTX_Open) */
@@ -247,9 +245,9 @@ rs_status_t rs_nfc_ptx_open(rs_nfc_reader_device_t device)
     ptxIoTRd_TempSense_Params_t    temp_sensor;
     ptxIoTRd_ComInterface_Params_t com_interface;
 
-    (void)memset(&init_params, PTX105R_ZERO, sizeof(init_params));
-    (void)memset(&temp_sensor, PTX105R_ZERO, sizeof(temp_sensor));
-    (void)memset(&com_interface, PTX105R_ZERO, sizeof(com_interface));
+    memset(&init_params, PTX105R_ZERO, sizeof(init_params));
+    memset(&temp_sensor, PTX105R_ZERO, sizeof(temp_sensor));
+    memset(&com_interface, PTX105R_ZERO, sizeof(com_interface));
 
     /* Temperature-sensor calibration is only performed once per power cycle */
     if (true == g_start_temp_calibration)
