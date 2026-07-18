@@ -59,9 +59,9 @@ typedef struct {
 rs_status_t rs_nfc_ptx_open(void);
 rs_status_t rs_nfc_ptx_close(void);
 bool rs_nfc_ptx_is_open(void);
-rs_status_t rs_nfc_ptx_configure_polling(rs_nfc_tech_mask_t tech_mask);
-rs_status_t rs_nfc_ptx_start_polling(void);
-rs_status_t rs_nfc_ptx_stop_polling(void);
+rs_status_t rs_nfc_ptx_configure_discovery(rs_nfc_tech_mask_t tech_mask);
+rs_status_t rs_nfc_ptx_start_discovery(void);
+rs_status_t rs_nfc_ptx_stop_discovery(void);
 rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms,
                                        rs_nfc_disc_status_t *out_status);
 rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t *card_info);

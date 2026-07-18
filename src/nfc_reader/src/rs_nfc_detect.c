@@ -2,7 +2,7 @@
  * rs_nfc_detect.c
  *
  * Card detection: wait for a card-discovery event, the timeout to expire,
- * or a stop request. Interrupt-driven — no fixed-cadence status polling.
+ * or a stop request. Interrupt-driven — the task blocks on the reader IRQ.
  * Uses only the rs_nfc_ptx API.
  */
 

@@ -313,13 +313,13 @@ bool rs_nfc_ptx_is_open(void)
     return g_ptx_opened;
 }
 
-rs_status_t rs_nfc_ptx_configure_polling(rs_nfc_tech_mask_t tech_mask)
+rs_status_t rs_nfc_ptx_configure_discovery(rs_nfc_tech_mask_t tech_mask)
 {
     RS_COMMON_UNUSED(tech_mask);
     return RS_OK;
 }
 
-rs_status_t rs_nfc_ptx_start_polling(void)
+rs_status_t rs_nfc_ptx_start_discovery(void)
 {
     nfc_reader_ptx_cfg_t const * p_cfg = &g_nfc_reader_ptx0_cfg;
 
@@ -347,7 +347,7 @@ rs_status_t rs_nfc_ptx_start_polling(void)
     return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-rs_status_t rs_nfc_ptx_stop_polling(void)
+rs_status_t rs_nfc_ptx_stop_discovery(void)
 {
     ptxStatus_t st = ptxIoTRd_Reader_Deactivation(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                                   PTX_IOTRD_RF_DEACTIVATION_TYPE_IDLE);
@@ -368,7 +368,9 @@ rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms, rs_nfc_disc_status_t *
         return ptx105r_discover_status(out_status);
     }
 
-    TickType_t remaining_ticks = pdMS_TO_TICKS(timeout_ms);
+    TickType_t remaining_ticks = (UINT32_MAX == timeout_ms)
+                                  ? portMAX_DELAY
+                                  : pdMS_TO_TICKS(timeout_ms);
     TickType_t start_tick      = xTaskGetTickCount();
 
     g_waiting_task = xTaskGetCurrentTaskHandle();
@@ -641,4 +643,3 @@ ptxNDEF_T3TOP_t * rs_nfc_ptx_get_ndef_t3t_comp (void)
 {
     return &g_t3t_ndef_comp;
 }
-

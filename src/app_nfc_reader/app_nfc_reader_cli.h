@@ -7,7 +7,7 @@
  *     (registered via app_nfc_reader_log_rx_callback) which handles echo,
  *     backspace, and line buffering in ISR context.
  *   - When a full line (CR/LF) is received, the ISR parses and executes
- *     the command immediately — no main-loop polling is needed.
+ *     the command immediately — no main-loop or busy-wait is needed.
  *
  * Because logging (ptxCommon_PrintF -> UART) happens from the same main
  * context, log lines are never interleaved mid-byte with CLI output and the

@@ -32,11 +32,11 @@
 #define DEFAULT_RETRY_COUNT      0U
 #define SUMMARY_BUF_SIZE         128U
 
-/* Upper bound on a single interrupt-wait inside run_event_loop().
- * After each wait we re-check system-error and RF-warning state.
- * Stop() wakes the task immediately via rs_nfc_ptx_wake_waiting_task(),
- * so this only bounds how often non-IRQ health checks run. */
-#define EVENT_LOOP_WAIT_CHUNK_MS 500U
+/* IRQ-only wait: the task blocks until the reader IRQ fires, Stop() sends
+ * a task notification, or the caller-supplied timeout_ms expires. No
+ * periodic host-side wake is used; the system-state / RF-warning
+ * accessors are re-read only when the task is woken by one of those
+ * events. */
 
 /* Async worker task configuration (static allocation — no heap) */
 #define ASYNC_TASK_STACK_WORDS   (3072U / sizeof(StackType_t))
@@ -191,18 +191,15 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
         {
             case LOOP_WAIT_FOR_ACTIVATION:
             {
-                /* Interrupt-driven wait: blocks (zero CPU) until the
-                 * reader's IRQ line signals a discovery event or this
-                 * chunk's wait elapses, whichever comes first. Bounded to
-                 * EVENT_LOOP_WAIT_CHUNK_MS so the Stop()/system-error/RF-
-                 * warning checks above stay responsive. */
-                uint32_t remaining = loop_forever ? EVENT_LOOP_WAIT_CHUNK_MS
-                                                   : (cfg->timeout_ms - elapsed_ms);
-                uint32_t chunk = (remaining < EVENT_LOOP_WAIT_CHUNK_MS)
-                                 ? remaining : EVENT_LOOP_WAIT_CHUNK_MS;
+                /* IRQ-only wait: blocks at 0% CPU until the reader IRQ
+                 * fires, Stop() sends a task notification, or the full
+                 * remaining timeout expires. No periodic host wake. */
+                uint32_t wait_ms = loop_forever
+                                    ? UINT32_MAX
+                                    : (cfg->timeout_ms - elapsed_ms);
 
                 rs_nfc_disc_status_t disc = RS_NFC_DISC_NO_CARD;
-                if (RS_OK != rs_nfc_ptx_wait_for_card(chunk, &disc))
+                if (RS_OK != rs_nfc_ptx_wait_for_card(wait_ms, &disc))
                 {
                     state = LOOP_DEACTIVATE;
                     break;
@@ -212,7 +209,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                 {
                     state = LOOP_DATA_EVENT;
                 }
-                if (!loop_forever) { elapsed_ms += chunk; }
+                if (!loop_forever) { elapsed_ms = cfg->timeout_ms; }
                 break;
             }
 
@@ -325,7 +322,7 @@ static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
         return st;
     }
 
-    st = rs_nfc_ptx_configure_polling(cfg->tech_mask);
+    st = rs_nfc_ptx_configure_discovery(cfg->tech_mask);
 
     if (RS_OK != st)
     {
@@ -333,7 +330,7 @@ static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
         return st;
     }
 
-    st = rs_nfc_ptx_start_polling();
+    st = rs_nfc_ptx_start_discovery();
 
     if (RS_OK != st)
     {

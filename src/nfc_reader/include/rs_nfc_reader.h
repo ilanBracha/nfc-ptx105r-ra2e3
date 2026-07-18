@@ -187,8 +187,9 @@ typedef void (*rs_nfc_card_event_cb_t)(rs_status_t status,
  * Configuration
  **********************************************************************************************************************/
 typedef struct {
-    /* Polling configuration: Must be within [RS_NFC_POLLING_INTERVAL_MIN_MS, RS_NFC_POLLING_INTERVAL_MAX_MS]. */
-    uint32_t polling_interval_ms;
+    /* RF discovery configuration: must be within
+     * [RS_NFC_DISCOVERY_INTERVAL_MIN_MS, RS_NFC_DISCOVERY_INTERVAL_MAX_MS]. */
+    uint32_t discovery_interval_ms;
     rs_nfc_tech_mask_t tech_mask;
 
     /* Run duration of rs_nfc_reader_Read() in milliseconds.
@@ -307,7 +308,7 @@ rs_status_t rs_nfc_reader_Stop(void);
 /**
  * Validates NFC card reader configuration and optional dependency state.
  *
- * Does not start polling, activate RF field, or acquire card resources.
+ * Does not start RF discovery, activate RF field, or acquire card resources.
  * Safe to call multiple times.
  *
  * Checks performed always:

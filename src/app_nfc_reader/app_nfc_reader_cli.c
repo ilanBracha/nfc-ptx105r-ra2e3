@@ -6,7 +6,7 @@
  * Character reception (echo, backspace, line editing) AND command dispatch are
  * handled entirely inside the UART RX ISR via a callback registered with
  * app_nfc_reader_log_rx_callback(). When a full line is received (CR/LF),
- * the ISR parses and executes the command immediately — no main-loop polling
+ * the ISR parses and executes the command immediately — no main-loop busy-wait
  * is required. Command handlers are kept simple (set flags, print text) so
  * they are safe to run at ISR priority.
  *
