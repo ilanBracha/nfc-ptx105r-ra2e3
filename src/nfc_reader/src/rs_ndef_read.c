@@ -262,8 +262,8 @@ static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
  * Public API
  **********************************************************************************************************************/
 
-rs_status_t rs_nfc_reader_ReadCardInfo(rs_nfc_protocol_t protocol,
-                                            rs_nfc_card_result_t *result)
+rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t protocol,
+                                     rs_nfc_card_result_t *result)
 {
     if (NULL == result) { return RS_ERR_INVALID_CFG; }
 

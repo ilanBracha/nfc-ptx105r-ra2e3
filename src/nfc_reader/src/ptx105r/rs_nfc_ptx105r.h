@@ -76,7 +76,7 @@ rs_status_t rs_nfc_ptx_get_last_rf_error(uint8_t *out_err);
 void rs_nfc_ptx_wake_waiting_task(void);
 
 /** Open the SDK T4T NDEF component. Call after activating an ISO-DEP
- *  (Type 4 Tag) card, before rs_nfc_reader_ReadCardInfo/WriteNDEF. */
+ *  (Type 4 Tag) card, before rs_ndef_read_card_info/WriteNDEF. */
 rs_status_t rs_nfc_ptx_ndef_open(void);
 /** Close the SDK T4T NDEF component (call after NDEF operations are done). */
 void rs_nfc_ptx_ndef_close(void);
@@ -84,7 +84,7 @@ void rs_nfc_ptx_ndef_close(void);
 struct ptxNDEF_T4TOP * rs_nfc_ptx_get_ndef_comp(void);
 
 /** Open the SDK T3T NDEF component. Call after activating a T3T
- *  (FeliCa / Type 3 Tag) card, before rs_nfc_reader_ReadCardInfo.
+ *  (FeliCa / Type 3 Tag) card, before rs_ndef_read_card_info.
  *  Reads NFCID2 and MRTI timing values from the active card registry. */
 rs_status_t rs_nfc_ptx_ndef_t3t_open(void);
 /** Close the SDK T3T NDEF component (call after NDEF operations are done). */
@@ -93,7 +93,7 @@ void rs_nfc_ptx_ndef_t3t_close(void);
 struct ptxNDEF_T3TOP * rs_nfc_ptx_get_ndef_t3t_comp(void);
 
 /** Open the SDK T5T NDEF component. Call after activating a T5T
- *  (ISO 15693) card, before rs_nfc_reader_ReadCardInfo/WriteNDEF. */
+ *  (ISO 15693) card, before rs_ndef_read_card_info/WriteNDEF. */
 rs_status_t rs_nfc_ptx_ndef_t5t_open(void);
 /** Close the SDK T5T NDEF component (call after NDEF operations are done). */
 void rs_nfc_ptx_ndef_t5t_close(void);

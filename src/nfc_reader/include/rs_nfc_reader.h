@@ -264,7 +264,7 @@ struct rs_nfc_card_result_s {
     int8_t rssi_dbm; /* optional, HAL may return 0 if unsupported */
     uint32_t read_time_ms;
 
-    /* Extended card-info fields (populated by rs_nfc_reader_ReadCardInfo) */
+    /* Extended card-info fields (populated by rs_ndef_read_card_info) */
     uint32_t    data_area_size;   /**< Tag capacity in bytes (from CC)       */
     bool        writeable;        /**< true if tag write-access is granted   */
     const char *tag_type_name;    /**< Human-readable tag type, e.g.
@@ -306,33 +306,9 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t * cfg, rs_nfc_card_resu
 rs_status_t rs_nfc_reader_Stop(void);
 
 /**
- * Validates NFC card reader configuration and optional dependency state.
- *
- * Does not start RF discovery, activate RF field, or acquire card resources.
- * Safe to call multiple times.
- *
- * Checks performed always:
- *   - cfg is non-NULL
- *   - reader is a valid enum value
- *   - tech_mask is non-zero
- *   - timeout_ms > 0
- *   - if read_ndef = true: max_ndef_bytes > 0 and <= RS_NFC_NDEF_MAX_BYTES
- *
- * Additional checks when cfg->validate_dependencies = true:
- *   - PTX105R lower-level stack is initialized (FSP ctrl block open)
- *
- * @param cfg [in] Configuration to validate. Must not be NULL.
- *
- * @return RS_OK if all checks pass.
- *         RS_ERR_INVALID_CFG if configuration is incomplete or invalid.
- *         RS_ERR_DEPENDENCY if a runtime dependency check fails.
- */
-rs_status_t rs_nfc_reader_Validate(const rs_nfc_reader_cfg_t *cfg);
-
-/**
  * Read structured card information (CC, NDEF message, tag type, size,
  * write-access) from the currently-activated card. Dispatches internally
- * to the appropriate T2T or T4T read sequence based on `protocol`.
+ * to the appropriate T2T/T3T/T4T/T5T read sequence based on `protocol`.
  *
  * Populates result->ndef_data/ndef_len/ndef_present, data_area_size,
  * writeable, and tag_type_name. Call from inside an on_card_event callback
@@ -342,27 +318,8 @@ rs_status_t rs_nfc_reader_Validate(const rs_nfc_reader_cfg_t *cfg);
  * @param[in,out] result     Result struct to populate. Must not be NULL.
  * @return RS_OK on success; RS_ERR_NOT_FOUND if not NDEF formatted.
  */
-rs_status_t rs_nfc_reader_ReadCardInfo(rs_nfc_protocol_t protocol,
-                                      rs_nfc_card_result_t *result);
-
-/**
- * Perform a protocol-specific raw demo exchange with the activated card.
- * Builds the correct frame (T2T READ, T3T CHECK, T5T READ_SINGLE_BLOCK,
- * NFC-DEP SYMM) and sends it via the HAL data_exchange.
- *
- * @param[in]  protocol  Active RF protocol.
- * @param[in]  uid       Card UID (needed for T3T NFCID2 and T5T addressing).
- * @param[in]  uid_len   UID length in bytes.
- * @param[out] tx        Caller buffer filled with the TX frame that was sent.
- * @param[out] tx_len    TX frame length.
- * @param[out] rx        Caller buffer filled with the RX response.
- * @param[out] rx_len    IN: capacity; OUT: received length.
- * @return RS_OK on success.
- */
-rs_status_t rs_nfc_reader_RawExchange(rs_nfc_protocol_t protocol,
-                                     const uint8_t *uid, uint8_t uid_len,
-                                     uint8_t *tx, uint32_t *tx_len,
-                                     uint8_t *rx, uint32_t *rx_len);
+rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t protocol,
+                                    rs_nfc_card_result_t *result);
 
 #ifdef __cplusplus
 }

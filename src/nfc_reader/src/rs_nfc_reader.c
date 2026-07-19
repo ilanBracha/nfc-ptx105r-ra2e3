@@ -48,7 +48,7 @@
 #define PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT 0x06u
 
 /* Static buffers for the optional per-card raw demo exchange.
- * Sized to match the frames built inside rs_nfc_reader_RawExchange
+ * Sized to match the frames built inside rs_nfc_reader_raw_exchange
  * (largest = T5T READ_SINGLE_BLOCK = 11 bytes TX; RX capped by HAL).
  * Only one Read() runs at a time (async re-entrancy is guarded by
  * g_async_ctx.active), so a single set of static buffers is safe. */
@@ -99,6 +99,13 @@ static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
 static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                                    rs_nfc_card_result_t *result_out);
 
+/* Internal helpers (previously public API — now module-private). */
+static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t *cfg);
+static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
+                                              const uint8_t *uid, uint8_t uid_len,
+                                              uint8_t *tx, uint32_t *tx_len,
+                                              uint8_t *rx, uint32_t *rx_len);
+
 /***********************************************************************************************************************
  * Single-attempt (used by retry wrapper & single-shot)
  **********************************************************************************************************************/
@@ -139,12 +146,12 @@ rs_status_t rs_nfc_reader_try_once(const void *cfg_raw, void *result_raw)
         res->rssi_dbm     = 0;
         res->read_time_ms = 0;
 
-        /* 4. Optionally read NDEF (richer read via rs_nfc_reader_ReadCardInfo,
+        /* 4. Optionally read NDEF (richer read via rs_ndef_read_card_info,
          * which also populates data_area_size / writeable / tag_type_name). */
         bool want_ndef = (NULL != cfg) ? cfg->read_ndef : true;
         if (want_ndef)
         {
-            (void)rs_nfc_reader_ReadCardInfo(res->protocol, res);
+            (void)rs_ndef_read_card_info(res->protocol, res);
         }
     }
 
@@ -226,16 +233,16 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                     res->uid_len = info.uid_len;
 
                     /* Optionally read NDEF (richer read via
-                     * rs_nfc_reader_ReadCardInfo, which also populates
+                     * rs_ndef_read_card_info, which also populates
                      * data_area_size / writeable / tag_type_name). */
                     if (cfg->read_ndef)
                     {
-                        (void)rs_nfc_reader_ReadCardInfo(res->protocol, res);
+                        (void)rs_ndef_read_card_info(res->protocol, res);
                     }
 
                     /* Optional raw demo exchange — result exposed to app
                      * via res->raw_exchange so the app does not need to call
-                     * rs_nfc_reader_RawExchange itself. Prior memset() has
+                     * rs_nfc_reader_raw_exchange itself. Prior memset() has
                      * already zero-initialised res->raw_exchange. */
                     if (cfg->run_raw_exchange &&
                         (RS_NFC_PROT_ISODEP    != res->protocol) &&
@@ -243,7 +250,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                     {
                         uint32_t tx_len = 0u;
                         uint32_t rx_len = RAW_RX_BUF_SIZE;
-                        rs_status_t rst = rs_nfc_reader_RawExchange(
+                        rs_status_t rst = rs_nfc_reader_raw_exchange(
                                               res->protocol,
                                               res->uid, res->uid_len,
                                               g_raw_tx_buf, &tx_len,
@@ -384,7 +391,7 @@ static void rs_nfc_async_worker(void *pvParameters)
  * Public API
  **********************************************************************************************************************/
 
-rs_status_t rs_nfc_reader_Validate(const rs_nfc_reader_cfg_t *cfg)
+static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t *cfg)
 {
     if (NULL == cfg)
     {
@@ -425,7 +432,7 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
     rs_status_t st;
 
     /* Validate configuration */
-    st = rs_nfc_reader_Validate(cfg);
+    st = rs_nfc_reader_validate(cfg);
 
     if (RS_OK != st)
     {
@@ -575,10 +582,10 @@ uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t *res,
  * Raw exchange
  **********************************************************************************************************************/
 
-rs_status_t rs_nfc_reader_RawExchange(rs_nfc_protocol_t protocol,
-                                           const uint8_t *uid, uint8_t uid_len,
-                                           uint8_t *tx, uint32_t *tx_len,
-                                           uint8_t *rx, uint32_t *rx_len)
+static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
+                                               const uint8_t *uid, uint8_t uid_len,
+                                               uint8_t *tx, uint32_t *tx_len,
+                                               uint8_t *rx, uint32_t *rx_len)
 {
     if ((NULL == tx) || (NULL == tx_len) || (NULL == rx) || (NULL == rx_len))
     {
