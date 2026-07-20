@@ -50,9 +50,9 @@ typedef void (*cli_cmd_fn_t)(const char *args);
 
 typedef struct
 {
-    const char   *name;
-    cli_cmd_fn_t  handler;
-    const char   *help;
+    const char   * name;
+    cli_cmd_fn_t   handler;
+    const char   * help;
 } cli_cmd_t;
 
 /* Line buffer filled by the ISR callback (echo + line editing in ISR). */
@@ -72,7 +72,7 @@ static uint8_t           s_initialized = 0u;
  * SMALL HELPERS
  * ####################################################################################################################
  */
-static void app_nfc_reader_cli_write (const char *s)
+static void app_nfc_reader_cli_write (const char * s)
 {
     app_nfc_reader_log_puts(s);
 }
@@ -87,17 +87,31 @@ void app_nfc_reader_cli_prompt (void)
     app_nfc_reader_cli_write(APP_NFC_READER_CLI_NEWLINE APP_NFC_READER_CLI_PROMPT);
 }
 
-static int app_nfc_reader_cli_streq_ci (const char *a, const char *b)
+static int app_nfc_reader_cli_streq_ci (const char * a, const char * b)
 {
     while (*a && *b)
     {
         char ca = *a;
         char cb = *b;
-        if ((ca >= 'A') && (ca <= 'Z')) { ca = (char)(ca + ('a' - 'A')); }
-        if ((cb >= 'A') && (cb <= 'Z')) { cb = (char)(cb + ('a' - 'A')); }
-        if (ca != cb) { return 0; }
+
+        if ((ca >= 'A') && (ca <= 'Z'))
+        {
+            ca = (char) (ca + ('a' - 'A'));
+        }
+
+        if ((cb >= 'A') && (cb <= 'Z'))
+        {
+            cb = (char) (cb + ('a' - 'A'));
+        }
+
+        if (ca != cb)
+        {
+            return 0;
+        }
+
         a++; b++;
     }
+
     return (*a == '\0') && (*b == '\0');
 }
 
@@ -107,25 +121,25 @@ static int app_nfc_reader_cli_streq_ci (const char *a, const char *b)
  * ####################################################################################################################
  */
 
-static void app_nfc_reader_cli_cmd_version (const char *args)
+static void app_nfc_reader_cli_cmd_version (const char * args)
 {
     (void)args;
     app_nfc_reader_cli_write("PTX IoT Reader (RA2E3 FPB) - CLI v1.0" APP_NFC_READER_CLI_NEWLINE);
 }
 
-static void app_nfc_reader_cli_cmd_help (const char *args)
+static void app_nfc_reader_cli_cmd_help (const char * args)
 {
     (void)args;
     app_nfc_reader_cli_print_menu();
 }
 
-static void app_nfc_reader_cli_cmd_menu (const char *args)
+static void app_nfc_reader_cli_cmd_menu (const char * args)
 {
     (void)args;
     app_nfc_reader_cli_print_menu();
 }
 
-static void app_nfc_reader_cli_cmd_reboot (const char *args)
+static void app_nfc_reader_cli_cmd_reboot (const char * args)
 {
     (void)args;
     app_nfc_reader_cli_write("rebooting..." APP_NFC_READER_CLI_NEWLINE);
@@ -148,28 +162,50 @@ static const cli_cmd_t s_cmds[] =
  * INTERNAL: PARSING / DISPATCH
  * ####################################################################################################################
  */
-static void cli_dispatch (char *line)
+static void cli_dispatch (char * line)
 {
+    size_t i;
+    char * p = line;
+    char * args = NULL;
+
     /* Skip leading whitespace. */
-    while ((*line == ' ') || (*line == '\t')) { line++; }
-    if (*line == '\0') { return; }
+    while ((*line == ' ') || (*line == '\t'))
+    {
+         line++;
+    }
+
+    if (*line == '\0')
+    {
+        return;
+    }
 
     /* Split into command + args at the first whitespace. */
-    char *p = line;
-    while ((*p != '\0') && (*p != ' ') && (*p != '\t')) { p++; }
-    char *args = p;
+    p = line;
+    
+    while ((*p != '\0') && (*p != ' ') && (*p != '\t'))
+    {
+        p++;
+    }
+
+    args = p;
+
     if (*p != '\0')
     {
         *p   = '\0';
         args = p + 1;
-        while ((*args == ' ') || (*args == '\t')) { args++; }
+
+        while ((*args == ' ') || (*args == '\t'))
+        {
+            args++;
+        }
     }
 
-    for (size_t i = 0u; i < APP_NFC_READER_CLI_CMD_COUNT; i++)
+    for (i = 0u; i < APP_NFC_READER_CLI_CMD_COUNT; i++)
     {
         if (app_nfc_reader_cli_streq_ci(line, s_cmds[i].name))
         {
             s_cmds[i].handler(args);
+
             return;
         }
     }
@@ -185,17 +221,20 @@ static void app_nfc_reader_cli_handle_byte (uint8_t b)
     if (s_prev_was_cr && (b == '\n'))
     {
         s_prev_was_cr = 0u;
+
         return;
     }
+
     s_prev_was_cr = (b == '\r') ? 1u : 0u;
 
     if ((b == '\r') || (b == '\n'))
     {
         app_nfc_reader_cli_write(APP_NFC_READER_CLI_NEWLINE);
         s_line[s_line_len] = '\0';
+
         if (s_line_len > 0u)
         {
-            (void)memcpy(s_pending_line, (const char *)s_line, s_line_len + 1u);
+            memcpy(s_pending_line, (const char *) s_line, s_line_len + 1u);
             cli_dispatch(s_pending_line);
             app_nfc_reader_cli_write(APP_NFC_READER_CLI_COLOR_KGRN APP_NFC_READER_CLI_PROMPT);
         }
@@ -204,7 +243,9 @@ static void app_nfc_reader_cli_handle_byte (uint8_t b)
             /* Empty line — just reprint the prompt. */
             app_nfc_reader_cli_write(APP_NFC_READER_CLI_COLOR_KGRN APP_NFC_READER_CLI_PROMPT);
         }
+
         s_line_len = 0u;
+
         return;
     }
 
@@ -217,6 +258,7 @@ static void app_nfc_reader_cli_handle_byte (uint8_t b)
             /* Erase the last character on the terminal. */
             app_nfc_reader_cli_write("\b \b");
         }
+
         return;
     }
 
@@ -228,7 +270,7 @@ static void app_nfc_reader_cli_handle_byte (uint8_t b)
 
     if (s_line_len < APP_NFC_READER_CLI_LINE_MAX)
     {
-        s_line[s_line_len++] = (char)b;
+        s_line[s_line_len++] = (char) b;
         app_nfc_reader_cli_write_byte(b); /* local echo */
     }
     else
@@ -245,8 +287,10 @@ static void app_nfc_reader_cli_handle_byte (uint8_t b)
  */
 static void app_nfc_reader_cli_rx_isr_callback (uint8_t byte)
 {
-    if (0u == s_initialized) { return; }
-    app_nfc_reader_cli_handle_byte(byte);
+    if (0u != s_initialized)
+    {
+        app_nfc_reader_cli_handle_byte(byte);
+    }
 }
 
 /*

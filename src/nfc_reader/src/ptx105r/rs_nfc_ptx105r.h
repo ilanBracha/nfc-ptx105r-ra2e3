@@ -62,17 +62,19 @@ bool rs_nfc_ptx_is_open(void);
 rs_status_t rs_nfc_ptx_configure_discovery(rs_nfc_tech_mask_t tech_mask);
 rs_status_t rs_nfc_ptx_start_discovery(void);
 rs_status_t rs_nfc_ptx_stop_discovery(void);
-rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms,
-                                       rs_nfc_disc_status_t *out_status);
-rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t *card_info);
-rs_status_t rs_nfc_ptx_get_card_type(rs_nfc_card_type_t *out_type);
-rs_status_t rs_nfc_ptx_get_uid(uint8_t *uid, uint8_t *uid_len);
+rs_status_t rs_nfc_ptx_wait_for_card(uint32_t               timeout_ms,
+                                      rs_nfc_disc_status_t * out_status);
+rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t * card_info);
+rs_status_t rs_nfc_ptx_get_card_type(rs_nfc_card_type_t * out_type);
+rs_status_t rs_nfc_ptx_get_uid(uint8_t * uid, uint8_t * uid_len);
 void rs_nfc_ptx_sleep(uint32_t ms);
-rs_status_t rs_nfc_ptx_data_exchange(const uint8_t *tx, uint32_t tx_len,
-                                       uint8_t *rx, uint32_t *rx_len);
+rs_status_t rs_nfc_ptx_data_exchange(const uint8_t * tx,
+                                     uint32_t        tx_len,
+                                     uint8_t       * rx,
+                                     uint32_t      * rx_len);
 rs_status_t rs_nfc_ptx_deactivate(void);
-rs_status_t rs_nfc_ptx_get_system_state(uint8_t *out_state);
-rs_status_t rs_nfc_ptx_get_last_rf_error(uint8_t *out_err);
+rs_status_t rs_nfc_ptx_get_system_state(uint8_t * out_state);
+rs_status_t rs_nfc_ptx_get_last_rf_error(uint8_t * out_err);
 void rs_nfc_ptx_wake_waiting_task(void);
 
 /** Open the SDK T4T NDEF component. Call after activating an ISO-DEP
@@ -105,31 +107,37 @@ struct ptxNDEF_T5TOP * rs_nfc_ptx_get_ndef_t5t_comp(void);
  **********************************************************************************************************************/
 
 /* rs_nfc_detect.c */
-rs_status_t rs_nfc_detect_wait(uint32_t timeout_ms,
-                                 rs_nfc_disc_status_t *out_status);
+rs_status_t rs_nfc_detect_wait(uint32_t               timeout_ms,
+                               rs_nfc_disc_status_t * out_status);
 
 /* rs_retry.c */
-rs_status_t rs_nfc_retry(const void *cfg, void *result_out,
-                           uint8_t max_retries);
+rs_status_t rs_nfc_retry(const void * cfg,
+                         void       * result_out,
+                         uint8_t      max_retries);
 
 /* rs_timeout.c */
-void rs_timeout_sleep_ms(uint32_t ms);
+void rs_timeout_sleep_ms (uint32_t ms);
 
 /* rs_nfc_reader.c  (used by retry) */
-rs_status_t rs_nfc_reader_try_once(const void *cfg, void *result_out);
+rs_status_t rs_nfc_reader_try_once(const void * cfg, void * result_out);
 
 /* rs_nfc_reader.c — stop flag (checked by detect_wait & event loop) */
 bool rs_nfc_reader_is_stop_requested(void);
 
 /* rs_nfc_reader.c — card summary */
-uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t *res,
-                                char *buf, uint32_t buf_size);
+uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t * res,
+                                          char                       * buf,
+                                          uint32_t                     buf_size);
 
 /* rs_nfc_uid.c */
-uint32_t rs_nfc_uid_to_hex(const uint8_t *uid, uint8_t uid_len,
-                            char *out, uint32_t out_size);
-uint32_t rs_nfc_uid_to_hex_colon(const uint8_t *uid, uint8_t uid_len,
-                                  char *out, uint32_t out_size);
+uint32_t rs_nfc_uid_to_hex(const uint8_t * uid,
+                           uint8_t         uid_len,
+                           char          * out,
+                           uint32_t        out_size);
+uint32_t rs_nfc_uid_to_hex_colon(const uint8_t * uid,
+                                 uint8_t         uid_len,
+                                 char          * out,
+                                 uint32_t        out_size);
 
 #ifdef __cplusplus
 }

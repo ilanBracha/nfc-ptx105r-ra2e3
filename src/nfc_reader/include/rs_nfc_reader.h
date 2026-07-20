@@ -90,23 +90,32 @@ typedef struct {
     bool     is_le;
 } rs_bt_info_t;
 
-rs_status_t rs_ndef_decode_message(const uint8_t *msg, uint32_t len,
-                                    rs_ndef_decoded_t *out);
+rs_status_t rs_ndef_decode_message(const uint8_t     * msg,
+                                   uint32_t            len,
+                                   rs_ndef_decoded_t * out);
 
-rs_status_t rs_ndef_decode_wifi(const uint8_t *payload, uint32_t len,
-                                 rs_wifi_info_t *out);
+rs_status_t rs_ndef_decode_wifi(const uint8_t  * payload,
+                                uint32_t         len,
+                                rs_wifi_info_t * out);
 
-rs_status_t rs_ndef_decode_bluetooth(const uint8_t *payload, uint32_t len,
-                                      bool is_le, rs_bt_info_t *out);
+rs_status_t rs_ndef_decode_bluetooth(const uint8_t * payload,
+                                     uint32_t        len,
+                                     bool            is_le,
+                                     rs_bt_info_t  * out);
 
-bool rs_ndef_tlv_find(const uint8_t *buf, uint32_t len, uint16_t tag,
-                      const uint8_t **val, uint32_t *val_len);
+bool rs_ndef_tlv_find(const uint8_t  * buf,
+                      uint32_t         len,
+                      uint16_t         tag,
+                      const uint8_t ** val,
+                      uint32_t       * val_len);
 
-bool rs_ndef_type_equals(const uint8_t *type, uint8_t type_len,
-                         const char *str);
+bool rs_ndef_type_equals(const uint8_t * type,
+                         uint8_t         type_len,
+                         const char    * str);
 
-bool rs_ndef_starts_with(const char *str, uint32_t str_len,
-                         const char *prefix);
+bool rs_ndef_starts_with(const char * str,
+                         uint32_t     str_len,
+                         const char * prefix);
 
 /**********************************************************************************************************************
  * Technology mask
@@ -195,7 +204,7 @@ typedef enum {
  * Fired once when a non-blocking rs_nfc_reader_Read() completes
  * (timeout, fatal error, or rs_nfc_reader_Stop() was called).
  */
-typedef void (*rs_nfc_callback_t)(rs_status_t status, void *p_context);
+typedef void (* rs_nfc_callback_t)(rs_status_t status, void * p_context);
 
 /**********************************************************************************************************************
  * Result (forward-declared so the per-card event cb can reference it)
@@ -212,10 +221,10 @@ typedef struct rs_nfc_card_result_s rs_nfc_card_result_t;
  * read-only and MUST NOT retain pointers past the call: both buffers are
  * reused on the next iteration of the read loop.
  */
-typedef void (*rs_nfc_card_event_cb_t)(rs_status_t status,
-                                        const rs_nfc_card_result_t *result,
-                                        const char *summary,
-                                        void *p_context);
+typedef void (* rs_nfc_card_event_cb_t)(rs_status_t                  status,
+                                        const rs_nfc_card_result_t * result,
+                                        const char                 * summary,
+                                        void                       * p_context);
 
 /**********************************************************************************************************************
  * Configuration
@@ -254,14 +263,14 @@ typedef struct {
      *                     be active at a time.
      */
     rs_nfc_callback_t callback;
-    void *p_context;
+    void * p_context;
 
     /* Per-card event (fires once per detected/activated card during Read()).
      * When set, the orchestrator runs in continuous-loop mode and emits one
      * event per card until timeout_ms elapses. Works in both blocking and
      * non-blocking modes. */
-    rs_nfc_card_event_cb_t on_card_event;
-    void                   *p_card_event_context;
+    rs_nfc_card_event_cb_t   on_card_event;
+    void                   * p_card_event_context;
 
     /* Optional runtime dependency validation */
     bool validate_dependencies;
@@ -343,7 +352,8 @@ struct rs_nfc_card_result_s {
  * In both modes, if on_card_event is set the orchestrator runs in
  * continuous-loop mode and fires one event per detected card.
  */
-rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t * cfg, rs_nfc_card_result_t * result_out);
+rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t * cfg,
+                               rs_nfc_card_result_t      * result_out);
 
 /**
  * Request graceful stop of a running Read (blocking or non-blocking).
@@ -370,9 +380,9 @@ rs_status_t rs_nfc_reader_Stop(void);
  *                                 treated as RS_NFC_NDEF_MAX_BYTES.
  * @return RS_OK on success; RS_ERR_NOT_FOUND if not NDEF formatted.
  */
-rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t protocol,
-                                    rs_nfc_card_result_t *result,
-                                    uint32_t max_ndef_bytes);
+rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t      protocol,
+                                   rs_nfc_card_result_t * result,
+                                   uint32_t               max_ndef_bytes);
 
 #ifdef __cplusplus
 }

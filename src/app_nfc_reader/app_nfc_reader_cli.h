@@ -28,7 +28,7 @@ extern "C" {
  * Maximum number of characters in a single CLI input line (not counting the
  * terminating NUL). Lines longer than this are truncated.
  */
-void app_nfc_reader_cli_prompt (void);
+void app_nfc_reader_cli_prompt(void);
 
 /**
  * Print the welcome banner + menu, register the UART RX ISR callback, and

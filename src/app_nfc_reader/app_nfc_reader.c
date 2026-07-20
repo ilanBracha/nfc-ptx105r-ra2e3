@@ -113,7 +113,10 @@ void app_nfc_reader_led_set_all (bsp_io_level_t level)
  */
 static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
 {
-    if (NULL == result) { return; }
+    if (NULL == result)
+    {
+        return;
+    }
 
     /* All extended fields (ndef_*, data_area_size, writeable, tag_type_name)
      * and the optional raw-exchange TX/RX frames are pre-populated by
@@ -125,7 +128,7 @@ static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
      * and the protocol is not ISO-DEP / UNDEFINED). */
     if (result->raw_exchange.valid)
     {
-        ptxCommon_PrintF("=========== DATA EXCHANGE ================\n");
+        ptxCommon_PrintF(APP_NFC_READER_SEPARATOR_TOP);
         ptxCommon_PrintF("TX = ");
         ptxCommon_Print_Buffer((uint8_t *)result->raw_exchange.tx, 0, result->raw_exchange.tx_len, 1, 0);
         if (RS_OK == result->raw_exchange.status)
@@ -138,7 +141,7 @@ static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
             ptxCommon_PrintF("ERROR - RF-Exchange failed (status=%d)\n",
                              (int)result->raw_exchange.status);
         }
-        ptxCommon_PrintF("==========================================\n");
+        ptxCommon_PrintF(APP_NFC_READER_SEPARATOR_BOT);
     }
 }
 
@@ -147,10 +150,10 @@ static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
  * CALLBACKS
  * ####################################################################################################################
  */
-static void on_nfc_read_done (rs_status_t status,
-                              const rs_nfc_card_result_t *result,
-                              const char *summary,
-                              void *p_context)
+static void on_nfc_read_done (rs_status_t                  status,
+                              const rs_nfc_card_result_t * result,
+                              const char                 * summary,
+                              void                       * p_context)
 {
     (void)p_context;
 
@@ -232,7 +235,7 @@ void app_nfc_reader_init (void)
 
     if (RS_OK != st)
     {
-        ptxCommon_PrintF("rs_nfc_reader_Read launch FAILED (status=%d)\n", (int)st);
+        ptxCommon_PrintF("rs_nfc_reader_Read launch FAILED (status=%d)\n", (int) st);
     }
     else
     {

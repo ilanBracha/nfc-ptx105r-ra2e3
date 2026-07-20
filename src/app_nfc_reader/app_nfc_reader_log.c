@@ -1,4 +1,4 @@
-﻿/*
+/*
  * user_uart_log.c
  *
  * Implementation of the UART debug-log sink. See user_uart_log.h.
@@ -77,14 +77,14 @@ static volatile uint8_t  s_tx_busy;     /* 1 while FSP write in flight */
  * either main (after enqueue) or ISR (on TX_COMPLETE). Caller must guarantee
  * mutual exclusion (we disable IRQs around the main-side call). */
 static void app_nfc_reader_log_tx_locked(void);
-void app_nfc_reader_log_write(const uint8_t *buf, size_t len);
+void app_nfc_reader_log_write (const uint8_t * buf, size_t len);
 
 /*
  * ####################################################################################################################
  * CALLBACK
  * ####################################################################################################################
  */
-static void app_nfc_reader_log_uart_cb (uart_callback_args_t *p_args)
+static void app_nfc_reader_log_uart_cb (uart_callback_args_t * p_args)
 {
     if (NULL == p_args)
     {
@@ -97,7 +97,7 @@ static void app_nfc_reader_log_uart_cb (uart_callback_args_t *p_args)
         {
             /* Previous chunk fully shifted out. Advance tail and start the
              * next contiguous chunk if any data is still pending. */
-            uint16_t tail = (uint16_t)((s_tx_tail + s_tx_chunk) & app_nfc_reader_log_TX_BUF_MASK);
+            uint16_t tail = (uint16_t) ((s_tx_tail + s_tx_chunk) & app_nfc_reader_log_TX_BUF_MASK);
             s_tx_tail  = tail;
             s_tx_chunk = 0u;
             s_tx_busy  = 0u;
@@ -107,7 +107,7 @@ static void app_nfc_reader_log_uart_cb (uart_callback_args_t *p_args)
 
         case UART_EVENT_RX_CHAR:
         {
-            uint8_t rxb = (uint8_t)p_args->data;
+            uint8_t rxb = (uint8_t) p_args->data;
 
             /* Forward to registered callback (e.g. CLI) if present. */
             if (NULL != s_rx_callback)
@@ -116,7 +116,7 @@ static void app_nfc_reader_log_uart_cb (uart_callback_args_t *p_args)
             }
 
             /* Always store in ring buffer for app_nfc_reader_log_rx_get() consumers. */
-            uint16_t next = (uint16_t)((s_rx_head + 1u) & app_nfc_reader_log_RX_BUF_MASK);
+            uint16_t next = (uint16_t) ((s_rx_head + 1u) & app_nfc_reader_log_RX_BUF_MASK);
             if (next != s_rx_tail)
             {
                 s_rx_buf[s_rx_head] = rxb;
@@ -143,7 +143,7 @@ static void app_nfc_reader_log_uart_cb (uart_callback_args_t *p_args)
  * API
  * ####################################################################################################################
  */
-int app_nfc_reader_log_init(void)
+int app_nfc_reader_log_init (void)
 {
     if (0u != s_uart_initialized)
     {
@@ -157,23 +157,26 @@ int app_nfc_reader_log_init(void)
      * overrides the two PFS registers we need. */
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
                           app_nfc_reader_log_TXD_PIN,
-                          ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
+                          ((uint32_t) IOPORT_CFG_PERIPHERAL_PIN | (uint32_t) IOPORT_PERIPHERAL_SCI1_3_5_7_9));
     (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
                           app_nfc_reader_log_RXD_PIN,
-                          ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI1_3_5_7_9));
+                          ((uint32_t) IOPORT_CFG_PERIPHERAL_PIN | (uint32_t) IOPORT_PERIPHERAL_SCI1_3_5_7_9));
 
     err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
+
     if (FSP_SUCCESS != err)
     {
-        return (int)err;
+        return (int) err;
     }
 
     /* Hook our own callback so we observe UART_EVENT_TX_COMPLETE. */
     err = g_uart0.p_api->callbackSet(g_uart0.p_ctrl, app_nfc_reader_log_uart_cb, NULL, NULL);
+
     if (FSP_SUCCESS != err)
     {
         (void)g_uart0.p_api->close(g_uart0.p_ctrl);
-        return (int)err;
+
+        return (int) err;
     }
 
     s_tx_head          = 0u;
@@ -181,6 +184,7 @@ int app_nfc_reader_log_init(void)
     s_tx_chunk         = 0u;
     s_tx_busy          = 0u;
     s_uart_initialized = 1u;
+
     return 0;
 }
 
@@ -189,27 +193,34 @@ int app_nfc_reader_log_init(void)
  * itself (where they're effectively masked at this priority anyway). */
 static void app_nfc_reader_log_tx_locked (void)
 {
+    uint16_t head;
+    uint16_t tail;
+    uint16_t end;
+    uint16_t len;
+    fsp_err_t err = FSP_SUCCESS;
+
     if (s_tx_busy)
     {
         return;
     }
-    uint16_t head = s_tx_head;
-    uint16_t tail = s_tx_tail;
+
+    head = s_tx_head;
+    tail = s_tx_tail;
+
     if (head == tail)
     {
         return; /* nothing to send */
     }
 
     /* Contiguous span from tail up to either head or the end of the ring. */
-    uint16_t end = (head > tail) ? head : (uint16_t)app_nfc_reader_log_TX_BUF_SIZE;
-    uint16_t len = (uint16_t)(end - tail);
+    end = (head > tail) ? head : (uint16_t) app_nfc_reader_log_TX_BUF_SIZE;
+    len = (uint16_t) (end - tail);
 
     s_tx_chunk = len;
     s_tx_busy  = 1u;
 
-    fsp_err_t err = g_uart0.p_api->write(g_uart0.p_ctrl,
-                                         (uint8_t const *)&s_tx_buf[tail],
-                                         (uint32_t)len);
+    err = g_uart0.p_api->write(g_uart0.p_ctrl, (uint8_t const *) &s_tx_buf[tail], (uint32_t) len);
+
     if (FSP_SUCCESS != err)
     {
         /* Drop this chunk and try to recover. */
@@ -219,8 +230,11 @@ static void app_nfc_reader_log_tx_locked (void)
     }
 }
 
-void app_nfc_reader_log_write(const uint8_t *buf, size_t len)
+void app_nfc_reader_log_write (const uint8_t * buf, size_t len)
 {
+    uint16_t head;
+    uint16_t tail;
+
     if ((0u == s_uart_initialized) || (NULL == buf) || (0u == len))
     {
         return;
@@ -232,60 +246,76 @@ void app_nfc_reader_log_write(const uint8_t *buf, size_t len)
      * main loop. dispatch() is called once at the end so the FSP gets a
      * single large write to chew on (not 1 byte at a time). */
     __disable_irq();
-    uint16_t head = s_tx_head;
-    uint16_t tail = s_tx_tail;
+    head = s_tx_head;
+    tail = s_tx_tail;
+
     for (size_t i = 0u; i < len; i++)
     {
-        uint16_t next = (uint16_t)((head + 1u) & app_nfc_reader_log_TX_BUF_MASK);
+        uint16_t next = (uint16_t) ((head + 1u) & app_nfc_reader_log_TX_BUF_MASK);
+
         if (next == tail)
         {
             break; /* ring full -- drop remainder */
         }
+
         s_tx_buf[head] = buf[i];
         head = next;
     }
+
     s_tx_head = head;
     app_nfc_reader_log_tx_locked();
     __enable_irq();
 }
 
-void app_nfc_reader_log_puts(const char *s)
+void app_nfc_reader_log_puts (const char * s)
 {
     if (NULL == s)
     {
         return;
     }
-    app_nfc_reader_log_write((const uint8_t *)s, strlen(s));
+
+    app_nfc_reader_log_write((const uint8_t *) s, strlen(s));
 }
 
-size_t app_nfc_reader_log_rx_available(void)
+size_t app_nfc_reader_log_rx_available (void)
 {
+    uint16_t head;
+    uint16_t tail;
+
     if (0u == s_uart_initialized)
     {
         return 0u;
     }
-    uint16_t head = s_rx_head;
-    uint16_t tail = s_rx_tail;
-    return (size_t)((head - tail) & app_nfc_reader_log_RX_BUF_MASK);
+
+    head = s_rx_head;
+    tail = s_rx_tail;
+
+    return (size_t) ((head - tail) & app_nfc_reader_log_RX_BUF_MASK);
 }
 
-int app_nfc_reader_log_rx_get(uint8_t *out)
+int app_nfc_reader_log_rx_get (uint8_t * out)
 {
+    uint16_t tail;
+
     if ((0u == s_uart_initialized) || (NULL == out))
     {
         return 0;
     }
-    uint16_t tail = s_rx_tail;
+
+    tail = s_rx_tail;
+
     if (tail == s_rx_head)
     {
         return 0;
     }
+
     *out = s_rx_buf[tail];
-    s_rx_tail = (uint16_t)((tail + 1u) & app_nfc_reader_log_RX_BUF_MASK);
+    s_rx_tail = (uint16_t) ((tail + 1u) & app_nfc_reader_log_RX_BUF_MASK);
+
     return 1;
 }
 
-void app_nfc_reader_log_rx_callback(app_nfc_reader_log_rx_callback_t cb)
+void app_nfc_reader_log_rx_callback (app_nfc_reader_log_rx_callback_t cb)
 {
     s_rx_callback = cb;
 }
@@ -302,7 +332,7 @@ void app_nfc_reader_log_rx_callback(app_nfc_reader_log_rx_callback_t cb)
  */
 
 /* Minimal format-to-buffer: supports %s %c %d %u %x %X %02X %04X %02d %04d %p %% and width/zero-pad for integers */
-static int app_nfc_reader_log_vsnprintf (char *buf, unsigned max, const char *fmt, va_list ap)
+static int app_nfc_reader_log_vsnprintf (char * buf, unsigned max, const char * fmt, va_list ap)
 {
     unsigned pos = 0u;
 #define PUT(c) do { if (pos < (max - 1u)) { buf[pos] = (c); } pos++; } while(0)
@@ -398,25 +428,29 @@ done:
 #undef PUT
 }
 
-void ptxCommon_PrintF(const char *format, ...)
+void ptxCommon_PrintF (const char * format, ...)
 {
+    char buf[256];
     va_list ap;
     va_start(ap, format);
+    int len = app_nfc_reader_log_vsnprintf(buf, sizeof(buf), format, ap);
 
     /* UART only (RTT sink removed to reclaim flash): format into stack
      * buffer and send. */
-    char buf[256];
-    int len = app_nfc_reader_log_vsnprintf(buf, sizeof(buf), format, ap);
 
     if (len > 0)
     {
-        app_nfc_reader_log_write((const uint8_t *)buf, (unsigned)len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned)len);
+        app_nfc_reader_log_write((const uint8_t *) buf, (unsigned) len > sizeof(buf)-1u ? sizeof(buf)-1u : (unsigned) len);
     }
 
     va_end(ap);
 }
 
-void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bufferLength, uint8_t addNewLine, uint8_t printASCII)
+void ptxCommon_Print_Buffer (uint8_t  * buffer,
+                             uint32_t   bufferOffset,
+                             uint32_t   bufferLength,
+                             uint8_t    addNewLine,
+                             uint8_t    printASCII)
 {
     uint32_t i;
     uint8_t character_to_print;
@@ -425,7 +459,7 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
     {
         if (0 != bufferLength)
         {
-            for (i = 0; (i < bufferLength) && (i < (uint32_t)TX_BUFFER_SIZE); i++)
+            for (i = 0; (i < bufferLength) && (i < (uint32_t) TX_BUFFER_SIZE); i++)
             {
                 if ((i > 0) && ((i % (LINE_LENGTH - 5) == 0)))
                 {
@@ -434,14 +468,17 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
 
                 if (0 == printASCII)
                 {
-                    ptxCommon_PrintF("%02X", (uint8_t)buffer[i + bufferOffset]);
-                } else
+                    ptxCommon_PrintF("%02X", (uint8_t) buffer[i + bufferOffset]);
+                }
+                else
                 {
-                    character_to_print = (uint8_t)buffer[i + bufferOffset];
+                    character_to_print = (uint8_t) buffer[i + bufferOffset];
+
                     if (character_to_print < 0x20)
                     {
                         ptxCommon_PrintF(".");
-                    } else
+                    }
+                    else
                     {
                         ptxCommon_PrintF("%c", character_to_print);
                     }
@@ -465,7 +502,7 @@ void ptxCommon_Print_Buffer (uint8_t *buffer, uint32_t bufferOffset, uint32_t bu
  * to both RTT and UART.  Pure I/O â€” no LED or board interaction; the caller
  * is responsible for any visual feedback (blink, etc.).
  */
-void app_nfc_reader_log_print_card_info(const rs_nfc_card_result_t * result)
+void app_nfc_reader_log_print_card_info (const rs_nfc_card_result_t * result)
 {
     char rf_tech[16];
 
@@ -520,7 +557,11 @@ void app_nfc_reader_log_print_card_info(const rs_nfc_card_result_t * result)
     {
         for (uint8_t i = 0; i < result->uid_len; i++)
         {
-            if (i) { ptxCommon_PrintF(":"); }
+            if (i)
+            {
+                ptxCommon_PrintF(":");
+            }
+
             ptxCommon_PrintF("%02X", result->uid[i]);
         }
     }
@@ -531,7 +572,7 @@ void app_nfc_reader_log_print_card_info(const rs_nfc_card_result_t * result)
     if (result->data_area_size > 0u)
     {
         ptxCommon_PrintF("Size           : %u bytes\n",
-                         (unsigned)result->data_area_size);
+                         (unsigned) result->data_area_size);
         ptxCommon_PrintF("Writeable      : %s\n",
                          result->writeable ? "Yes" : "No");
     }
@@ -545,8 +586,8 @@ void app_nfc_reader_log_print_card_info(const rs_nfc_card_result_t * result)
     if (result->ndef_present && (result->ndef_len > 0u))
     {
         ptxCommon_PrintF("NDEF           : %u bytes\n",
-                         (unsigned)result->ndef_len);
-        ptxCommon_PrintF("  NDEF raw (%u bytes):", (unsigned)result->ndef_len);
+                         (unsigned) result->ndef_len);
+        ptxCommon_PrintF("  NDEF raw (%u bytes):", (unsigned) result->ndef_len);
         for (uint32_t k = 0u; k < result->ndef_len; k++)
         {
             if ((k > 0u) && (0u == (k % 16u)))

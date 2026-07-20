@@ -72,7 +72,7 @@ typedef enum {
  **********************************************************************************************************************/
 static volatile bool g_stop_requested = false;
 
-bool rs_nfc_reader_is_stop_requested(void)
+bool rs_nfc_reader_is_stop_requested (void)
 {
     return g_stop_requested;
 }
@@ -81,9 +81,9 @@ bool rs_nfc_reader_is_stop_requested(void)
  * Non-blocking async context (static allocation)
  **********************************************************************************************************************/
 typedef struct {
-    rs_nfc_reader_cfg_t  cfg;          /* deep copy of caller cfg  */
-    rs_nfc_card_result_t     *p_result_out; /* caller's result pointer  */
-    volatile bool              active;       /* re-entrancy guard        */
+    rs_nfc_reader_cfg_t    cfg;            /* deep copy of caller cfg  */
+    rs_nfc_card_result_t * p_result_out;   /* caller's result pointer  */
+    volatile bool          active;         /* re-entrancy guard        */
 } rs_nfc_async_ctx_t;
 
 static rs_nfc_async_ctx_t  g_async_ctx;
@@ -94,45 +94,56 @@ static TaskHandle_t         g_async_task_handle = NULL;
 /***********************************************************************************************************************
  * Forward declarations
  **********************************************************************************************************************/
-static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
-                                           rs_nfc_card_result_t *result_out);
-static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
-                                   rs_nfc_card_result_t *result_out);
+static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t * cfg,
+                                         rs_nfc_card_result_t      * result_out);
+static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t * cfg,
+                                   rs_nfc_card_result_t      * result_out);
 
 /* Internal helpers (previously public API — now module-private). */
-static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t *cfg);
-static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
-                                              const uint8_t *uid, uint8_t uid_len,
-                                              uint8_t *tx, uint32_t *tx_len,
-                                              uint8_t *rx, uint32_t *rx_len);
+static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t * cfg);
+static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t   protocol,
+                                              const uint8_t     * uid,
+                                              uint8_t             uid_len,
+                                              uint8_t           * tx,
+                                              uint32_t          * tx_len,
+                                              uint8_t           * rx,
+                                              uint32_t          * rx_len);
 
 /***********************************************************************************************************************
  * Single-attempt (used by retry wrapper & single-shot)
  **********************************************************************************************************************/
-rs_status_t rs_nfc_reader_try_once(const void *cfg_raw, void *result_raw)
+rs_status_t rs_nfc_reader_try_once (const void * cfg_raw, void * result_raw)
 {
-    const rs_nfc_reader_cfg_t *cfg = (const rs_nfc_reader_cfg_t *)cfg_raw;
-    rs_nfc_card_result_t           *res = (rs_nfc_card_result_t *)result_raw;
+    const rs_nfc_reader_cfg_t * cfg = (const rs_nfc_reader_cfg_t *) cfg_raw;
+    rs_nfc_card_result_t      * res = (rs_nfc_card_result_t *) result_raw;
     rs_status_t st;
-
+    bool want_ndef;
     uint32_t timeout = (NULL != cfg) ? cfg->timeout_ms : DEFAULT_TIMEOUT_MS;
 
     /* 1. Wait for a card */
     rs_nfc_disc_status_t disc = RS_NFC_DISC_NO_CARD;
     st = rs_nfc_detect_wait(timeout, &disc);
-    if (RS_OK != st) { return st; }
+
+    if (RS_OK != st)
+    {
+        return st;
+    }
 
     /* If stop was requested during the wait, detect_wait returns RS_OK
      * with NO_CARD — treat as a clean exit. */
     if (g_stop_requested || (RS_NFC_DISC_NO_CARD == disc))
-    { 
+    {
         return RS_OK;
     }
 
     /* 2. Activate the card */
     rs_nfc_ptx_card_info_t card_info;
     st = rs_nfc_ptx_activate_card(&card_info);
-    if (RS_OK != st) { return st; }
+
+    if (RS_OK != st)
+    {
+        return st;
+    }
 
     /* 3. Fill basic result fields */
     if (NULL != res)
@@ -148,10 +159,11 @@ rs_status_t rs_nfc_reader_try_once(const void *cfg_raw, void *result_raw)
 
         /* 4. Optionally read NDEF (richer read via rs_ndef_read_card_info,
          * which also populates data_area_size / writeable / tag_type_name). */
-        bool want_ndef = (NULL != cfg) ? cfg->read_ndef : true;
+        want_ndef = (NULL != cfg) ? cfg->read_ndef : true;
+
         if (want_ndef)
         {
-            uint32_t ndef_cap = (NULL != cfg) ? (uint32_t)cfg->max_ndef_bytes : (uint32_t)RS_NFC_NDEF_MAX_BYTES;
+            uint32_t ndef_cap = (NULL != cfg) ? (uint32_t) cfg->max_ndef_bytes : (uint32_t) RS_NFC_NDEF_MAX_BYTES;
             (void)rs_ndef_read_card_info(res->protocol, res, ndef_cap);
         }
     }
@@ -162,31 +174,41 @@ rs_status_t rs_nfc_reader_try_once(const void *cfg_raw, void *result_raw)
 /***********************************************************************************************************************
  * Event-loop mode
  **********************************************************************************************************************/
-static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
-                                   rs_nfc_card_result_t *result_out)
+static rs_status_t run_event_loop (const rs_nfc_reader_cfg_t * cfg,
+                                   rs_nfc_card_result_t      * result_out)
 {
     rs_nfc_card_result_t   local_res;
-    rs_nfc_card_result_t  *res = (NULL != result_out) ? result_out : &local_res;
+    rs_nfc_card_result_t * res = (NULL != result_out) ? result_out : &local_res;
     char                    summary[SUMMARY_BUF_SIZE];
     loop_state_t            state         = LOOP_WAIT_FOR_ACTIVATION;
     uint32_t                elapsed_ms    = 0u;
     const bool              loop_forever  = (UINT32_MAX == cfg->timeout_ms);
+    uint8_t sys_state;
+    uint8_t last_rf_err;
 
     while (loop_forever || (elapsed_ms < cfg->timeout_ms))
     {
         /* Stop requested? Exit cleanly. */
-        if (g_stop_requested) { return RS_OK; }
+        if (g_stop_requested)
+        {
+            return RS_OK;
+        }
 
         /* Critical system-error watchdog */
-        uint8_t sys_state = PTX_SYS_STATUS_OK;
+        sys_state = PTX_SYS_STATUS_OK;
+
         if (RS_OK == rs_nfc_ptx_get_system_state(&sys_state))
         {
-            if (PTX_SYS_STATUS_OK != sys_state) { state = LOOP_SYSTEM_ERROR; }
+            if (PTX_SYS_STATUS_OK != sys_state)
+            {
+                state = LOOP_SYSTEM_ERROR;
+            }
         }
 
         /* PA overcurrent / other RF warning notifications */
-        uint8_t last_rf_err = 0u;
+        last_rf_err = 0u;
         (void)rs_nfc_ptx_get_last_rf_error(&last_rf_err);
+
         if ((PTX_RF_ERR_WARNING_PA_OVERCURRENT_LIMIT == last_rf_err) &&
             (NULL != cfg->on_card_event))
         {
@@ -207,17 +229,24 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                                     : (cfg->timeout_ms - elapsed_ms);
 
                 rs_nfc_disc_status_t disc = RS_NFC_DISC_NO_CARD;
+
                 if (RS_OK != rs_nfc_ptx_wait_for_card(wait_ms, &disc))
                 {
                     state = LOOP_DEACTIVATE;
                     break;
                 }
+
                 if ((RS_NFC_DISC_CARD_ACTIVE == disc) ||
                     (RS_NFC_DISC_DONE        == disc))
                 {
                     state = LOOP_DATA_EVENT;
                 }
-                if (!loop_forever) { elapsed_ms = cfg->timeout_ms; }
+
+                if (!loop_forever)
+                {
+                    elapsed_ms = cfg->timeout_ms;
+                }
+
                 break;
             }
 
@@ -225,6 +254,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
             {
                 rs_nfc_ptx_card_info_t info;
                 rs_status_t st = rs_nfc_ptx_activate_card(&info);
+
                 if (RS_OK == st)
                 {
                     (void)memset(res, 0, sizeof(*res));
@@ -238,7 +268,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                      * data_area_size / writeable / tag_type_name). */
                     if (cfg->read_ndef)
                     {
-                        (void)rs_ndef_read_card_info(res->protocol, res, (uint32_t)cfg->max_ndef_bytes);
+                        (void)rs_ndef_read_card_info(res->protocol, res, (uint32_t) cfg->max_ndef_bytes);
                     }
 
                     /* Optional raw demo exchange — result exposed to app
@@ -280,6 +310,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                                            cfg->p_card_event_context);
                     }
                 }
+
                 state = LOOP_DEACTIVATE;
                 break;
             }
@@ -297,8 +328,9 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                 {
                     cfg->on_card_event(RS_ERR_INTERNAL, NULL,
                        "ERROR: critical system-error (overcurrent/temperature)",
-                                       cfg->p_card_event_context);
+                       cfg->p_card_event_context);
                 }
+
                 return RS_ERR_INTERNAL;
             }
 
@@ -313,8 +345,8 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
 /***********************************************************************************************************************
  * Blocking core
  **********************************************************************************************************************/
-static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
-                                           rs_nfc_card_result_t *result_out)
+static rs_status_t rs_nfc_read_blocking (const rs_nfc_reader_cfg_t * cfg,
+                                         rs_nfc_card_result_t      * result_out)
 {
     rs_status_t st;
 
@@ -335,6 +367,7 @@ static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
     if (RS_OK != st)
     {
         (void)rs_nfc_ptx_close();
+
         return st;
     }
 
@@ -343,6 +376,7 @@ static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
     if (RS_OK != st)
     {
         (void)rs_nfc_ptx_close();
+
         return st;
     }
 
@@ -362,16 +396,17 @@ static rs_status_t rs_nfc_read_blocking(const rs_nfc_reader_cfg_t *cfg,
 
     (void)rs_nfc_ptx_deactivate();
     (void)rs_nfc_ptx_close();
+
     return st;
 }
 
 /***********************************************************************************************************************
  * Async worker task function
  **********************************************************************************************************************/
-static void rs_nfc_async_worker(void *pvParameters)
+static void rs_nfc_async_worker (void * pvParameters)
 {
     (void)pvParameters;
-    rs_nfc_async_ctx_t *ctx = &g_async_ctx;
+    rs_nfc_async_ctx_t * ctx = &g_async_ctx;
 
     /* Run full blocking flow inside this dedicated task. */
     rs_status_t st = rs_nfc_read_blocking(&ctx->cfg, ctx->p_result_out);
@@ -392,8 +427,10 @@ static void rs_nfc_async_worker(void *pvParameters)
  * Public API
  **********************************************************************************************************************/
 
-static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t *cfg)
+static rs_status_t rs_nfc_reader_validate (const rs_nfc_reader_cfg_t * cfg)
 {
+    rs_status_t dep_st = RS_OK;
+
     if (NULL == cfg)
     {
         return RS_ERR_INVALID_CFG;
@@ -420,15 +457,19 @@ static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t *cfg)
     /* Non-blocking callback is now accepted (no longer rejected). */
     if (cfg->validate_dependencies)
     {
-        rs_status_t dep_st = rs_nfc_reader_validate_deps();
-        if (RS_OK != dep_st) { return dep_st; }
+        dep_st = rs_nfc_reader_validate_deps();
+
+        if (RS_OK != dep_st)
+        {
+            return dep_st;
+        }
     }
 
     return RS_OK;
 }
 
-rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
-                                    rs_nfc_card_result_t *result_out)
+rs_status_t rs_nfc_reader_Read (const rs_nfc_reader_cfg_t * cfg,
+                               rs_nfc_card_result_t      * result_out)
 {
     rs_status_t st;
 
@@ -442,6 +483,7 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
     if (cfg->cfg_valid_check_en)
     {
         st = rs_nfc_reader_validate(cfg);
+
         if (RS_OK != st)
         {
             return st;
@@ -452,7 +494,10 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
     if (NULL != cfg->callback)
     {
         /* Re-entrancy guard: only one async Read() at a time. */
-        if (g_async_ctx.active) { return RS_ERR_INTERNAL; }
+        if (g_async_ctx.active)
+        {
+            return RS_ERR_INTERNAL;
+        }
 
         /* Deep-copy config into static context. */
         (void)memcpy(&g_async_ctx.cfg, cfg, sizeof(*cfg));
@@ -474,6 +519,7 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
         if (NULL == g_async_task_handle)
         {
             g_async_ctx.active = false;
+
             return RS_ERR_INTERNAL;
         }
 
@@ -487,13 +533,14 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
     return rs_nfc_read_blocking(cfg, result_out);
 }
 
-rs_status_t rs_nfc_reader_Stop(void)
+rs_status_t rs_nfc_reader_Stop (void)
 {
     g_stop_requested = true;
     /* Wake any task blocked in rs_nfc_ptx_wait_for_card() so it can
      * observe the stop flag immediately instead of sleeping until the
      * next timeout expiry or IRQ event. */
     rs_nfc_ptx_wake_waiting_task();
+
     return RS_OK;
 }
 
@@ -503,68 +550,98 @@ rs_status_t rs_nfc_reader_Stop(void)
 
 static const char HEX_DIGITS[] = "0123456789ABCDEF";
 
-static uint32_t copy_str(char *dst, uint32_t dst_size, uint32_t off, const char *s)
+static uint32_t copy_str (char * dst, uint32_t dst_size, uint32_t off, const char * s)
 {
     while ((NULL != s) && ('\0' != *s) && (off + 1u < dst_size))
     {
         dst[off++] = *s++;
     }
+
     return off;
 }
 
-static uint32_t copy_hex_byte(char *dst, uint32_t dst_size, uint32_t off, uint8_t b)
+static uint32_t copy_hex_byte (char * dst, uint32_t dst_size, uint32_t off, uint8_t b)
 {
-    if (off + 2u >= dst_size) { return off; }
+    if (off + 2u >= dst_size)
+    {
+        return off;
+    }
+
     dst[off++] = HEX_DIGITS[(b >> 4) & 0x0Fu];
     dst[off++] = HEX_DIGITS[b & 0x0Fu];
+
     return off;
 }
 
-static uint32_t copy_uint(char *dst, uint32_t dst_size, uint32_t off, uint32_t v)
+static uint32_t copy_uint (char * dst, uint32_t dst_size, uint32_t off, uint32_t v)
 {
     char tmp[11];
     uint32_t n = 0;
+
     if (0u == v)
     {
-        if (off + 1u < dst_size) { dst[off++] = '0'; }
+        if (off + 1u < dst_size)
+        {
+            dst[off++] = '0';
+        }
+
         return off;
     }
+
     while (v > 0u && n < sizeof(tmp))
     {
-        tmp[n++] = (char)('0' + (v % 10u));
+        tmp[n++] = (char) ('0' + (v % 10u));
         v /= 10u;
     }
+
     while (n > 0u && off + 1u < dst_size)
     {
         dst[off++] = tmp[--n];
     }
+
     return off;
 }
 
-static const char * card_type_name(rs_nfc_card_type_t t)
+static const char * card_type_name (rs_nfc_card_type_t t)
 {
     switch (t)
     {
-        case RS_NFC_CARD_TYPE_ISO14443A:        return "ISO14443A";
-        case RS_NFC_CARD_TYPE_ISO14443B:        return "ISO14443B";
-        case RS_NFC_CARD_TYPE_FELICA:           return "FeliCa";
-        case RS_NFC_CARD_TYPE_ISO15693:         return "ISO15693";
-        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_2:   return "NFC-T2T";
-        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_3:   return "NFC-T3T";
-        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4A:  return "NFC-T4A";
-        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:  return "NFC-T4B";
-        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5:   return "NFC-T5T";
-        default:                                 return "Unknown";
+        case RS_NFC_CARD_TYPE_ISO14443A:
+            return "ISO14443A";
+        case RS_NFC_CARD_TYPE_ISO14443B:
+            return "ISO14443B";
+        case RS_NFC_CARD_TYPE_FELICA:
+            return "FeliCa";
+        case RS_NFC_CARD_TYPE_ISO15693:
+            return "ISO15693";
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_2:
+            return "NFC-T2T";
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_3:
+            return "NFC-T3T";
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4A:
+            return "NFC-T4A";
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_4B:
+            return "NFC-T4B";
+        case RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5:
+            return "NFC-T5T";
+        default:
+            return "Unknown";
     }
 }
 
-uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t *res,
-                                char *buf, uint32_t buf_size)
+uint32_t rs_nfc_reader_card_summary_build (const rs_nfc_card_result_t * res,
+                                           char                       * buf,
+                                           uint32_t                     buf_size)
 {
-    if ((NULL == buf) || (0u == buf_size)) { return 0u; }
+    if ((NULL == buf) || (0u == buf_size))
+    {
+        return 0u;
+    }
+
     if (NULL == res)
     {
         buf[0] = '\0';
+
         return 0u;
     }
 
@@ -573,19 +650,29 @@ uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t *res,
     off = copy_str(buf, buf_size, off, "CARD DETECTED! type=");
     off = copy_str(buf, buf_size, off, card_type_name(res->card_type));
     off = copy_str(buf, buf_size, off, " UID=");
+
     for (uint8_t i = 0; i < res->uid_len; i++)
     {
         off = copy_hex_byte(buf, buf_size, off, res->uid[i]);
     }
+
     if (res->ndef_present)
     {
         off = copy_str(buf, buf_size, off, " NDEF=");
-        off = copy_uint(buf, buf_size, off, (uint32_t)res->ndef_len);
+        off = copy_uint(buf, buf_size, off, (uint32_t) res->ndef_len);
         off = copy_str(buf, buf_size, off, "B");
     }
 
-    if (off < buf_size) { buf[off] = '\0'; }
-    else                { buf[buf_size - 1u] = '\0'; off = buf_size - 1u; }
+    if (off < buf_size)
+    {
+        buf[off] = '\0';
+    }
+    else
+    {
+        buf[buf_size - 1u] = '\0';
+        off = buf_size - 1u;
+    }
+
     return off;
 }
 
@@ -593,10 +680,13 @@ uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t *res,
  * Raw exchange
  **********************************************************************************************************************/
 
-static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
-                                               const uint8_t *uid, uint8_t uid_len,
-                                               uint8_t *tx, uint32_t *tx_len,
-                                               uint8_t *rx, uint32_t *rx_len)
+static rs_status_t rs_nfc_reader_raw_exchange (rs_nfc_protocol_t   protocol,
+                                               const uint8_t     * uid,
+                                               uint8_t             uid_len,
+                                               uint8_t           * tx,
+                                               uint32_t          * tx_len,
+                                               uint8_t           * rx,
+                                               uint32_t          * rx_len)
 {
     if ((NULL == tx) || (NULL == tx_len) || (NULL == rx) || (NULL == rx_len))
     {
@@ -622,6 +712,7 @@ static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
             };
 
             tx[0] = 0x06;
+
             if ((NULL != uid) && (uid_len >= 8u))
             {
                 (void)memcpy(&tx[1], uid, 8u);
@@ -630,8 +721,9 @@ static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
             {
                 (void)memset(&tx[1], 0, 8u);
             }
+
             (void)memcpy(&tx[9], t3t_tail, sizeof(t3t_tail));
-            frame_len = 1u + 8u + (uint32_t)sizeof(t3t_tail);
+            frame_len = 1u + 8u + (uint32_t) sizeof(t3t_tail);
             break;
         }
 
@@ -639,6 +731,7 @@ static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
         {
             tx[0] = 0x22u;
             tx[1] = 0x20u;
+
             if ((NULL != uid) && (uid_len >= 8u))
             {
                 for (uint8_t i = 0; i < 8u; i++)
@@ -650,6 +743,7 @@ static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
             {
                 (void)memset(&tx[2], 0, 8u);
             }
+
             tx[10] = 0x00u;
             frame_len = 11u;
             break;
@@ -664,7 +758,9 @@ static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t protocol,
         }
 
         default:
+        {
             return RS_ERR_INVALID_CFG;
+        }
     }
 
     *tx_len = frame_len;

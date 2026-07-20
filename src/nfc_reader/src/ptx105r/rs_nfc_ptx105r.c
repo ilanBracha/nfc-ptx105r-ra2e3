@@ -80,7 +80,7 @@ static uint8_t          g_t5t_work_buf[T5T_WORK_BUF_SIZE];
 
 static volatile TaskHandle_t g_waiting_task = NULL;
 
-static void ptx105r_irq_wake_cb(external_irq_callback_args_t *p_args)
+static void ptx105r_irq_wake_cb (external_irq_callback_args_t * p_args)
 {
     RS_COMMON_UNUSED(p_args);
     if (NULL != g_waiting_task)
@@ -95,10 +95,13 @@ static void ptx105r_irq_wake_cb(external_irq_callback_args_t *p_args)
  * Internal helpers
  **********************************************************************************************************************/
 
-static rs_nfc_card_type_t map_card_type(ptxIoTRd_CardParams_t *card,
+static rs_nfc_card_type_t map_card_type (ptxIoTRd_CardParams_t * card,
                                          ptxIoTRd_CardProtocol_t prot)
 {
-    if (NULL == card) { return RS_NFC_CARD_TYPE_UNKNOWN; }
+    if (NULL == card)
+    {
+        return RS_NFC_CARD_TYPE_UNKNOWN;
+    }
 
     switch (card->TechType)
     {
@@ -123,7 +126,7 @@ static rs_nfc_card_type_t map_card_type(ptxIoTRd_CardParams_t *card,
     }
 }
 
-static rs_nfc_protocol_t map_protocol(ptxIoTRd_CardProtocol_t prot)
+static rs_nfc_protocol_t map_protocol (ptxIoTRd_CardProtocol_t prot)
 {
     switch (prot)
     {
@@ -137,9 +140,12 @@ static rs_nfc_protocol_t map_protocol(ptxIoTRd_CardProtocol_t prot)
     }
 }
 
-static ptxIoTRd_CardProtocol_t choose_protocol(ptxIoTRd_CardParams_t *card)
+static ptxIoTRd_CardProtocol_t choose_protocol (ptxIoTRd_CardParams_t * card)
 {
-    if (NULL == card) { return Prot_Undefined; }
+    if (NULL == card)
+    {
+        return Prot_Undefined;
+    }
 
     switch (card->TechType)
     {
@@ -167,27 +173,37 @@ static ptxIoTRd_CardProtocol_t choose_protocol(ptxIoTRd_CardParams_t *card)
     }
 }
 
-static void extract_uid(ptxIoTRd_CardParams_t *card, uint8_t *uid, uint8_t *uid_len)
+static void extract_uid (ptxIoTRd_CardParams_t * card, uint8_t * uid, uint8_t * uid_len)
 {
+    uint8_t len = 0;
     *uid_len = 0;
-    if (NULL == card) { return; }
+
+    if (NULL == card)
+    {
+        return;
+    }
 
     switch (card->TechType)
     {
         case Tech_TypeA:
         {
-            uint8_t len = card->TechParams.CardAParams.NFCID1_LEN;
-            if (len > RS_NFC_UID_MAX_BYTES) { len = RS_NFC_UID_MAX_BYTES; }
-            (void)memcpy(uid, card->TechParams.CardAParams.NFCID1, len);
+            len = card->TechParams.CardAParams.NFCID1_LEN;
+
+            if (len > RS_NFC_UID_MAX_BYTES)
+            {
+                len = RS_NFC_UID_MAX_BYTES;
+            }
+
+            memcpy(uid, card->TechParams.CardAParams.NFCID1, len);
             *uid_len = len;
             break;
         }
         case Tech_TypeB:
-            (void)memcpy(uid, &card->TechParams.CardBParams.SENSB_RES[1], 4u);
+            memcpy(uid, &card->TechParams.CardBParams.SENSB_RES[1], 4u);
             *uid_len = 4u;
             break;
         case Tech_TypeF:
-            (void)memcpy(uid, &card->TechParams.CardFParams.SENSF_RES[2], 8u);
+            memcpy(uid, &card->TechParams.CardFParams.SENSF_RES[2], 8u);
             *uid_len = 8u;
             break;
         case Tech_TypeV:
@@ -202,14 +218,21 @@ static void extract_uid(ptxIoTRd_CardParams_t *card, uint8_t *uid, uint8_t *uid_
     }
 }
 
-static rs_status_t ptx105r_discover_status(rs_nfc_disc_status_t *out_status)
+static rs_status_t ptx105r_discover_status (rs_nfc_disc_status_t * out_status)
 {
-    if (NULL == out_status) { return RS_ERR_INVALID_CFG; }
+    if (NULL == out_status)
+    {
+        return RS_ERR_INVALID_CFG;
+    }
 
     uint8_t raw = 0;
     ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                               StatusType_Discover, &raw);
-    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
+
+    if (ptxStatus_Success != st)
+    {
+        return RS_ERR_INTERNAL;
+    }
 
     switch (raw)
     {
@@ -218,19 +241,25 @@ static rs_status_t ptx105r_discover_status(rs_nfc_disc_status_t *out_status)
         case RF_DISCOVER_STATUS_DISCOVER_DONE:   *out_status = RS_NFC_DISC_DONE;        break;
         default:                                 *out_status = RS_NFC_DISC_NO_CARD;     break;
     }
+
     return RS_OK;
 }
 
-static rs_status_t ptx105r_system_check(void)
+static rs_status_t ptx105r_system_check (void)
 {
     uint8_t state = 0;
     ptxStatus_t st = ptxIoTRd_Get_Status_Info(g_nfc_reader_ptx0_cfg.iot_reader_context,
                                               StatusType_System, &state);
-    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
+
+    if (ptxStatus_Success != st)
+    {
+        return RS_ERR_INTERNAL;
+    }
+
     return (PTX_SYSTEM_STATUS_OK == state) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-static ptxIoTRd_CardRegistry_t *g_active_reg = NULL;
+static ptxIoTRd_CardRegistry_t * g_active_reg = NULL;
 
 /***********************************************************************************************************************
  * PTX SDK function implementations
@@ -294,7 +323,10 @@ rs_status_t rs_nfc_ptx_open (void)
         st = ptxIoTRd_Init(p_cfg->iot_reader_context, &init_params);
     }
 
-    if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
+    if (ptxStatus_Success != st)
+    {
+        return RS_ERR_INTERNAL;
+    }
 
     g_ptx_opened = true;
     return RS_OK;
