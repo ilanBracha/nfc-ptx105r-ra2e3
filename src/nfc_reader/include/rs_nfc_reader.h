@@ -126,6 +126,40 @@ typedef uint32_t rs_nfc_tech_mask_t;
                            RS_NFC_TECH_NFC_FORUM)
 
 /**********************************************************************************************************************
+ * Named configuration values
+ *
+ * Cosmetic constants that give meaningful names to the raw literals used
+ * when populating rs_nfc_reader_cfg_t. Prefer these over bare true / false
+ * / 0 / UINT32_MAX / NULL at call sites for readability.
+ **********************************************************************************************************************/
+
+/* timeout_ms */
+#define RS_NFC_TIMEOUT_INFINITE          (UINT32_MAX)   /* loop forever */
+#define RS_NFC_TIMEOUT_DEFAULT_MS        (5000U)
+
+/* retry_count */
+#define RS_NFC_RETRY_DISABLED            (0U)
+
+/* max_ndef_bytes — see RS_NFC_NDEF_MAX_BYTES for the absolute cap */
+
+/* Boolean feature toggles (typed as bool in the struct). */
+#define RS_NFC_NDEF_READ_ENABLED          (true)
+#define RS_NFC_NDEF_READ_DISABLED         (false)
+
+#define RS_NFC_RAW_EXCHANGE_ENABLED       (true)
+#define RS_NFC_RAW_EXCHANGE_DISABLED      (false)
+
+#define RS_NFC_DEP_VALIDATION_ENABLED     (true)
+#define RS_NFC_DEP_VALIDATION_DISABLED    (false)
+
+#define RS_NFC_CFG_VALIDATION_ENABLED     (true)
+#define RS_NFC_CFG_VALIDATION_DISABLED    (false)
+
+/* Callback / context slot: "no callback" / "no user context". */
+#define RS_NFC_CALLBACK_NONE              (NULL)
+#define RS_NFC_CONTEXT_NONE               (NULL)
+
+/**********************************************************************************************************************
  * Card type (must precede result struct)
  **********************************************************************************************************************/
 typedef enum {
@@ -187,9 +221,8 @@ typedef void (*rs_nfc_card_event_cb_t)(rs_status_t status,
  * Configuration
  **********************************************************************************************************************/
 typedef struct {
-    /* RF discovery configuration: must be within
-     * [RS_NFC_DISCOVERY_INTERVAL_MIN_MS, RS_NFC_DISCOVERY_INTERVAL_MAX_MS]. */
-    uint32_t discovery_interval_ms;
+    /* RF technologies to enable during discovery (bitmask of
+     * RS_NFC_TECH_* flags, e.g. RS_NFC_TECH_ALL). Must be non-zero. */
     rs_nfc_tech_mask_t tech_mask;
 
     /* Run duration of rs_nfc_reader_Read() in milliseconds.
@@ -199,6 +232,11 @@ typedef struct {
 
     /* Read options */
     bool read_ndef;
+    /* Upper bound (in bytes) for the NDEF payload copied into
+     * result->ndef_data. Clamped internally to RS_NFC_NDEF_MAX_BYTES.
+     * A value of 0 is rejected by the validator when read_ndef==true;
+     * if validation is skipped (see cfg_valid_check_en), 0 is treated
+     * as RS_NFC_NDEF_MAX_BYTES by the NDEF reader. */
     uint16_t max_ndef_bytes;
 
     /* Opt-in demo: after activation, perform a protocol-appropriate raw
@@ -227,6 +265,16 @@ typedef struct {
 
     /* Optional runtime dependency validation */
     bool validate_dependencies;
+
+    /* Gate for rs_nfc_reader_validate() inside rs_nfc_reader_Read().
+     *   true  (recommended default): validate cfg fields on entry.
+     *   false: skip validation entirely — the caller is responsible
+     *          for supplying a well-formed cfg. A NULL cfg is still
+     *          rejected regardless of this flag.
+     * NOTE: because a memset(&cfg,0,sizeof(cfg)) zero-initialises this
+     * field to false, callers MUST explicitly set it to true to keep
+     * validation enabled. */
+    bool cfg_valid_check_en;
 } rs_nfc_reader_cfg_t;
 
 
@@ -314,12 +362,17 @@ rs_status_t rs_nfc_reader_Stop(void);
  * writeable, and tag_type_name. Call from inside an on_card_event callback
  * while the card is still activated.
  *
- * @param[in]     protocol   Active RF protocol (from result->protocol).
- * @param[in,out] result     Result struct to populate. Must not be NULL.
+ * @param[in]     protocol         Active RF protocol (from result->protocol).
+ * @param[in,out] result           Result struct to populate. Must not be NULL.
+ * @param[in]     max_ndef_bytes   Upper bound (in bytes) for the NDEF payload
+ *                                 copied into result->ndef_data. Values > 
+ *                                 RS_NFC_NDEF_MAX_BYTES are clamped; 0 is
+ *                                 treated as RS_NFC_NDEF_MAX_BYTES.
  * @return RS_OK on success; RS_ERR_NOT_FOUND if not NDEF formatted.
  */
 rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t protocol,
-                                    rs_nfc_card_result_t *result);
+                                    rs_nfc_card_result_t *result,
+                                    uint32_t max_ndef_bytes);
 
 #ifdef __cplusplus
 }

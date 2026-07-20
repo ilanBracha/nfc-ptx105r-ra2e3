@@ -32,7 +32,7 @@
  * Type 4 Tag NDEF Read — via PTX SDK ptxNDEF_T4TOP component
  **********************************************************************************************************************/
 
-static rs_status_t read_t4t_ndef(rs_nfc_card_result_t *res)
+static rs_status_t read_t4t_ndef(rs_nfc_card_result_t *res, uint32_t cap)
 {
     res->tag_type_name = "ISO-DEP (Type 4 Tag / ISO 14443-4)";
 
@@ -50,7 +50,7 @@ static rs_status_t read_t4t_ndef(rs_nfc_card_result_t *res)
         return RS_ERR_NOT_FOUND;
     }
 
-    uint32_t msg_len = RS_NFC_NDEF_MAX_BYTES;
+    uint32_t msg_len = cap;
     ptx_st = ptxNDEF_T4TOpReadMessage(t4t, res->ndef_data, &msg_len);
 
     if (ptxStatus_Success == ptx_st)
@@ -76,7 +76,7 @@ static rs_status_t read_t4t_ndef(rs_nfc_card_result_t *res)
  * Type 5 Tag NDEF Read — via PTX SDK ptxNDEF_T5TOP component
  **********************************************************************************************************************/
 
-static rs_status_t read_t5t_ndef(rs_nfc_card_result_t *res)
+static rs_status_t read_t5t_ndef(rs_nfc_card_result_t *res, uint32_t cap)
 {
     res->tag_type_name = "NFC Forum Type 5 Tag (T5T/ISO 15693)";
 
@@ -94,7 +94,7 @@ static rs_status_t read_t5t_ndef(rs_nfc_card_result_t *res)
         return RS_ERR_NOT_FOUND;
     }
 
-    uint32_t msg_len = RS_NFC_NDEF_MAX_BYTES;
+    uint32_t msg_len = cap;
     ptx_st = ptxNDEF_T5TOpReadMessage(t5t, res->ndef_data, &msg_len);
 
     if (ptxStatus_Success == ptx_st)
@@ -120,7 +120,7 @@ static rs_status_t read_t5t_ndef(rs_nfc_card_result_t *res)
  * Type 3 Tag NDEF Read — via PTX SDK ptxNDEF_T3TOP component
  **********************************************************************************************************************/
 
-static rs_status_t read_t3t_ndef (rs_nfc_card_result_t *res)
+static rs_status_t read_t3t_ndef (rs_nfc_card_result_t *res, uint32_t cap)
 {
     res->tag_type_name = "NFC Forum Type 3 Tag (T3T/FeliCa)";
 
@@ -138,7 +138,7 @@ static rs_status_t read_t3t_ndef (rs_nfc_card_result_t *res)
         return RS_ERR_NOT_FOUND;
     }
 
-    uint32_t msg_len = RS_NFC_NDEF_MAX_BYTES;
+    uint32_t msg_len = cap;
     ptx_st = ptxNDEF_T3TOpReadMessage(t3t, res->ndef_data, &msg_len);
 
     if (ptxStatus_Success == ptx_st)
@@ -166,7 +166,7 @@ static rs_status_t read_t3t_ndef (rs_nfc_card_result_t *res)
 /***********************************************************************************************************************
  * Type 2 Tag NDEF Read — hand-rolled (small footprint, proven)
  **********************************************************************************************************************/
-static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
+static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res, uint32_t ndef_cap)
 {
     uint8_t rx[RX_BUF_SIZE];
     uint8_t cmd[2];
@@ -196,13 +196,13 @@ static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
     res->tag_type_name  = "NFC Forum Type 2 Tag (T2T)";
 
     /* Read the data area (starting at block 4) */
-    uint32_t cap = (data_area > (uint32_t)TX_BUF_SIZE)
-                   ? (uint32_t)TX_BUF_SIZE : data_area;
-    if (0u == cap) { cap = (uint32_t)TX_BUF_SIZE; }
+    uint32_t buf_cap = (data_area > (uint32_t)TX_BUF_SIZE)
+                       ? (uint32_t)TX_BUF_SIZE : data_area;
+    if (0u == buf_cap) { buf_cap = (uint32_t)TX_BUF_SIZE; }
     uint32_t got   = 0;
     uint8_t  block = 4u;
 
-    while (got < cap)
+    while (got < buf_cap)
     {
         cmd[0] = 0x30; cmd[1] = block;
         rx_len = RX_BUF_SIZE;
@@ -213,7 +213,7 @@ static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
         }
 
         uint32_t take = (rx_len < 16u) ? rx_len : 16u;
-        if ((got + take) > cap) { take = cap - got; }
+        if ((got + take) > buf_cap) { take = buf_cap - got; }
         (void)memcpy(&data_buf[got], rx, take);
         got += take;
 
@@ -241,8 +241,7 @@ static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
         if (0x03u == t)  /* NDEF Message TLV */
         {
             if ((p + l) > got) { l = got - p; }
-            uint32_t copy = (l > RS_NFC_NDEF_MAX_BYTES)
-                            ? RS_NFC_NDEF_MAX_BYTES : l;
+            uint32_t copy = (l > ndef_cap) ? ndef_cap : l;
             (void)memcpy(res->ndef_data, &data_buf[p], copy);
             res->ndef_len     = (uint16_t)copy;
             res->ndef_present = (copy > 0u);
@@ -263,7 +262,8 @@ static rs_status_t read_t2t_ndef(rs_nfc_card_result_t *res)
  **********************************************************************************************************************/
 
 rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t protocol,
-                                     rs_nfc_card_result_t *result)
+                                   rs_nfc_card_result_t * result,
+                                   uint32_t max_ndef_bytes)
 {
     if (NULL == result) { return RS_ERR_INVALID_CFG; }
 
@@ -274,19 +274,25 @@ rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t protocol,
     result->writeable      = false;
     result->tag_type_name  = NULL;
 
+    /* Clamp the caller-supplied cap to the on-stack / result buffer size.
+     * 0 (unspecified) falls back to the max. */
+    uint32_t cap = ((0u == max_ndef_bytes) || (max_ndef_bytes > RS_NFC_NDEF_MAX_BYTES))
+                   ? (uint32_t)RS_NFC_NDEF_MAX_BYTES
+                   : max_ndef_bytes;
+
     switch (protocol)
     {
         case RS_NFC_PROT_ISODEP:
-            return read_t4t_ndef(result);
+            return read_t4t_ndef(result, cap);
 
         case RS_NFC_PROT_T2T:
-            return read_t2t_ndef(result);
+            return read_t2t_ndef(result, cap);
 
         case RS_NFC_PROT_T5T:
-            return read_t5t_ndef(result);
+            return read_t5t_ndef(result, cap);
 
         case RS_NFC_PROT_T3T:
-            return read_t3t_ndef(result);
+            return read_t3t_ndef(result, cap);
 
         case RS_NFC_PROT_NFCDEP:
             result->tag_type_name = "NFC-DEP (Peer-to-Peer)";

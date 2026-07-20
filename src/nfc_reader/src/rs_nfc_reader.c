@@ -151,7 +151,8 @@ rs_status_t rs_nfc_reader_try_once(const void *cfg_raw, void *result_raw)
         bool want_ndef = (NULL != cfg) ? cfg->read_ndef : true;
         if (want_ndef)
         {
-            (void)rs_ndef_read_card_info(res->protocol, res);
+            uint32_t ndef_cap = (NULL != cfg) ? (uint32_t)cfg->max_ndef_bytes : (uint32_t)RS_NFC_NDEF_MAX_BYTES;
+            (void)rs_ndef_read_card_info(res->protocol, res, ndef_cap);
         }
     }
 
@@ -237,7 +238,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t *cfg,
                      * data_area_size / writeable / tag_type_name). */
                     if (cfg->read_ndef)
                     {
-                        (void)rs_ndef_read_card_info(res->protocol, res);
+                        (void)rs_ndef_read_card_info(res->protocol, res, (uint32_t)cfg->max_ndef_bytes);
                     }
 
                     /* Optional raw demo exchange — result exposed to app
@@ -431,12 +432,20 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
 {
     rs_status_t st;
 
-    /* Validate configuration */
-    st = rs_nfc_reader_validate(cfg);
-
-    if (RS_OK != st)
+    /* NULL cfg is always rejected, regardless of cfg_valid_check_en. */
+    if (NULL == cfg)
     {
-        return st;
+        return RS_ERR_INVALID_CFG;
+    }
+
+    /* Optional configuration validation (gated by cfg_valid_check_en). */
+    if (cfg->cfg_valid_check_en)
+    {
+        st = rs_nfc_reader_validate(cfg);
+        if (RS_OK != st)
+        {
+            return st;
+        }
     }
 
     /* Non-blocking path */
@@ -468,11 +477,13 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t *cfg,
             return RS_ERR_INTERNAL;
         }
 
-        return RS_OK;  /* returns immediately */
+        /* returns immediately */
+        return RS_OK;
     }
 
     /* Blocking path */
     g_stop_requested = false;
+
     return rs_nfc_read_blocking(cfg, result_out);
 }
 

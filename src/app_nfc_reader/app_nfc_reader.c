@@ -214,16 +214,17 @@ void app_nfc_reader_init (void)
     rs_nfc_reader_cfg_t cfg;
     memset(&cfg, 0, sizeof(cfg));
     cfg.tech_mask             = RS_NFC_TECH_ALL;
-    cfg.timeout_ms            = UINT32_MAX;
-    cfg.retry_count           = 0u;
-    cfg.read_ndef             = true;
+    cfg.timeout_ms            = RS_NFC_TIMEOUT_INFINITE;
+    cfg.retry_count           = RS_NFC_RETRY_DISABLED;
+    cfg.read_ndef             = RS_NFC_NDEF_READ_ENABLED;
     cfg.max_ndef_bytes        = RS_NFC_NDEF_MAX_BYTES;
-    cfg.run_raw_exchange      = true;
+    cfg.run_raw_exchange      = RS_NFC_RAW_EXCHANGE_ENABLED;
     cfg.callback              = on_nfc_operation_done;
-    cfg.p_context             = NULL;
+    cfg.p_context             = RS_NFC_CONTEXT_NONE;
     cfg.on_card_event         = on_nfc_read_done;
-    cfg.p_card_event_context  = NULL;
-    cfg.validate_dependencies = false;
+    cfg.p_card_event_context  = RS_NFC_CONTEXT_NONE;
+    cfg.validate_dependencies = RS_NFC_DEP_VALIDATION_DISABLED;
+    cfg.cfg_valid_check_en    = RS_NFC_CFG_VALIDATION_ENABLED;
 
     memset(&result, 0, sizeof(result));
 
