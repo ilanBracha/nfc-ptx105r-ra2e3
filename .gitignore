@@ -10,6 +10,7 @@ Release/
 
 # Eclipse workspace metadata
 .metadata/
+.settings/language.settings.xml
 
 # FSP generated files (optional — uncomment to exclude)
 # ra_gen/
