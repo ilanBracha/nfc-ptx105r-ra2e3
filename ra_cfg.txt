@@ -119,7 +119,7 @@ FSP Configuration
       P207 17 GPIO PMOD2_GPIO8 - - "Output mode (Initial Low)" - - - - None - - 
       P208 16 GPIO PMOD2_GPIO7 - - "Output mode (Initial Low)" - - "AGT0: AGTOB0" - None - - 
       P212 8 - PMOD2_RESET - - Disabled - - "AGT1: AGTEE1; CGC: EXTAL; GPT0: GTIOC0B; GPT_POEGB: GTETRGB; ICU: IRQ3; SCI1: RXD1" - None - - 
-      P213 7 - LED1 - - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - None - - 
+      P213 7 - LED1 M - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - IO - - 
       P214 5 - - - - Disabled - - "CGC: XCOUT" - None - - 
       P215 4 - - - - Disabled - - "CGC: XCIN" - None - - 
       P300 24 - - H - Disabled - - "GPT0: GTIOC0A; GPT_OPS: GTOUUP; JTAG/SWD: SWCLK" - IO - - 
@@ -132,7 +132,7 @@ FSP Configuration
       P409 10 GPIO ARDUINO_D2 - - "Input mode" - - "GPT_OPS: GTOWUP; ICU: IRQ6" - None - - 
       P500 37 GPIO ARDUINO_D6 - - "Output mode (Initial Low)" - - "GPT5: GTIOC5A" - None - - 
       P913 15 GPIO PMOD1_GPIO10 - - "Output mode (Initial Low)" - - "AGT1: AGTIO1; GPT_POEGA: GTETRGA" - None - - 
-      P914 14 GPIO LED2_PMOD1_GPIO9 - - "Output mode (Initial Low)" - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - None - - 
+      P914 14 GPIO LED2_PMOD1_GPIO9 H - "Output mode (Initial Low)" - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - IO - - 
       P915 13 GPIO PMOD1_RESET - - "Output mode (Initial Low)" - - - - None - - 
       RES# 19 SYSTEM_RES# - - - - - - - - IO "Read only" - 
       VCC 30 SYSTEM_VCC - - - - - - - - IO "Read only" - 
@@ -168,7 +168,7 @@ FSP Configuration
       P207 17 - PMOD2_GPIO8 - - Disabled - - - - None - - 
       P208 16 - PMOD2_GPIO7 - - Disabled - - "AGT0: AGTOB0" - None - - 
       P212 8 - PMOD2_RESET - - Disabled - - "AGT1: AGTEE1; CGC: EXTAL; GPT0: GTIOC0B; GPT_POEGB: GTETRGB; ICU: IRQ3; SCI1: RXD1" - None - - 
-      P213 7 - LED1 - - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - None - - 
+      P213 7 - LED1 M - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - IO - - 
       P214 5 - - - - Disabled - - "CGC: XCOUT" - None - - 
       P215 4 - - - - Disabled - - "CGC: XCIN" - None - - 
       P300 24 - - H - Disabled - - "GPT0: GTIOC0A; GPT_OPS: GTOUUP; JTAG/SWD: SWCLK" - IO - - 
@@ -181,7 +181,7 @@ FSP Configuration
       P409 10 - ARDUINO_D2 - - Disabled - - "GPT_OPS: GTOWUP; ICU: IRQ6" - None - - 
       P500 37 - ARDUINO_D6 - - Disabled - - "GPT5: GTIOC5A" - None - - 
       P913 15 GPIO PMOD1_GPIO10 - - "Output mode (Initial Low)" - - "AGT1: AGTIO1; GPT_POEGA: GTETRGA" - None - - 
-      P914 14 - LED2_PMOD1_GPIO9 - - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - None - - 
+      P914 14 - LED2_PMOD1_GPIO9 H - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - IO - - 
       P915 13 GPIO PMOD1_RESET - - "Output mode (Initial Low)" - - - - None - - 
       RES# 19 SYSTEM_RES# - - - - - - - - IO "Read only" - 
       VCC 30 SYSTEM_VCC - - - - - - - - IO "Read only" - 
@@ -217,7 +217,7 @@ FSP Configuration
       P207 17 - PMOD2_GPIO8 - - Disabled - - - - None - - 
       P208 16 - PMOD2_GPIO7 - - Disabled - - "AGT0: AGTOB0" - None - - 
       P212 8 - PMOD2_RESET - - Disabled - - "AGT1: AGTEE1; CGC: EXTAL; GPT0: GTIOC0B; GPT_POEGB: GTETRGB; ICU: IRQ3; SCI1: RXD1" - None - - 
-      P213 7 - LED1 - - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - None - - 
+      P213 7 - LED1 M - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - IO - - 
       P214 5 - - - - Disabled - - "CGC: XCOUT" - None - - 
       P215 4 - - - - Disabled - - "CGC: XCIN" - None - - 
       P300 24 - - H - Disabled - - "GPT0: GTIOC0A; GPT_OPS: GTOUUP; JTAG/SWD: SWCLK" - IO - - 
@@ -230,7 +230,7 @@ FSP Configuration
       P409 10 - ARDUINO_D2 - - Disabled - - "GPT_OPS: GTOWUP; ICU: IRQ6" - None - - 
       P500 37 - ARDUINO_D6 - - Disabled - - "GPT5: GTIOC5A" - None - - 
       P913 15 - PMOD1_GPIO10 - - Disabled - - "AGT1: AGTIO1; GPT_POEGA: GTETRGA" - None - - 
-      P914 14 - LED2_PMOD1_GPIO9 - - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - None - - 
+      P914 14 - LED2_PMOD1_GPIO9 H - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - IO - - 
       P915 13 - PMOD1_RESET - - Disabled - - - - None - - 
       RES# 19 SYSTEM_RES# - - - - - - - - IO "Read only" - 
       VCC 30 SYSTEM_VCC - - - - - - - - IO "Read only" - 
@@ -266,7 +266,7 @@ FSP Configuration
       P207 17 - PMOD2_GPIO8 - - Disabled - - - - None - - 
       P208 16 - PMOD2_GPIO7 - - Disabled - - "AGT0: AGTOB0" - None - - 
       P212 8 - PMOD2_RESET - - Disabled - - "AGT1: AGTEE1; CGC: EXTAL; GPT0: GTIOC0B; GPT_POEGB: GTETRGB; ICU: IRQ3; SCI1: RXD1" - None - - 
-      P213 7 - LED1 - - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - None - - 
+      P213 7 - LED1 M - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - IO - - 
       P214 5 - - - - Disabled - - "CGC: XCOUT" - None - - 
       P215 4 - - - - Disabled - - "CGC: XCIN" - None - - 
       P300 24 - - H - Disabled - - "GPT0: GTIOC0A; GPT_OPS: GTOUUP; JTAG/SWD: SWCLK" - IO - - 
@@ -279,7 +279,7 @@ FSP Configuration
       P409 10 - ARDUINO_D2 - - Disabled - - "GPT_OPS: GTOWUP; ICU: IRQ6" - None - - 
       P500 37 - ARDUINO_D6 - - Disabled - - "GPT5: GTIOC5A" - None - - 
       P913 15 - PMOD1_GPIO10 - - Disabled - - "AGT1: AGTIO1; GPT_POEGA: GTETRGA" - None - - 
-      P914 14 - LED2_PMOD1_GPIO9 - - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - None - - 
+      P914 14 - LED2_PMOD1_GPIO9 H - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - IO - - 
       P915 13 - PMOD1_RESET - - Disabled - - - - None - - 
       RES# 19 SYSTEM_RES# - - - - - - - - IO "Read only" - 
       VCC 30 SYSTEM_VCC - - - - - - - - IO "Read only" - 
@@ -315,7 +315,7 @@ FSP Configuration
       P207 17 GPIO PMOD2_GPIO8 - - "Output mode (Initial Low)" - - - - None - - 
       P208 16 GPIO PMOD2_GPIO7 - - "Output mode (Initial Low)" - - "AGT0: AGTOB0" - None - - 
       P212 8 GPIO PMOD2_RESET - - "Output mode (Initial High)" - - "AGT1: AGTEE1; CGC: EXTAL; GPT0: GTIOC0B; GPT_POEGB: GTETRGB; ICU: IRQ3; SCI1: RXD1" - None - - 
-      P213 7 - LED1 - - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - None - - 
+      P213 7 - LED1 M - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - IO - - 
       P214 5 - - - - Disabled - - "CGC: XCOUT" - None - - 
       P215 4 - - - - Disabled - - "CGC: XCIN" - None - - 
       P300 24 JTAG/SWD_SWCLK - H - "Peripheral mode" - - "GPT0: GTIOC0A; GPT_OPS: GTOUUP; JTAG/SWD: SWCLK" - IO - - 
@@ -328,7 +328,7 @@ FSP Configuration
       P409 10 GPIO ARDUINO_D2 - - "Output mode (Initial Low)" - - "GPT_OPS: GTOWUP; ICU: IRQ6" - None - - 
       P500 37 GPIO ARDUINO_D6 - - "Output mode (Initial Low)" - - "GPT5: GTIOC5A" - None - - 
       P913 15 GPIO PMOD1_GPIO10 - - "Output mode (Initial Low)" - - "AGT1: AGTIO1; GPT_POEGA: GTETRGA" - None - - 
-      P914 14 GPIO LED2_PMOD1_GPIO9 - - "Output mode (Initial Low)" - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - None - - 
+      P914 14 GPIO LED2_PMOD1_GPIO9 H - "Output mode (Initial Low)" - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - IO - - 
       P915 13 GPIO PMOD1_RESET - - "Output mode (Initial Low)" - - - - None - - 
       RES# 19 SYSTEM_RES# - - - - - - - - IO "Read only" - 
       VCC 30 SYSTEM_VCC - - - - - - - - IO "Read only" - 
@@ -336,7 +336,7 @@ FSP Configuration
       VCL 3 SYSTEM_VCL - - - - - - - - IO "Read only" - 
       VSS 31 SYSTEM_VSS - - - - - - - - IO "Read only" - 
       VSS 6 SYSTEM_VSS - - - - - - - - IO "Read only" - 
-    R7FA2E3073CFL.pincfg -> 
+    R7FA2E3073CFL.pincfg -> g_bsp_pin_cfg
       AVCC0 42 SYSTEM_AVCC0 - - - - - - - - IO "Read only" - 
       AVSS0 43 SYSTEM_AVSS0 - - - - - - - - IO "Read only" - 
       P000 48 - ARDUINO_A0 - - Disabled - - "ADC0: AN000; ICU: IRQ6" - None - - 
@@ -351,7 +351,7 @@ FSP Configuration
       P100 36 SCI0_RXD0 ARDUINO_D12_MISO_PMOD1_MISO H None "Peripheral mode" - - "ADC0: AN022; AGT0: AGTIO0; GPT8: GTIOC8B; GPT_POEGA: GTETRGA; ICU: IRQ2; IIC0: SCL0; KINT: KRM00; SCI0: RXD0; SCI1: SCK1; SPI0: MISO0" - I - - 
       P101 35 SCI0_TXD0 ARDUINO_D11_MOSI_PMOD1_MOSI H None "Peripheral mode" - - "ADC0: AN021; AGT0: AGTEE0; GPT8: GTIOC8A; GPT_POEGB: GTETRGB; ICU: IRQ1; IIC0: SDA0; KINT: KRM01; SCI0: TXD0; SCI1: CTS_RTS1; SPI0: MOSI0" - O - - 
       P102 34 SCI0_SCK0 ARDUINO_D13_SCK_PMOD1_SCK H - "Peripheral mode" - - "ADC0: AN020; ADC0(Digital): ADTRG0; AGT0: AGTO0; GPT5: GTIOC5B; GPT_OPS: GTOWLO; KINT: KRM02; SCI0: SCK0; SCI2: TXD2; SPI0: RSPCK0" - IO - - 
-      P103 33 SCI0_CTS_RTS0 ARDUINO_D10_SS_PMOD1_SS H - "Peripheral mode" - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
+      P103 33 GPIO ARDUINO_D10_SS_PMOD1_SS H - "Output mode (Initial High)" - - "ADC0: AN019; GPT5: GTIOC5A; GPT_OPS: GTOWUP; KINT: KRM03; SCI0: CTS_RTS0; SPI0: SSLA0" - IO - - 
       P104 32 - ARDUINO_D9 - - Disabled - - "GPT4: GTIOC4B; GPT_POEGB: GTETRGB; ICU: IRQ1; KINT: KRM04; SCI0: RXD0; SPI0: SSLA1" - None - - 
       P108 25 JTAG/SWD_SWDIO - H - "Peripheral mode" - - "GPT0: GTIOC0B; GPT_OPS: GTOULO; JTAG/SWD: SWDIO; SCI9: CTS_RTS9" - IO - - 
       P109 26 SCI9_TXD9 ARDUINO_D1_TX H - "Peripheral mode" - - "CLKOUT: CLKOUT; GPT4: GTIOC4A; GPT_OPS: GTOVUP; SCI1: SCK1; SCI9: TXD9" - O - - 
@@ -364,7 +364,7 @@ FSP Configuration
       P207 17 - PMOD2_GPIO8 - - Disabled - - - - None - - 
       P208 16 - PMOD2_GPIO7 - - Disabled - - "AGT0: AGTOB0" - None - - 
       P212 8 - PMOD2_RESET - - Disabled - - "AGT1: AGTEE1; CGC: EXTAL; GPT0: GTIOC0B; GPT_POEGB: GTETRGB; ICU: IRQ3; SCI1: RXD1" - None - - 
-      P213 7 - LED1 - - Disabled - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - None - - 
+      P213 7 GPIO LED1 M - "Output mode (Initial Low)" - - "CGC: XTAL; GPT0: GTIOC0A; GPT_POEGA: GTETRGA; ICU: IRQ2; SCI1: TXD1" - IO - - 
       P214 5 - - - - Disabled - - "CGC: XCOUT" - None - - 
       P215 4 - - - - Disabled - - "CGC: XCIN" - None - - 
       P300 24 JTAG/SWD_SWCLK - H - "Peripheral mode" - - "GPT0: GTIOC0A; GPT_OPS: GTOUUP; JTAG/SWD: SWCLK" - IO - - 
@@ -377,7 +377,7 @@ FSP Configuration
       P409 10 - ARDUINO_D2 - - Disabled - - "GPT_OPS: GTOWUP; ICU: IRQ6" - None - - 
       P500 37 - ARDUINO_D6 - - Disabled - - "GPT5: GTIOC5A" - None - - 
       P913 15 - PMOD1_GPIO10 - - Disabled - - "AGT1: AGTIO1; GPT_POEGA: GTETRGA" - None - - 
-      P914 14 - LED2_PMOD1_GPIO9 - - Disabled - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - None - - 
+      P914 14 GPIO LED2_PMOD1_GPIO9 H - "Output mode (Initial Low)" - - "AGT1: AGTOA1; GPT_POEGB: GTETRGB" - IO - - 
       P915 13 - PMOD1_RESET - - Disabled - - - - None - - 
       RES# 19 SYSTEM_RES# - - - - - - - - IO "Read only" - 
       VCC 30 SYSTEM_VCC - - - - - - - - IO "Read only" - 
@@ -417,11 +417,11 @@ FSP Configuration
     
   Module "SPI Communication Device (rm_comms_spi)"
     Parameter Checking: Default (BSP)
-    Auto Slave Select: Disabled
+    Auto Slave Select: Enabled
     
   Module "SPI Shared Bus (rm_comms_spi)"
     Parameter Checking: Default (BSP)
-    Auto Slave Select: Disabled
+    Auto Slave Select: Enabled
     
   Module "External IRQ (r_icu)"
     Parameter Checking: Default (BSP)
@@ -439,11 +439,6 @@ FSP Configuration
     Parameter Checking: Default (BSP)
     Pin Output Support: Disabled
     Write Protect Enable: Disabled
-    
-  Module "Timer, Low-Power (r_agt)"
-    Parameter Checking: Default (BSP)
-    Pin Output Support: Disabled
-    Pin Input Support: Disabled
     
   Module "FreeRTOS Port (rm_freertos_port)"
   Module "FreeRTOS Heap 4"
@@ -563,15 +558,15 @@ FSP Configuration
       Temperature Sensor: Shutdown Temperature (°C): 100
       Temperature Sensor: Ambient Temperature (°C): 25
       Set Polling Mode: 0
-      NFC Interrupt Port: Disabled
-      NFC Interrupt Pin: Disabled
+      NFC Interrupt Port: 00
+      NFC Interrupt Pin: 15
       Device Limit: 5
       Idle Time: 100
       
       Instance "g_comms_spi_device0 SPI Communication Device (rm_comms_spi)"
         Name: g_comms_spi_device0
-        SSL Port Number: Disabled
-        SSL Pin Number: Disabled
+        SSL Port Number: 01
+        SSL Pin Number: 03
         SSL Next Access Delay (Microseconds): 1
         Slave Select Polarity: Active Low
         Semaphore Timeout (RTOS only): 0xFFFFFFFF
@@ -625,24 +620,71 @@ FSP Configuration
           Semaphore for Blocking (RTOS only): Use
           Recursive Mutex for Bus (RTOS only): Use
           
-      Instance "g_timer1 Timer, Low-Power (r_agt)"
+      Instance "g_timer1 Timer, General PWM (r_gpt)"
         General: Name: g_timer1
-        General: Counter Bit Width: AGT 16-bit
         General: Channel: 0
         General: Mode: Periodic
         General: Period: 0x10000
+        General: Compare Match: Compare Match A: Status: Disabled
+        General: Compare Match: Compare Match A: Compare match value: 0x10000
+        General: Compare Match: Compare Match B: Status: Disabled
+        General: Compare Match: Compare Match B: Compare match value: 0x10000
+        General: Compare Match: Compare Match C: Status: Disabled
+        General: Compare Match: Compare Match C: Compare match value: 0x10000
+        General: Compare Match: Compare Match D: Status: Disabled
+        General: Compare Match: Compare Match D: Compare match value: 0x10000
+        General: Compare Match: Compare Match E: Status: Disabled
+        General: Compare Match: Compare Match E: Compare match value: 0x10000
+        General: Compare Match: Compare Match F: Status: Disabled
+        General: Compare Match: Compare Match F: Compare match value: 0x10000
         General: Period Unit: Raw Counts
+        Output: Custom Waveform: GTIOA: Initial Output Level: Pin Level Low
+        Output: Custom Waveform: GTIOA: Cycle End Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOA: Compare Match Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOA: Retain Output Level at Count Stop: Disabled
+        Output: Custom Waveform: GTIOB: Initial Output Level: Pin Level Low
+        Output: Custom Waveform: GTIOB: Cycle End Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOB: Compare Match Output Level: Pin Level Retain
+        Output: Custom Waveform: GTIOB: Retain Output Level at Count Stop: Disabled
+        Output: Custom Waveform: Custom Waveform Enable: Disabled
         Output: Duty Cycle Percent (only applicable in PWM mode): 50
-        General: Count Source: PCLKB
-        Output: AGTOA Output: Disabled
-        Output: AGTOB Output: Disabled
-        Output: AGTO Output: Disabled
-        Input: Measurement Mode: Measure Disabled
-        Input: Input Filter: No Filter
-        Input: Enable Pin: Enable Pin Not Used
-        Input: Trigger Edge: Trigger Edge Rising
+        Output: GTIOCA Output Enabled: False
+        Output: GTIOCA Stop Level: Pin Level Low
+        Output: GTIOCB Output Enabled: False
+        Output: GTIOCB Stop Level: Pin Level Low
+        Input: Count Up Source: 
+        Input: Count Down Source: 
+        Input: Start Source: 
+        Input: Stop Source: 
+        Input: Clear Source: 
+        Input: Capture A Source: 
+        Input: Capture B Source: 
+        Input: Noise Filter A Sampling Clock Select: No Filter
+        Input: Noise Filter B Sampling Clock Select: No Filter
+        Pin Polarity: GTIOCnA Polarity: Normal
+        Pin Polarity: GTIOCnB Polarity: Normal
         Interrupts: Callback: ptxPLAT_TIMER_IsrCallback
-        Interrupts: Underflow Interrupt Priority: Priority 3
+        Interrupts: Overflow/Crest Interrupt Priority: Priority 3
+        Interrupts: Capture/Compare match A Interrupt Priority: Disabled
+        Interrupts: Capture/Compare match B Interrupt Priority: Disabled
+        Interrupts: Compare Match C Interrupt Priority: Disabled
+        Interrupts: Compare Match D Interrupt Priority: Disabled
+        Interrupts: Compare Match E Interrupt Priority: Disabled
+        Interrupts: Compare Match F Interrupt Priority: Disabled
+        Interrupts: Underflow/Trough Interrupt Priority: Disabled
+        Extra Features: Extra Features: Disabled
+        Extra Features: Output Disable: POEG Link: POEG Channel 0
+        Extra Features: Output Disable: Output Disable POEG Trigger: 
+        Extra Features: ADC Trigger: Start Event Trigger (Channels with GTINTAD only): 
+        Extra Features: ADC Trigger: ADC A Compare Match (Raw Counts): 0
+        Extra Features: ADC Trigger: ADC B Compare Match (Raw Counts): 0
+        Extra Features: Dead Time (Value range varies with Channel): Dead Time Count Up (Raw Counts): 0
+        Extra Features: Dead Time (Value range varies with Channel): Dead Time Count Down (Raw Counts) (Channels with GTDVD only): 0
+        Extra Features: Interrupt Skipping (Channels with GTITC only): Interrupt to Count: None
+        Extra Features: Interrupt Skipping (Channels with GTITC only): Interrupt Skip Count: 0
+        Extra Features: Interrupt Skipping (Channels with GTITC only): Skip ADC Events: None
+        Extra Features: Output Disable: GTIOCA Disable Setting: Disable Prohibited
+        Extra Features: Output Disable: GTIOCB Disable Setting: Disable Prohibited
         
       Instance "g_timer0 Timer, General PWM (r_gpt)"
         General: Name: g_timer0

@@ -8,14 +8,14 @@
  #define COMPS_PLAT_PTXPLAT_INT_H_
 
  #include "ptxStatus.h"
-#include "ptxPLAT.h"
+ #include "ptxPLAT.h"
 
  #if defined(PTX_INTF_UART)
-  #include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_UART.h>
+  #include "ptxPLAT_UART.h"
  #elif defined(PTX_INTF_SPI)
   #include "ptxPLAT_SPI.h"
  #elif defined(PTX_INTF_I2C)
-  #include <STACK/COMPS/PLAT/RENESAS/RA4M2/ptxPLAT_I2C.h>
+  #include "ptxPLAT_I2C.h"
  #else
   #error Error - Missing or unsupported Host-Interface implementation used
  #endif

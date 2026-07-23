@@ -82,41 +82,12 @@ ptxStatus_t ptxPLAT_SPI_Open (rm_comms_instance_t * spi_comms_instance, ioport_i
         memset(&spi_ctx, 0, sizeof(ptxPLAT_Spi_t));
         static ptxPLAT_SpiPort_t setting_spi_port;
 
-        /*
-         * Force SCI0 SPI pin mux for PMOD1 on RA2E3 FPB.
-         * The generated g_bsp_pin_cfg does NOT include these peripheral pins,
-         * so the SCI0 SPI peripheral would be opened but its signals never
-         * reach the package pins. Same workaround as in user_uart_log.c.
-         *
-         *   P1_00 = MISO (RXD0)   SCI0_2_4_6_8
-         *   P1_01 = MOSI (TXD0)   SCI0_2_4_6_8
-         *   P1_02 = SCK0           SCI0_2_4_6_8
-         *   P1_03 = SS / CS        GPIO output, idle HIGH
-         */
-        (void)R_IOPORT_PinCfg(gpio_instance->p_ctrl,
-                              BSP_IO_PORT_01_PIN_00,
-                              ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI0_2_4_6_8));
-        (void)R_IOPORT_PinCfg(gpio_instance->p_ctrl,
-                              BSP_IO_PORT_01_PIN_01,
-                              ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI0_2_4_6_8));
-        (void)R_IOPORT_PinCfg(gpio_instance->p_ctrl,
-                              BSP_IO_PORT_01_PIN_02,
-                              ((uint32_t)IOPORT_CFG_PERIPHERAL_PIN | (uint32_t)IOPORT_PERIPHERAL_SCI0_2_4_6_8));
-        /* CS pin as GPIO output, start HIGH (deasserted). */
-        (void)R_IOPORT_PinCfg(gpio_instance->p_ctrl,
-                              BSP_IO_PORT_01_PIN_03,
-                              ((uint32_t)IOPORT_CFG_PORT_DIRECTION_OUTPUT | (uint32_t)IOPORT_CFG_PORT_OUTPUT_HIGH));
-
         status = (ptxStatus_t) spi_comms_instance->p_api->open(spi_comms_instance->p_ctrl, spi_comms_instance->p_cfg);
+        rm_comms_spi_device_extended_cfg_t * spi_ssl_pin =
+            (rm_comms_spi_device_extended_cfg_t *) spi_comms_instance->p_cfg->p_lower_level_cfg;
 
         setting_spi_port.SpiInstance      = spi_comms_instance;
-        /*
-         * Override the CS pin at runtime. The generated hal_data.c sets
-         * ssl_pin = BSP_IO_PORT_FF_PIN_FF (invalid). We force it to the
-         * correct PMOD1_SS pin (P1_03) so ptxPLAT_SPI_SetChipSelect()
-         * toggles the right GPIO.
-         */
-        setting_spi_port.Nss.PinNumber    = (uint16_t) BSP_IO_PORT_01_PIN_03;
+        setting_spi_port.Nss.PinNumber    = (uint16_t) spi_ssl_pin->ssl_pin;
         setting_spi_port.Nss.PortInstance = gpio_instance;
         spi_ctx.SpiPortUsed               = &setting_spi_port;
     }

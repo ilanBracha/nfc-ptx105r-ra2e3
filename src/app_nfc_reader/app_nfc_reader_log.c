@@ -15,9 +15,6 @@
  *    debug log can never throttle the main loop or RTT.
  *  - RX bytes are collected in a separate ring buffer from the RX_CHAR event
  *    and consumed by user_cli via app_nfc_reader_log_rx_get().
- *  - The pin mux for P1_09 (TXD9) / P1_10 (RXD9) on the RA2E3 FPB is forced
- *    here via R_IOPORT_PinCfg, mirroring the SPI workaround in ptxPLAT_SPI.c
- *    -- the generated g_bsp_pin_cfg does not include those pins.
  */
 #include <stdio.h>
 #include "app_nfc_reader_log.h"
@@ -26,22 +23,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include "ptxCOMMON.h"
-
-/*
- * SCI9 routes to P1_09 (TXD9) / P1_10 (RXD9) on the RA2E3 FPB.
- * SCI1/3/5/7/9 use PSEL = 0x05 -> IOPORT_PERIPHERAL_SCI1_3_5_7_9.
- *
- * The generated g_bsp_pin_cfg in ra_gen/pin_data.c does NOT mux these pins
- * to the peripheral (TXD/RXD are missing from the FSP Pins tab), so the SCI
- * peripheral is opened but its signals never reach the package pins. We force
- * the mux here, mirroring the SPI workaround in ptxPLAT_SPI.c.
- */
-#ifndef app_nfc_reader_log_TXD_PIN
-#define app_nfc_reader_log_TXD_PIN  BSP_IO_PORT_01_PIN_09
-#endif
-#ifndef app_nfc_reader_log_RXD_PIN
-#define app_nfc_reader_log_RXD_PIN  BSP_IO_PORT_01_PIN_10
-#endif
 
 /*
  * ####################################################################################################################
@@ -151,16 +132,6 @@ int app_nfc_reader_log_init (void)
     }
 
     fsp_err_t err;
-
-    /* Force the SCI9 pin mux for TXD9 (P1_09) and RXD9 (P1_10). The IOPORT
-     * driver was already opened from R_BSP_WarmStart() POST_C, so this just
-     * overrides the two PFS registers we need. */
-    (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
-                          app_nfc_reader_log_TXD_PIN,
-                          ((uint32_t) IOPORT_CFG_PERIPHERAL_PIN | (uint32_t) IOPORT_PERIPHERAL_SCI1_3_5_7_9));
-    (void)R_IOPORT_PinCfg(&g_ioport_ctrl,
-                          app_nfc_reader_log_RXD_PIN,
-                          ((uint32_t) IOPORT_CFG_PERIPHERAL_PIN | (uint32_t) IOPORT_PERIPHERAL_SCI1_3_5_7_9));
 
     err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
 

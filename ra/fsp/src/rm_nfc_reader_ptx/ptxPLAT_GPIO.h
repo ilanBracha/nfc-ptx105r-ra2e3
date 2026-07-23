@@ -13,10 +13,10 @@
  * ####################################################################################################################
  */
 
+ #include "ptxStatus.h"
  #include "r_icu.h"
  #include "r_ioport_api.h"
  #include <stddef.h>
-#include "ptxStatus.h"
 
  #ifdef __cplusplus
 extern "C" {

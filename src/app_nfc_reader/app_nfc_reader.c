@@ -80,22 +80,11 @@ static const bsp_io_port_pin_t led_pins[] =
 
 static const uint32_t LED_COUNT = (uint32_t)(sizeof(led_pins) / sizeof(led_pins[0]));
 
-/* Configure all LED pins as outputs (called once). */
-void app_nfc_reader_led_init (void)
-{
-    for (uint32_t i = 0; i < LED_COUNT; i++)
-    {
-        g_ioport.p_api->pinCfg(g_ioport.p_ctrl, led_pins[i],
-                               (uint32_t)IOPORT_CFG_PORT_DIRECTION_OUTPUT | (uint32_t)IOPORT_CFG_PORT_OUTPUT_LOW);
-    }
-}
-
 /*
  * Drive every LED known to this module to the requested level.
  *
  * NOTE: `g_bsp_pin_cfg` (used by R_IOPORT_Open at boot) does not include
- * the on-board LED pins (P02_13, P09_14). app_nfc_reader_led_init() configures them
- * here at first use as outputs.
+ * the on-board LED pins (P02_13, P09_14), so the application must configure them as outputs
  */
 void app_nfc_reader_led_set_all (bsp_io_level_t level)
 {
@@ -199,9 +188,6 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
  */
 void app_nfc_reader_entry (void)
 {
-#if defined(APP_NFC_READER_LED_EN)
-    app_nfc_reader_led_init();
-#endif
     app_nfc_reader_log_init();
     app_nfc_reader_cli_init();
     app_nfc_reader_init();

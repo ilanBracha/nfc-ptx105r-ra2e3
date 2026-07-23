@@ -63,10 +63,9 @@ extern "C" {
 #define APP_NFC_READER_SEPARATOR_BOT "==========================================\n"
 
 #if defined(APP_NFC_READER_LED_EN)
-#define APP_NFC_READER_LED_1         BSP_IO_PORT_02_PIN_13
-#define APP_NFC_READER_LED_2         BSP_IO_PORT_09_PIN_14
+#define APP_NFC_READER_LED_1         LED1
+#define APP_NFC_READER_LED_2         LED2_PMOD1_GPIO9
 
-void app_nfc_reader_led_init(void);
 void app_nfc_reader_led_set_all(bsp_io_level_t level);
 #endif /* APP_NFC_READER_LED_EN */
 

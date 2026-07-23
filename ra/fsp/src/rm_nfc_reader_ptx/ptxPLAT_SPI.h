@@ -12,11 +12,11 @@
  * INCLUDES
  * ####################################################################################################################
  */
+ #include "ptxStatus.h"
  #include "rm_comms_spi.h"
  #include "r_ioport_api.h"
  #include "ptxPLAT_GPIO.h"
  #include <stddef.h>
-#include "ptxStatus.h"
  #include "ptxPLAT.h"
 
  #ifdef __cplusplus

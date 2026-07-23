@@ -28,6 +28,6 @@ BSP_DONT_REMOVE static const uint32_t BSP_PLACE_IN_SECTION(".option_setting_osis
 /******************************/
 /* the init tables are located in bsp_linker_info.h */
 #define BSP_LINKER_C
-#include <bsp_linker_info.h>
+#include "bsp_linker_info.h"
 
 /* UNCRUSTIFY-ON */

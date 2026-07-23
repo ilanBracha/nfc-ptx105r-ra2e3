@@ -12,10 +12,10 @@
  * INCLUDES
  * ####################################################################################################################
  */
+ #include "ptxStatus.h"
  #include "ptxPLAT.h"
  #include "r_timer_api.h"
  #include <stddef.h>
- #include "ptxStatus.h"
 
  #ifdef __cplusplus
 extern "C" {
@@ -45,7 +45,6 @@ typedef struct ptxPlatTimer
     void                   * TimerInstance; /*< Timer driver API instance. */
     ptxPlatTimerState_t      TimerState;    /*< Timer State. */
     volatile uint8_t         IsElapsed;     /*< Timer Elapsed variable. */
-    volatile uint32_t        RemainingMs;   /*< Software down-counter for long timeouts on 16-bit timers. */
     pptxPlat_TimerCallBack_t ISRCallBack;   /*< Callback used by timer for asynchronous notification to upper layers. */
     void                   * ISRCxt;        /*< Context used by callback. */
 } ptxPlatTimer_t;

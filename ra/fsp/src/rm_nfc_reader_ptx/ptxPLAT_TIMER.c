@@ -97,20 +97,9 @@ ptxStatus_t ptxPLAT_TIMER_Start (ptxPlatTimer_t         * timer,
 
         if (FSP_SUCCESS == r_status)
         {
-            /*
-             * The AGT timer is only 16-bit.  At PCLKB = 24 MHz the counter
-             * overflows after ~2.7 ms, so any timeout > 2 ms would silently
-             * wrap and expire almost instantly.
-             *
-             * Fix: set the hardware period to exactly 1 ms and use the
-             * software down-counter RemainingMs (decremented in the ISR)
-             * to support arbitrarily long timeouts.
-             */
-            uint32_t timer_freq_hz = R_FSP_SystemClockHzGet(FSP_PRIV_CLOCK_PCLKB)
-                                     >> timer_instance->p_cfg->source_div;
-            uint32_t one_ms_counts = timer_freq_hz / PTX_PLAT_TIMER_DIVIDER;
-            timer->RemainingMs = ms;
-            r_status = timer_instance->p_api->periodSet(timer_instance->p_ctrl, one_ms_counts);
+            uint32_t timer_freq_hz = R_FSP_SystemClockHzGet(FSP_PRIV_CLOCK_PCLKD) >> timer_instance->p_cfg->source_div;
+            uint32_t period_counts = (uint32_t) (((uint64_t) timer_freq_hz * ms) / PTX_PLAT_TIMER_DIVIDER);
+            r_status = timer_instance->p_api->periodSet(timer_instance->p_ctrl, period_counts);
         }
 
         if (FSP_SUCCESS == r_status)
@@ -240,33 +229,29 @@ ptxStatus_t ptxPLAT_TIMER_Deinit (ptxPlatTimer_t * timer)
  */
 void ptxPLAT_TIMER_IsrCallback (timer_callback_args_t * p_args)
 {
-    (void) p_args;
-
-    /*
-     * Each ISR tick represents 1 ms (hardware period set in ptxPLAT_TIMER_Start).
-     * Decrement the software down-counter and only mark the timer as elapsed
-     * when it reaches zero.  This allows the 16-bit AGT to support timeouts
-     * of up to ~4 billion ms.
+    /**
+     * PERIODIC_MODE is used for timer operation:
+     *      -interrupt flags are cleared in ISR routine
+     *      -timer counter is not automatically stopped (unless a Callback-routine is used), as this periodic mechanism is
+     *       is used to prevent a potential race condition between checking the "IsElapsed"-flag and the WFI-instruction in "ptxPLAT_TIMER_Start".
+     *
+     * It is assumed p_args has been properly set and is not NULL.
+     * It is assumed that p_context is timer instance used. Should this be checked, use g_timer0.p_ctrl.
+     * So, far only one timer and one channel is used.
      */
-    if (timer_ctx.RemainingMs > 0)
-    {
-        timer_ctx.RemainingMs--;
-    }
+    timer_ctx.IsElapsed = 1U;
 
-    if (0 == timer_ctx.RemainingMs)
+    /*Let's call back if defined. */
+    if (NULL != timer_ctx.ISRCallBack)
     {
-        timer_ctx.IsElapsed = 1U;
+        timer_instance_t * timer_instance = (timer_instance_t *) timer_ctx.TimerInstance;
+        timer_instance->p_api->stop(timer_instance->p_ctrl);
 
-        /* Call back if defined. */
-        if (NULL != timer_ctx.ISRCallBack)
+        if (NULL != timer_ctx.ISRCxt)
         {
-            timer_instance_t * timer_instance = (timer_instance_t *) timer_ctx.TimerInstance;
-            timer_instance->p_api->stop(timer_instance->p_ctrl);
-
-            if (NULL != timer_ctx.ISRCxt)
-            {
-                timer_ctx.ISRCallBack(timer_ctx.ISRCxt);
-            }
+            timer_ctx.ISRCallBack(timer_ctx.ISRCxt);
         }
     }
+
+    (void) p_args;
 }

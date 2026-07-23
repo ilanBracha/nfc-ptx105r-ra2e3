@@ -54,33 +54,10 @@ ptxStatus_t ptxPLAT_GPIO_Open (ioport_instance_t       * gpio_instance,
 
         gpio_irq_ctx.PortInstance = gpio_instance;
 
-        /*
-         * Override IRQ pin at runtime if the generated hal_data.c has the
-         * invalid default (BSP_IO_PORT_FF_PIN_FF). On the RA2E3 FPB the
-         * PMOD1 IRQ is on P0_15 (ICU channel 7).
-         */
-        if ((bsp_io_port_pin_t)BSP_IO_PORT_FF_PIN_FF == interrupt_pin)
-        {
-            gpio_irq_ctx.PortPin = (bsp_io_port_pin_t)BSP_IO_PORT_00_PIN_15;
-        }
-        else
-        {
-            gpio_irq_ctx.PortPin = interrupt_pin;
-        }
+        gpio_irq_ctx.PortPin = interrupt_pin;
 
         /* GPIO used for IRQ purpose is the following one. */
         gpio_irq_ctx.ExtIrqInstance = irq_instance;
-
-        /*
-         * Force IRQ pin mux for PMOD1 on RA2E3 FPB.
-         * The generated g_bsp_pin_cfg does NOT include P0_15 with IRQ_ENABLE,
-         * so the ICU external IRQ never fires. Same workaround as for the
-         * SPI and UART pins.
-         */
-        (void)R_IOPORT_PinCfg(gpio_instance->p_ctrl,
-                              gpio_irq_ctx.PortPin,
-                              ((uint32_t)IOPORT_CFG_IRQ_ENABLE
-                             | (uint32_t)IOPORT_CFG_PORT_DIRECTION_INPUT));
     }
     else
     {
@@ -402,18 +379,6 @@ ptxStatus_t ptxPLAT_GPIO_WriteLevel (ptxPlatGpio_t * gpio, uint8_t value)
  */
 void ptxPLAT_GPIO_IsrCallback (external_irq_callback_args_t * p_args)
 {
+    /* NFC_TODO: Add functionality to GPIO interrupt */
     (void) p_args;
-
-    /*
-     * DO NOT call gpio_irq_ctx.IrqCallBack (ptxNSC_GetRx) from ISR
-     * context!  ptxNSC_GetRx performs SPI transactions that busy-wait
-     * for SCI0 transfer-complete ISRs. Those ISRs run at the same NVIC
-     * priority as this ICU ISR, so they can never preempt -> deadlock.
-     *
-     * Instead we just let the ISR return.  The IRQ itself wakes the
-     * CPU from WFI, and the main-loop polling in ptxNSC_WaitForRsp()
-     * detects the high IRQ-pin level via ptxPLAT_IsRxPending() and
-     * calls ptxPLAT_TriggerRx() from thread context where SPI I/O
-     * works normally.
-     */
 }

@@ -6,8 +6,6 @@
 #include "common_data.h"
 #include "r_gpt.h"
 #include "r_timer_api.h"
-#include "r_agt.h"
-#include "r_timer_api.h"
 #include "r_dtc.h"
 #include "r_transfer_api.h"
 #include "r_sci_spi.h"
@@ -28,11 +26,11 @@ extern const timer_cfg_t g_timer0_cfg;
 #ifndef ptxPLAT_TIMER_IsrCallback
 void ptxPLAT_TIMER_IsrCallback(timer_callback_args_t *p_args);
 #endif
-/** AGT Timer Instance */
+/** Timer on GPT Instance. */
 extern const timer_instance_t g_timer1;
 
-/** Access the AGT instance using these structures when calling API functions directly (::p_api is not used). */
-extern agt_instance_ctrl_t g_timer1_ctrl;
+/** Access the GPT instance using these structures when calling API functions directly (::p_api is not used). */
+extern gpt_instance_ctrl_t g_timer1_ctrl;
 extern const timer_cfg_t g_timer1_cfg;
 
 #ifndef ptxPLAT_TIMER_IsrCallback

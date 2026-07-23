@@ -42,7 +42,7 @@ FSP_HEADER
 
 extern const ioport_cfg_t g_bsp_pin_cfg1; /* RA2E1 EK */
 
-extern const ioport_cfg_t g_bsp_pin_cfg; /* R7FA2E1A92DFM.pincfg */
+extern const ioport_cfg_t g_bsp_pin_cfg; /* R7FA2E3073CFL.pincfg */
 
 void BSP_PinConfigSecurityInit();
 

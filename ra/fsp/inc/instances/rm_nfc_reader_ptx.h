@@ -16,11 +16,11 @@
  * Includes
  **********************************************************************************************************************/
 #include "ptx_IOT_READER.h"
+#include "ptxNDEF.h"
 #include "ptxNativeTag_T2T.h"
 #include "ptxNativeTag_T3T.h"
 #include "ptxNativeTag_T4T.h"
 #include "ptxNativeTag_T5T.h"
-#include "ptxNDEF.h"
 #include "ptxPLAT_GPIO.h"
 #include "ptxPLAT_SPI.h"
 #include "ptxPLAT_TIMER.h"

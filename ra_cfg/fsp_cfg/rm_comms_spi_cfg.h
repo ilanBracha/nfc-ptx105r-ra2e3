@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 #define RM_COMMS_SPI_CFG_PARAM_CHECKING_ENABLE          (BSP_CFG_PARAM_CHECKING_ENABLE)
-#define RM_COMMS_SPI_CFG_SLAVE_SELECT_ENABLE          (0)
+#define RM_COMMS_SPI_CFG_SLAVE_SELECT_ENABLE          (1)
 
 #ifdef __cplusplus
 }

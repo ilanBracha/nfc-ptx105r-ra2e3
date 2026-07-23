@@ -16,7 +16,6 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <assert.h>
-#include <bsp_linker_info.h>
 #include <string.h>
 
 /* Different compiler support. */
@@ -29,6 +28,8 @@
 #include "../../src/bsp/mcu/all/bsp_mmf.h"
 #include "../../src/bsp/mcu/all/bsp_ipc.h"
 #include "../../src/bsp/mcu/all/bsp_ospi_b.h"
+
+#include "bsp_linker_info.h"
 
 #include "bsp_cfg.h"
 

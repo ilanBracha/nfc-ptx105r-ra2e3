@@ -59,88 +59,14 @@ void Reset_Handler (void)
 }
 
 /*******************************************************************************************************************//**
- * Default exception handler — diagnostic version.
- * When the debugger breaks here, inspect the g_fault_info struct to determine which exception
- * fired and what caused it.
+ * Default exception handler.
  **********************************************************************************************************************/
-
-/* Fault diagnostic information — inspect in debugger when stopped at BKPT */
-volatile struct {
-    uint32_t icsr;          /* SCB->ICSR  — VECTACTIVE[8:0] = exception number that brought us here */
-    uint32_t shcsr;         /* SCB->SHCSR — System Handler Control and State Register */
-    uint32_t lr;            /* LR at exception entry (EXC_RETURN value) */
-    uint32_t stacked_pc;    /* PC from the exception stack frame — faulting instruction */
-    uint32_t stacked_lr;    /* LR from the exception stack frame — caller of faulting function */
-    uint32_t stacked_r0;    /* R0 from exception frame */
-    uint32_t stacked_r1;    /* R1 from exception frame */
-    uint32_t stacked_r2;    /* R2 from exception frame */
-    uint32_t stacked_r3;    /* R3 from exception frame */
-    uint32_t stacked_r12;   /* R12 from exception frame */
-    uint32_t stacked_xpsr;  /* xPSR from exception frame */
-    uint32_t vect_active;   /* Exception number extracted from ICSR */
-} g_fault_info;
-
 void Default_Handler (void)
 {
-    /* Capture available fault-status registers (Cortex-M23 has no CFSR/HFSR/MMFAR/BFAR) */
-    g_fault_info.icsr        = SCB->ICSR;
-    g_fault_info.shcsr       = SCB->SHCSR;
-    g_fault_info.vect_active = (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk);
-
-    /* Retrieve EXC_RETURN from LR and determine which stack pointer was in use */
-    uint32_t exc_return;
-    __ASM volatile ("mov %0, lr" : "=r" (exc_return));
-    g_fault_info.lr = exc_return;
-
-    /* Get the stack frame pointer: bit 2 of EXC_RETURN indicates PSP (1) or MSP (0) */
-    uint32_t *frame_ptr;
-    if (exc_return & 0x04U)
-    {
-        frame_ptr = (uint32_t *) __get_PSP();
-    }
-    else
-    {
-        frame_ptr = (uint32_t *) __get_MSP();
-    }
-
-    /* HW exception frame layout: R0, R1, R2, R3, R12, LR, PC, xPSR */
-    g_fault_info.stacked_r0  = frame_ptr[0];
-    g_fault_info.stacked_r1  = frame_ptr[1];
-    g_fault_info.stacked_r2  = frame_ptr[2];
-    g_fault_info.stacked_r3  = frame_ptr[3];
-    g_fault_info.stacked_r12 = frame_ptr[4];
-    g_fault_info.stacked_lr  = frame_ptr[5];   /* LR of the faulting context */
-    g_fault_info.stacked_pc  = frame_ptr[6];   /* PC — the faulting instruction address */
-    g_fault_info.stacked_xpsr = frame_ptr[7];
-
-    /*
-     * ===== HOW TO READ g_fault_info IN THE DEBUGGER =====
-     *
-     * vect_active: Exception number that triggered Default_Handler:
-     *   2  = NMI (shouldn't land here, has its own handler)
-     *   3  = HardFault
-     *   4  = MemManage
-     *   5  = BusFault
-     *   6  = UsageFault
-     *   7  = SecureFault
-     *  11  = SVCall          (SVC_Handler not linked — FreeRTOS port.c missing?)
-     *  12  = DebugMon
-     *  14  = PendSV          (PendSV_Handler not linked — FreeRTOS port.c missing?)
-     *  15  = SysTick         (SysTick_Handler not linked — FreeRTOS port.c missing?)
-     *
-     * stacked_pc: Address of the instruction that caused the fault.
-     *             Look it up in the .map file or disassembly.
-     *
-     * stacked_lr: Return address of the function that was executing.
-     *
-     * shcsr: System Handler Control and State Register
-     *   Bit 0 = SVCALLPENDED, Bit 15 = SVCALLACT
-     *
-     * On Cortex-M23 there is no CFSR/HFSR — HardFault is the only
-     * configurable fault. If vect_active=3, the HardFault was likely
-     * caused by an invalid memory access or undefined instruction.
+    /** A error has occurred. The user will need to investigate the cause. Common problems are stack corruption
+     *  or use of an invalid pointer. Use the Fault Status window in e2 studio or manually check the fault status
+     *  registers for more information.
      */
-
     BSP_CFG_HANDLE_UNRECOVERABLE_ERROR(0);
 }
 
