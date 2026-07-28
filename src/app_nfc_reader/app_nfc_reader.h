@@ -43,7 +43,6 @@
 #ifndef APP_NFC_READER_H_
 #define APP_NFC_READER_H_
 
-#include "SEGGER_RTT.h" /* Import RTT Library */
 #include "hal_data.h"
 
 #ifdef __cplusplus

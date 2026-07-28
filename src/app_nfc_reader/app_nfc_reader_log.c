@@ -12,7 +12,7 @@
  *    ring buffer and returns immediately. The SCI TX_COMPLETE ISR chain-loads
  *    the next contiguous chunk until the ring drains. If the ring fills up
  *    (very long burst at <115200 baud) the excess bytes are dropped so the
- *    debug log can never throttle the main loop or RTT.
+ *    debug log can never throttle the main loop.
  *  - RX bytes are collected in a separate ring buffer from the RX_CHAR event
  *    and consumed by user_cli via app_nfc_reader_log_rx_get().
  */
@@ -299,7 +299,7 @@ void app_nfc_reader_log_rx_callback (app_nfc_reader_log_rx_callback_t cb)
  * The SDK declares ptxCommon_PrintF / Print_Buffer / PrintStatusMessage in
  * ptxCOMMON.h (ra/renesas/wireless/...).  We provide the implementation HERE
  * so the vendor ptxCOMMON.c can remain unmodified (excluded from build).
- * Output is routed to both SEGGER RTT (channel 0) and the debug UART.
+ * Output is routed to the debug UART.
  */
 
 /* Minimal format-to-buffer: supports %s %c %d %u %x %X %02X %04X %02d %04d %p %% and width/zero-pad for integers */
@@ -406,7 +406,7 @@ void ptxCommon_PrintF (const char * format, ...)
     va_start(ap, format);
     int len = app_nfc_reader_log_vsnprintf(buf, sizeof(buf), format, ap);
 
-    /* UART only (RTT sink removed to reclaim flash): format into stack
+    /* UART only: format into stack
      * buffer and send. */
 
     if (len > 0)
@@ -470,7 +470,7 @@ void ptxCommon_Print_Buffer (uint8_t  * buffer,
  * ####################################################################################################################
  *
  * Reads fields from rs_nfc_card_result_t and formats a human-readable block
- * to both RTT and UART.  Pure I/O â€” no LED or board interaction; the caller
+ * to the debug UART.  Pure I/O — no LED or board interaction; the caller
  * is responsible for any visual feedback (blink, etc.).
  */
 void app_nfc_reader_log_print_card_info (const rs_nfc_card_result_t * result)
