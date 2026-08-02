@@ -519,8 +519,8 @@ FSP Configuration
       4th Port ELC Trigger Source: Disabled
       Pin Configuration Name: g_bsp_pin_cfg
       
-    Instance "g_uart0 UART (r_sci_uart)"
-      General: Name: g_uart0
+    Instance "g_uart_jlob_vcom UART (r_sci_uart)"
+      General: Name: g_uart_jlob_vcom
       General: Channel: 9
       General: Data Bits: 8bits
       General: Parity: None

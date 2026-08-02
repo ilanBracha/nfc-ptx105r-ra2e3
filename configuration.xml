@@ -225,7 +225,7 @@
       <property id="module.driver.ioport.pincfg" value="g_bsp_pin_cfg"/>
     </module>
     <module id="module.driver.uart_on_sci_uart.358907279">
-      <property id="module.driver.uart.name" value="g_uart0"/>
+      <property id="module.driver.uart.name" value="g_uart_jlob_vcom"/>
       <property id="module.driver.uart.channel" value="9"/>
       <property id="module.driver.uart.data_bits" value="module.driver.uart.data_bits.data_bits_8"/>
       <property id="module.driver.uart.parity" value="module.driver.uart.parity.parity_off"/>

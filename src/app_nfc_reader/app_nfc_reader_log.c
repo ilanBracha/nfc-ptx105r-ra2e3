@@ -133,7 +133,7 @@ int app_nfc_reader_log_init (void)
 
     fsp_err_t err;
 
-    err = g_uart0.p_api->open(g_uart0.p_ctrl, g_uart0.p_cfg);
+    err = g_uart_jlob_vcom.p_api->open(g_uart_jlob_vcom.p_ctrl, g_uart_jlob_vcom.p_cfg);
 
     if (FSP_SUCCESS != err)
     {
@@ -141,11 +141,11 @@ int app_nfc_reader_log_init (void)
     }
 
     /* Hook our own callback so we observe UART_EVENT_TX_COMPLETE. */
-    err = g_uart0.p_api->callbackSet(g_uart0.p_ctrl, app_nfc_reader_log_uart_cb, NULL, NULL);
+    err = g_uart_jlob_vcom.p_api->callbackSet(g_uart_jlob_vcom.p_ctrl, app_nfc_reader_log_uart_cb, NULL, NULL);
 
     if (FSP_SUCCESS != err)
     {
-        (void)g_uart0.p_api->close(g_uart0.p_ctrl);
+        (void)g_uart_jlob_vcom.p_api->close(g_uart_jlob_vcom.p_ctrl);
 
         return (int) err;
     }
@@ -190,7 +190,7 @@ static void app_nfc_reader_log_tx_locked (void)
     s_tx_chunk = len;
     s_tx_busy  = 1u;
 
-    err = g_uart0.p_api->write(g_uart0.p_ctrl, (uint8_t const *) &s_tx_buf[tail], (uint32_t) len);
+    err = g_uart_jlob_vcom.p_api->write(g_uart_jlob_vcom.p_ctrl, (uint8_t const *) &s_tx_buf[tail], (uint32_t) len);
 
     if (FSP_SUCCESS != err)
     {

@@ -70,12 +70,12 @@ void ptxPLAT_SPI_TransferCallback(rm_comms_callback_args_t *p_args);
 extern nfc_reader_ptx_instance_ctrl_t g_nfc_reader_ptx0_ctrl;
 extern const nfc_reader_ptx_cfg_t g_nfc_reader_ptx0_cfg;
 /** UART on SCI Instance. */
-extern const uart_instance_t g_uart0;
+extern const uart_instance_t g_uart_jlob_vcom;
 
 /** Access the UART instance using these structures when calling API functions directly (::p_api is not used). */
-extern sci_uart_instance_ctrl_t g_uart0_ctrl;
-extern const uart_cfg_t g_uart0_cfg;
-extern const sci_uart_extended_cfg_t g_uart0_cfg_extend;
+extern sci_uart_instance_ctrl_t g_uart_jlob_vcom_ctrl;
+extern const uart_cfg_t g_uart_jlob_vcom_cfg;
+extern const sci_uart_extended_cfg_t g_uart_jlob_vcom_cfg_extend;
 
 #ifndef NULL
 void NULL(uart_callback_args_t *p_args);
