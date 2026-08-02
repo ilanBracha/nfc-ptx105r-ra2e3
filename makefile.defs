@@ -1,0 +1,19 @@
+################################################################################
+# Project-level build customization (committed; NOT auto-generated).
+#
+# This file is pulled in by the generated Debug/makefile via
+#   -include ../makefile.defs
+# which happens AFTER the (broken) `RM := -rf` definition but BEFORE the
+# `clean` target, so any override here wins.
+#
+# Fix: e2studio generates `RM := -rf` in Debug/makefile — the `rm` program
+# name is missing. That makes the `clean` recipe expand to `xargs ... -rf`
+# and `-rf <file>`, which BusyBox rejects, so `clean` silently deletes
+# nothing (every clean line is prefixed with `-@`, hiding the error) and the
+# next build is incremental instead of a full rebuild.
+#
+# Redefining RM here restores a working `clean` and survives regeneration of
+# the Debug/ folder.
+################################################################################
+
+RM := rm -rf
