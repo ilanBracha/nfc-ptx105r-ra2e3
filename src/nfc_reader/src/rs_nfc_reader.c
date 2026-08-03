@@ -469,7 +469,7 @@ static rs_status_t rs_nfc_reader_validate (const rs_nfc_reader_cfg_t * cfg)
 }
 
 rs_status_t rs_nfc_reader_Read (const rs_nfc_reader_cfg_t * cfg,
-                               rs_nfc_card_result_t      * result_out)
+                                rs_nfc_card_result_t      * result_out)
 {
     rs_status_t st;
 

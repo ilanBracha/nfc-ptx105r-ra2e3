@@ -83,7 +83,7 @@ static const uint32_t LED_COUNT = (uint32_t)(sizeof(led_pins) / sizeof(led_pins[
  * NOTE: `g_bsp_pin_cfg` (used by R_IOPORT_Open at boot) does not include
  * the on-board LED pins (P02_13, P09_14), so the application must configure them as outputs
  */
-void app_nfc_reader_led_set_all (bsp_io_level_t level)
+static void app_nfc_reader_led_set_all (bsp_io_level_t level)
 {
     for (uint32_t i = 0; i < LED_COUNT; i++)
     {
@@ -218,12 +218,8 @@ static void app_nfc_reader_stop (void)
  * APPLICATION ENTRY POINT
  * ####################################################################################################################
  */
-void app_nfc_reader_entry (void)
-{
-    app_nfc_reader_init();
-}
 
-void app_nfc_reader_init (void)
+static void app_nfc_reader_init (void)
 {
     rs_status_t st = RS_OK;
 
@@ -259,13 +255,15 @@ void app_nfc_reader_init (void)
          * already active) leaves the module in an undefined run state. Request
          * a graceful stop so any in-flight discovery loop exits cleanly before
          * we bail out. Safe to call even if nothing is running. */
-        if (RS_ERR_INTERNAL == st)
-        {
-            app_nfc_reader_stop();
-        }
+        app_nfc_reader_stop();
     }
     else
     {
         printf("RS NFC Reader launched (non-blocking)\n");
     }
+}
+
+void app_nfc_reader_entry (void)
+{
+    app_nfc_reader_init();
 }
