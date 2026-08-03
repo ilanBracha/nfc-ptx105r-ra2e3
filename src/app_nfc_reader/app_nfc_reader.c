@@ -52,7 +52,6 @@
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "app_nfc_reader_cli.h"
 #include "app_nfc_reader.h"
 #include "app_nfc_reader_log.h"
 #include "rs_nfc_reader.h"
@@ -187,17 +186,7 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
  */
 void app_nfc_reader_entry (void)
 {
-    app_nfc_reader_cli_init();
-    app_nfc_reader_log_attach_rx();
     app_nfc_reader_init();
-
-    /* Service the CLI from main (task) context. The UART RX ISR only buffers
-     * incoming bytes; echo and command dispatch (blocking stdio) run here. */
-    while (1)
-    {
-        app_nfc_reader_cli_process();
-        vTaskDelay(1);
-    }
 }
 
 void app_nfc_reader_init (void)
