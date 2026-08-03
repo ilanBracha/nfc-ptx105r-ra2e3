@@ -142,6 +142,125 @@ void app_nfc_reader_log_print_buffer (uint8_t  * buffer,
 
 /*
  * ####################################################################################################################
+ * NDEF RECORD DECODER (human-readable record content)
+ * ####################################################################################################################
+ */
+
+/* Human-readable NDEF TNF (Type Name Format) names. */
+static const char * ndef_tnf_name (uint8_t tnf)
+{
+    switch (tnf)
+    {
+        case 0x00u: return "Empty";
+        case 0x01u: return "NFC Forum well-known";
+        case 0x02u: return "MIME media";
+        case 0x03u: return "Absolute URI";
+        case 0x04u: return "NFC Forum external";
+        case 0x05u: return "Unknown";
+        case 0x06u: return "Unchanged";
+        default:    return "Reserved";
+    }
+}
+
+/* NFC Forum URI-record abbreviation prefixes (indexed by the identifier byte). */
+static const char * const NDEF_URI_PREFIX[] = {
+    "", "http://www.", "https://www.", "http://", "https://", "tel:",
+    "mailto:", "ftp://anonymous:anonymous@", "ftp://ftp.", "ftps://",
+    "sftp://", "smb://", "nfs://", "ftp://", "dav://", "news:",
+    "telnet://", "imap:", "rtsp://", "urn:", "pop:", "sip:", "sips:",
+    "tftp:", "btspp://", "btl2cap://", "btgoep://", "tcpobex://",
+    "irdaobex://", "file://", "urn:epc:id:", "urn:epc:tag:",
+    "urn:epc:pat:", "urn:epc:raw:", "urn:epc:", "urn:nfc:"
+};
+
+static void print_printable (const uint8_t * p, uint32_t len)
+{
+    for (uint32_t i = 0; i < len; i++)
+    {
+        uint8_t c = p[i];
+        putchar(((c >= 0x20u) && (c < 0x7Fu)) ? (int) c : '.');
+    }
+}
+
+/* Decode result->ndef_data (NDEF message) into records and print each one. */
+static void print_ndef_records (const rs_nfc_card_result_t * result)
+{
+    rs_ndef_decoded_t decoded;
+
+    if (RS_OK != rs_ndef_decode_message(result->ndef_data,
+                                        (uint32_t) result->ndef_len,
+                                        &decoded))
+    {
+        printf("  Records        : (decode failed)\n");
+        return;
+    }
+
+    if (0u == decoded.record_count)
+    {
+        printf("  Records        : (none)\n");
+        return;
+    }
+
+    printf("  Records        : %u%s\n",
+           (unsigned) decoded.record_count,
+           decoded.truncated ? " (truncated)" : "");
+
+    for (uint8_t i = 0; i < decoded.record_count; i++)
+    {
+        const rs_ndef_record_t * rec = &decoded.records[i];
+
+        printf("   [%u] TNF=0x%02X (%s) Type='", (unsigned) i,
+               (unsigned) rec->tnf, ndef_tnf_name(rec->tnf));
+        print_printable(rec->type, rec->type_len);
+        printf("' Payload=%u bytes\n", (unsigned) rec->payload_len);
+
+        /* Well-known Text record: [status][lang][UTF-8 text] */
+        if ((0x01u == rec->tnf) &&
+            rs_ndef_type_equals(rec->type, rec->type_len, "T") &&
+            (rec->payload_len >= 1u))
+        {
+            uint8_t status   = rec->payload[0];
+            uint8_t lang_len = (uint8_t) (status & 0x3Fu);
+
+            if ((uint32_t) lang_len + 1u <= rec->payload_len)
+            {
+                const uint8_t * txt = &rec->payload[1u + lang_len];
+                uint32_t txt_len = rec->payload_len - 1u - lang_len;
+
+                printf("        Text : \"");
+                print_printable(txt, txt_len);
+                printf("\"\n");
+            }
+        }
+        /* Well-known URI record: [prefix-id][URI tail] */
+        else if ((0x01u == rec->tnf) &&
+                 rs_ndef_type_equals(rec->type, rec->type_len, "U") &&
+                 (rec->payload_len >= 1u))
+        {
+            uint8_t id = rec->payload[0];
+
+            printf("        URI  : ");
+
+            if (id < (uint8_t) (sizeof(NDEF_URI_PREFIX) / sizeof(NDEF_URI_PREFIX[0])))
+            {
+                printf("%s", NDEF_URI_PREFIX[id]);
+            }
+
+            print_printable(&rec->payload[1], rec->payload_len - 1u);
+            printf("\n");
+        }
+        /* Anything else: show a compact printable preview of the payload. */
+        else if (rec->payload_len > 0u)
+        {
+            printf("        Data : ");
+            print_printable(rec->payload, rec->payload_len);
+            printf("\n");
+        }
+    }
+}
+
+/*
+ * ####################################################################################################################
  * APPLICATION-LEVEL CARD-INFO PRINTER
  * ####################################################################################################################
  *
@@ -244,6 +363,10 @@ void app_nfc_reader_log_print_card_info (const rs_nfc_card_result_t * result)
             printf(" %02X", result->ndef_data[k]);
         }
         printf("\n");
+
+        /* Decode the NDEF message into individual records and print their
+         * human-readable content (Text / URI / raw payload preview). */
+        print_ndef_records(result);
     }
     else
     {
