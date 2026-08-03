@@ -181,6 +181,40 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
 
 /*
  * ####################################################################################################################
+ * STOP EXAMPLE (placeholder)
+ * ####################################################################################################################
+ */
+/*
+ * Placeholder example showing how to request a graceful stop of a running
+ * read (blocking or non-blocking). This is intentionally NOT called anywhere
+ * in the default demo flow — it exists only to illustrate the API usage.
+ *
+ * Typical real-world triggers:
+ *   - a button/GPIO ISR that signals the app to stop scanning
+ *   - another FreeRTOS task deciding the read should end
+ *   - a timeout/watchdog handler
+ *
+ * Behaviour: rs_nfc_reader_Stop() sets the stop flag and wakes the task
+ * blocked in the discovery loop, so it exits cleanly. The operation-end
+ * callback (on_nfc_operation_done) then fires with RS_OK.
+ * Safe to call even when no operation is in flight — always returns RS_OK.
+ */
+static void app_nfc_reader_stop (void)
+{
+    rs_status_t st = rs_nfc_reader_Stop();
+
+    if (RS_OK != st)
+    {
+        printf("rs_nfc_reader_Stop FAILED (status=%d)\n", (int)st);
+    }
+    else
+    {
+        printf("RS NFC Reader stop requested\n");
+    }
+}
+
+/*
+ * ####################################################################################################################
  * APPLICATION ENTRY POINT
  * ####################################################################################################################
  */
@@ -220,6 +254,15 @@ void app_nfc_reader_init (void)
     if (RS_OK != st)
     {
         printf("rs_nfc_reader_Read launch FAILED (status=%d)\n", (int) st);
+
+        /* A launch failure (e.g. RS_ERR_INTERNAL when a non-blocking read is
+         * already active) leaves the module in an undefined run state. Request
+         * a graceful stop so any in-flight discovery loop exits cleanly before
+         * we bail out. Safe to call even if nothing is running. */
+        if (RS_ERR_INTERNAL == st)
+        {
+            app_nfc_reader_stop();
+        }
     }
     else
     {
