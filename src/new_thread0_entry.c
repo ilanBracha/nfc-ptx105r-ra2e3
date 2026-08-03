@@ -8,8 +8,8 @@ void new_thread0_entry(void *pvParameters)
     FSP_PARAMETER_NOT_USED (pvParameters);
 
     /* Start the NFC card reader application.
-     * This runs the UART/CLI init then the blocking NFC event loop.
-     * The function only returns on fatal error. */
+     * This configures the RS NFC reader and launches the non-blocking NFC
+     * event loop (spawns the "RS_NFC" worker task) before returning. */
     app_nfc_reader_entry();
 
     /* Should not reach here; suspend if it does. */

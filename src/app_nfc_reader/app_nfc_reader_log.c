@@ -1,15 +1,11 @@
 /*
  * app_nfc_reader_log.c
  *
- * Implementation of the application log/RX helper. See app_nfc_reader_log.h.
+ * Implementation of the application log helper. See app_nfc_reader_log.h.
  *
  * Notes:
- *  - TX / stdout is handled by the pes-console-io stdio layer (printf); this
- *    module no longer owns a TX ring buffer.
- *  - RX bytes are delivered to a registered callback via
- *    app_nfc_reader_log_rx_dispatch(); the RX bridge is installed by
- *    app_nfc_reader_log_attach_rx().
- *    -- the generated g_bsp_pin_cfg does not include those pins.
+ *  - Log output (printf / stdout) is handled by the pes-console-io stdio
+ *    layer; this module only provides the card-info / buffer print helpers.
  */
 #include <stdio.h>
 #include "app_nfc_reader_log.h"
@@ -17,75 +13,6 @@
 #include "r_ioport.h"
 #include "ptxCOMMON.h"
 
-
-/*
- * ####################################################################################################################
- * INTERNAL STATE
- * ####################################################################################################################
- */
-static volatile uint8_t s_uart_initialized = 0u;
-
-/* Optional per-byte RX callback (registered by CLI layer). */
-static app_nfc_reader_log_rx_callback_t s_rx_callback = NULL;
-
-/*
- * ####################################################################################################################
- * API
- * ####################################################################################################################
- */
-
-void app_nfc_reader_log_rx_callback (app_nfc_reader_log_rx_callback_t cb)
-{
-    s_rx_callback = cb;
-}
-
-void app_nfc_reader_log_rx_dispatch (uint8_t byte)
-{
-    /* Forward to registered callback (e.g. CLI) if present. Runs in the
-     * caller's context (typically the UART RX ISR). */
-    if (NULL != s_rx_callback)
-    {
-        s_rx_callback(byte);
-    }
-}
-
-/*
- * ####################################################################################################################
- * RX BRIDGE (keeps the pes-console-io submodule untouched)
- * ####################################################################################################################
- *
- * The stdio UART is owned by the pes-console-io submodule, whose ISR callback
- * uart_jlob_vcom_callback() only queues bytes for getchar(). Rather than edit
- * that submodule, we install our own wrapper callback here that forwards every
- * received byte to app_nfc_reader_log_rx_dispatch() (and thus the CLI) and then
- * chains to the original submodule callback so stdio (getchar/TX-complete)
- * keeps working. uart_jlob_vcom_callback is a non-static symbol, so we can
- * reference it directly.
- */
-extern void uart_jlob_vcom_callback (uart_callback_args_t * p_args);
-
-static void app_nfc_reader_log_rx_uart_cb (uart_callback_args_t * p_args)
-{
-    if ((NULL != p_args) && (UART_EVENT_RX_CHAR == p_args->event))
-    {
-        app_nfc_reader_log_rx_dispatch((uint8_t) p_args->data);
-    }
-
-    /* Preserve the submodule's stdio behaviour (getchar queue + TX complete). */
-    uart_jlob_vcom_callback(p_args);
-}
-
-void app_nfc_reader_log_attach_rx (void)
-{
-    /* Must be called AFTER the stdio layer has opened g_uart_jlob_vcom and
-     * installed its own callback (i.e. after the first printf/getchar). We
-     * override that callback with a wrapper that first forwards RX bytes to the
-     * CLI and then chains to the original stdio callback. */
-    (void) g_uart_jlob_vcom.p_api->callbackSet(g_uart_jlob_vcom.p_ctrl,
-                                               app_nfc_reader_log_rx_uart_cb,
-                                               NULL,
-                                               NULL);
-}
 
 /*
  * ####################################################################################################################
@@ -265,8 +192,8 @@ static void print_ndef_records (const rs_nfc_card_result_t * result)
  * ####################################################################################################################
  *
  * Reads fields from rs_nfc_card_result_t and formats a human-readable block
- * to both RTT and UART.  Pure I/O - no LED or board interaction; the caller
- * is responsible for any visual feedback (blink, etc.).
+ * to the pes-console-io stdio output (printf).  Pure I/O - no LED or board
+ * interaction; the caller is responsible for any visual feedback (blink, etc.).
  */
 void app_nfc_reader_log_print_card_info (const rs_nfc_card_result_t * result)
 {
