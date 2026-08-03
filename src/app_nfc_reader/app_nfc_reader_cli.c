@@ -1,31 +1,29 @@
 /*
  * app_nfc_reader_cli.c
  *
- * Tiny interrupt-driven line-based CLI on g_uart0. See app_nfc_reader_cli.h.
+ * Tiny line-based CLI over the pes-console-io stdio UART. See
+ * app_nfc_reader_cli.h.
  *
- * Character reception (echo, backspace, line editing) AND command dispatch are
- * handled entirely inside the UART RX ISR via a callback registered with
- * app_nfc_reader_log_rx_callback(). When a full line is received (CR/LF),
- * the ISR parses and executes the command immediately — no main-loop busy-wait
- * is required. Command handlers are kept simple (set flags, print text) so
- * they are safe to run at ISR priority.
+ * The UART RX ISR (registered via app_nfc_reader_log_rx_callback()) only
+ * enqueues raw bytes into an ISR-to-main FIFO. All echo, backspace/line
+ * editing and command dispatch run in main context from
+ * app_nfc_reader_cli_process(), because they use blocking stdio (printf/
+ * putchar) which must not run at ISR priority.
  *
  * Adding a new command:
  *   1. Implement a `static void cmd_xxx(const char *args)` handler.
  *   2. Add an entry to s_cmds[] below (name, handler, one-line help).
  * Commands receive whatever non-whitespace text followed the command name on
- * the same input line (NUL-terminated). They may print using
- * app_nfc_reader_log_puts/Write or ptxCommon_PrintF.
+ * the same input line (NUL-terminated). They may print using printf.
  */
 
 #include "app_nfc_reader_cli.h"
 #include "app_nfc_reader_log.h"
 #include "hal_data.h"
-#include "FreeRTOS.h"
-#include "task.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
 
 /*
  * ####################################################################################################################
@@ -33,7 +31,6 @@
  * ####################################################################################################################
  */
 #define APP_NFC_READER_CLI_COLOR_KNRM  "\x1B[0m"
-#define APP_NFC_READER_CLI_COLOR_KRED  "\x1B[31m"
 #define APP_NFC_READER_CLI_COLOR_KGRN  "\x1B[32m"
 #define APP_NFC_READER_CLI_COLOR_KCYN  "\x1B[36m"
 #define APP_NFC_READER_CLI_LINE_MAX    120u
@@ -55,18 +52,27 @@ typedef struct
     const char   * help;
 } cli_cmd_t;
 
-/* Line buffer filled by the ISR callback (echo + line editing in ISR). */
+/* Line buffer filled in main context (echo + line editing) as bytes are
+ * drained from the RX FIFO by app_nfc_reader_cli_process(). */
 static volatile char     s_line[APP_NFC_READER_CLI_LINE_MAX + 1u];
 static volatile uint16_t s_line_len;
-static volatile uint8_t  s_prev_was_cr = 0u; /* swallow LF that follows CR (CRLF) */
+/* swallow LF that follows CR (CRLF) */
+static volatile uint8_t  s_prev_was_cr = 0u;
 
-/* Deferred dispatch: when ISR sees CR/LF it copies the completed line here
- * and sets s_line_ready. Main-context app_nfc_reader_cli_process() picks it up. */
+/* Completed line is copied here by app_nfc_reader_cli_handle_byte() before
+ * dispatch, so the volatile ISR-filled s_line[] is not handed to command
+ * handlers. */
 static char              s_pending_line[APP_NFC_READER_CLI_LINE_MAX + 1u];
-static volatile uint8_t  s_line_ready = 0u;
-
 static uint8_t           s_initialized = 0u;
 
+/* ISR-to-main RX FIFO. The UART RX ISR (app_nfc_reader_cli_rx_isr_callback)
+ * only enqueues raw bytes here; app_nfc_reader_cli_process() dequeues and
+ * handles them in main context. Size MUST be a power of two. */
+#define APP_NFC_READER_CLI_RX_SIZE  128u
+#define APP_NFC_READER_CLI_RX_MASK  (APP_NFC_READER_CLI_RX_SIZE - 1u)
+static volatile uint8_t  s_rx_fifo[APP_NFC_READER_CLI_RX_SIZE];
+static volatile uint16_t s_rx_head = 0u; /* ISR producer  */
+static volatile uint16_t s_rx_tail = 0u; /* main consumer */
 /*
  * ####################################################################################################################
  * SMALL HELPERS
@@ -74,17 +80,20 @@ static uint8_t           s_initialized = 0u;
  */
 static void app_nfc_reader_cli_write (const char * s)
 {
-    app_nfc_reader_log_puts(s);
+    printf("%s", s);
+    /* Prompts and ANSI escape sequences (e.g. "$ ") contain no '\n', so stdio
+     * would keep them buffered until the next newline. Flush to show them now. */
+    fflush(stdout);
 }
 
 static void app_nfc_reader_cli_write_byte (uint8_t b)
 {
-    app_nfc_reader_log_write(&b, 1u);
-}
-
-void app_nfc_reader_cli_prompt (void)
-{
-    app_nfc_reader_cli_write(APP_NFC_READER_CLI_NEWLINE APP_NFC_READER_CLI_PROMPT);
+    /* Echo through stdio. This runs in main context (see
+     * app_nfc_reader_cli_process), so blocking stdio TX is safe. The previous
+     * app_nfc_reader_log_write() sink was inert because the log UART is never
+     * opened, which is why typed characters were not echoed. */
+    putchar((int) b);
+    fflush(stdout);
 }
 
 static int app_nfc_reader_cli_streq_ci (const char * a, const char * b)
@@ -289,7 +298,17 @@ static void app_nfc_reader_cli_rx_isr_callback (uint8_t byte)
 {
     if (0u != s_initialized)
     {
-        app_nfc_reader_cli_handle_byte(byte);
+        /* ISR context: only buffer the byte. Echo, line editing and command
+         * dispatch happen in main context via app_nfc_reader_cli_process(),
+         * because they use blocking stdio (printf/putchar) which must not run
+         * at ISR priority (uart_flush() busy-waits on TX completion). */
+        uint16_t next = (uint16_t) ((s_rx_head + 1u) & APP_NFC_READER_CLI_RX_MASK);
+        if (next != s_rx_tail)
+        {
+            s_rx_fifo[s_rx_head] = byte;
+            s_rx_head = next;
+        }
+        /* FIFO full: byte dropped (input is faster than the CLI can drain). */
     }
 }
 
@@ -323,7 +342,8 @@ void app_nfc_reader_cli_init (void)
 {
     s_line_len    = 0u;
     s_prev_was_cr = 0u;
-    s_line_ready  = 0u;
+    s_rx_head     = 0u;
+    s_rx_tail     = 0u;
     s_initialized = 1u;
 
     /* Register our byte handler so the UART RX ISR feeds us directly. */
@@ -334,13 +354,13 @@ void app_nfc_reader_cli_init (void)
 
 void app_nfc_reader_cli_process (void)
 {
-    /* Command dispatch now happens directly in the UART RX ISR, so this
-     * function is a no-op. Kept for backward compatibility. */
-    (void)0;
-}
-
-void app_nfc_reader_cli_poll (void)
-{
-    /* Legacy API kept for backward compatibility. Equivalent to Process(). */
-    app_nfc_reader_cli_process();
+    /* Drain bytes captured by the RX ISR and handle them (echo, line editing,
+     * command dispatch) here in main context, where blocking stdio TX is safe.
+     * Call this regularly from the main loop / a task. */
+    while (s_rx_tail != s_rx_head)
+    {
+        uint8_t b = s_rx_fifo[s_rx_tail];
+        s_rx_tail = (uint16_t) ((s_rx_tail + 1u) & APP_NFC_READER_CLI_RX_MASK);
+        app_nfc_reader_cli_handle_byte(b);
+    }
 }

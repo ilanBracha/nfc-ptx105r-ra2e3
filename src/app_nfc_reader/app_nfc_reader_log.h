@@ -1,10 +1,11 @@
 /*
  * app_nfc_reader_log.h
  *
- * Tiny helper that pipes debug strings out via the FSP-generated `g_uart0`
- * (r_sci_uart) instance.  Used as an additional sink for ptxCommon_PrintF
- * so that the boot/initialization log is visible on a USB-UART adapter
- * connected to the PMOD1/Arduino TXD pin (P1_09) in addition to SEGGER RTT.
+ * Application log/RX helper. Debug output (printf) is emitted via the
+ * pes-console-io stdio layer; this module no longer owns a UART instance.
+ * Its remaining jobs are: (1) force the SCI9 pin mux, (2) bridge received
+ * UART bytes to a registered RX callback (the CLI), and (3) provide the
+ * card-info / buffer print helpers.
  */
 
 #ifndef APP_NFC_READER_LOG_H_
@@ -19,24 +20,16 @@ extern "C" {
 #endif
 
 #define APP_NFC_READER_LOG_COL_RESET        "\x1B[0m"
-#define APP_NFC_READER_LOG_COL_CLEAR        "\x1B[2J"
-#define APP_NFC_READER_LOG_COL_BRIGHT_RED   "\x1B[1;31m"
 #define APP_NFC_READER_LOG_COL_BRIGHT_GREEN "\x1B[1;32m"
 #define APP_NFC_READER_LOG_COL_BRIGHT_CYAN  "\x1B[1;36m"
 
 /**
- * Signature of an optional RX byte callback. When registered, the UART ISR
- * forwards each received byte to this function instead of (in addition to)
- * the internal RX ring buffer. The callback runs in ISR context.
+ * Signature of an optional RX byte callback. When registered, every received
+ * UART byte is forwarded to this function via app_nfc_reader_log_rx_dispatch().
+ * The callback runs in the RX ISR context.
  */
 typedef void (* app_nfc_reader_log_rx_callback_t)(uint8_t byte);
 
-/**
- * Open g_uart0 and register the internal TX/RX callback.
- * Safe to call multiple times: the second and later calls are no-ops.
- * Returns 0 on success, non-zero on FSP error.
- */
-int  app_nfc_reader_log_init(void);
 
 /**
  * Register a callback that will be invoked from the UART RX ISR for every
@@ -46,34 +39,42 @@ int  app_nfc_reader_log_init(void);
 void app_nfc_reader_log_rx_callback(app_nfc_reader_log_rx_callback_t cb);
 
 /**
- * Blocking write of `len` bytes through g_uart0.
- * Returns when the SCI peripheral has finished shifting out the last byte.
- * Silently drops data if Init() has not been called or failed.
+ * Forward a single received UART byte to the registered RX callback (if any).
+ * Intended to be called from the UART RX ISR for every received byte so
+ * consumers such as the CLI see every keystroke. Runs in the caller's (ISR)
+ * context — keep it short.
  */
-void app_nfc_reader_log_write(const uint8_t * buf, size_t len);
+void app_nfc_reader_log_rx_dispatch(uint8_t byte);
 
 /**
  * Convenience wrapper: blocking write of a NUL-terminated string.
+ * Install the application UART RX bridge on g_uart_jlob_vcom. This overrides
+ * the stdio callback owned by the pes-console-io submodule with a wrapper that
+ * forwards every received byte to app_nfc_reader_log_rx_dispatch() (and thus
+ * the CLI) before chaining to the original stdio callback so getchar() keeps
+ * working. MUST be called after the stdio UART has been opened (i.e. after the
+ * first printf/getchar).
  */
-void app_nfc_reader_log_puts(const char * s);
-
-/**
- * Non-blocking: returns the number of received bytes currently waiting in the
- * internal RX ring buffer. Safe to call from main context.
- */
-size_t app_nfc_reader_log_rx_available(void);
-
-/**
- * Non-blocking: pop one byte from the RX ring buffer.
- * Returns 1 if a byte was written to *out, 0 if the buffer is empty.
- */
-int app_nfc_reader_log_rx_get(uint8_t * out);
+void app_nfc_reader_log_attach_rx(void);
 
 /**
  * Print formatted card-info block (tag type, UID, size, NDEF) to both
  * RTT and UART.  Pure I/O — no LED or board interaction.
  */
 void app_nfc_reader_log_print_card_info(const rs_nfc_card_result_t * result);
+
+/**
+ * Hex/ASCII dump of `bufferLength` bytes from `buffer` (starting at
+ * `bufferOffset`) via printf.
+ *   addNewLine != 0 : append a trailing newline.
+ *   printASCII != 0 : print printable ASCII (non-printables as '.'),
+ *                     otherwise print two-digit hex.
+ */
+void app_nfc_reader_log_print_buffer(uint8_t  * buffer,
+                                     uint32_t   bufferOffset,
+                                     uint32_t   bufferLength,
+                                     uint8_t    addNewLine,
+                                     uint8_t    printASCII);
 
 #ifdef __cplusplus
 }

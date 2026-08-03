@@ -42,21 +42,4 @@
 		<nature>com.renesas.cdt.managedbuild.jsoncdb.compilationdatabase.CompileCommandsNature</nature>
 		<nature>com.renesas.cdt.ra.contentgen.raNature</nature>
 	</natures>
-	<linkedResources>
-		<link>
-			<name>src/r_byteq.c</name>
-			<type>1</type>
-			<location>C:/Users/a5133422/devbox/702_pes_nfc/PTX105R/Ra2e1_PtxIotReader_Package/ra2e3_ptx_Iot_fsp_reader/pes-console-io/examples/e2studio/stdio_uart_on_fpb_ra2e3/src/r_byteq.c</location>
-		</link>
-		<link>
-			<name>src/r_byteq.h</name>
-			<type>1</type>
-			<location>C:/Users/a5133422/devbox/702_pes_nfc/PTX105R/Ra2e1_PtxIotReader_Package/ra2e3_ptx_Iot_fsp_reader/pes-console-io/examples/e2studio/stdio_uart_on_fpb_ra2e3/src/r_byteq.h</location>
-		</link>
-		<link>
-			<name>src/syscalls_picolib_stdio_to_uart.c</name>
-			<type>1</type>
-			<location>C:/Users/a5133422/devbox/702_pes_nfc/PTX105R/Ra2e1_PtxIotReader_Package/ra2e3_ptx_Iot_fsp_reader/pes-console-io/examples/e2studio/stdio_uart_on_fpb_ra2e3/src/syscalls_picolib_stdio_to_uart.c</location>
-		</link>
-	</linkedResources>
 </projectDescription>

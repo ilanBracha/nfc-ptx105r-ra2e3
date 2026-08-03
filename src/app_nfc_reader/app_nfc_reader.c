@@ -53,8 +53,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "app_nfc_reader_cli.h"
-#include "ptxCOMMON.h"
-#include "ptx_IOT_READER.h"
 #include "app_nfc_reader.h"
 #include "app_nfc_reader_log.h"
 #include "rs_nfc_reader.h"
@@ -117,20 +115,21 @@ static void app_nfc_reader_card_event (const rs_nfc_card_result_t *result)
      * and the protocol is not ISO-DEP / UNDEFINED). */
     if (result->raw_exchange.valid)
     {
-        ptxCommon_PrintF(APP_NFC_READER_SEPARATOR_TOP);
-        ptxCommon_PrintF("TX = ");
-        ptxCommon_Print_Buffer((uint8_t *)result->raw_exchange.tx, 0, result->raw_exchange.tx_len, 1, 0);
+        printf(APP_NFC_READER_SEPARATOR_TOP);
+        printf("TX = ");
+        app_nfc_reader_log_print_buffer((uint8_t *)result->raw_exchange.tx, 0, result->raw_exchange.tx_len, 1, 0);
+
         if (RS_OK == result->raw_exchange.status)
         {
-            ptxCommon_PrintF("RX = ");
-            ptxCommon_Print_Buffer((uint8_t *)result->raw_exchange.rx, 0, result->raw_exchange.rx_len, 1, 0);
+            printf("RX = ");
+            app_nfc_reader_log_print_buffer((uint8_t *)result->raw_exchange.rx, 0, result->raw_exchange.rx_len, 1, 0);
         }
         else
         {
-            ptxCommon_PrintF("ERROR - RF-Exchange failed (status=%d)\n",
-                             (int)result->raw_exchange.status);
+            printf("ERROR - RF-Exchange failed (status=%d)\n", (int)result->raw_exchange.status);
         }
-        ptxCommon_PrintF(APP_NFC_READER_SEPARATOR_BOT);
+
+        printf(APP_NFC_READER_SEPARATOR_BOT);
     }
 }
 
@@ -155,7 +154,7 @@ static void on_nfc_read_done (rs_status_t                  status,
     {
         if (NULL != summary)
         {
-            ptxCommon_PrintF("%s\n", summary);
+            printf("%s\n", summary);
         }
 
 #if defined(APP_NFC_READER_LED_EN)
@@ -164,8 +163,8 @@ static void on_nfc_read_done (rs_status_t                  status,
         return;
     }
 
-    ptxCommon_PrintF(APP_NFC_READER_LOG_COL_BRIGHT_GREEN "\n\n%s" APP_NFC_READER_LOG_COL_RESET "\n",
-                     (NULL != summary) ? summary : "CARD DETECTED!");
+    printf(APP_NFC_READER_LOG_COL_BRIGHT_GREEN "\n\n%s" APP_NFC_READER_LOG_COL_RESET "\n",
+           (NULL != summary) ? summary : "CARD DETECTED!");
 
     app_nfc_reader_card_event(result);
     (void)status;
@@ -178,7 +177,7 @@ static void on_nfc_read_done (rs_status_t                  status,
 static void on_nfc_operation_done (rs_status_t status, void *p_context)
 {
     (void)p_context;
-    ptxCommon_PrintF("rs_nfc_reader_Read completed (status=%d)\n", (int)status);
+    printf("rs_nfc_reader_Read completed (status=%d)\n", (int)status);
 }
 
 /*
@@ -188,17 +187,24 @@ static void on_nfc_operation_done (rs_status_t status, void *p_context)
  */
 void app_nfc_reader_entry (void)
 {
-    app_nfc_reader_log_init();
     app_nfc_reader_cli_init();
+    app_nfc_reader_log_attach_rx();
     app_nfc_reader_init();
+
+    /* Service the CLI from main (task) context. The UART RX ISR only buffers
+     * incoming bytes; echo and command dispatch (blocking stdio) run here. */
+    while (1)
+    {
+        app_nfc_reader_cli_process();
+        vTaskDelay(1);
+    }
 }
 
 void app_nfc_reader_init (void)
 {
-    rs_nfc_card_result_t result;
     rs_status_t st = RS_OK;
 
-    ptxCommon_PrintF("System Initialization (RS NFC Reader) ... starting\n");
+    printf("System Initialization (RS NFC Reader) ... starting\n");
 
     rs_nfc_reader_cfg_t cfg;
     memset(&cfg, 0, sizeof(cfg));
@@ -215,16 +221,19 @@ void app_nfc_reader_init (void)
     cfg.validate_dependencies = RS_NFC_DEP_VALIDATION_DISABLED;
     cfg.cfg_valid_check_en    = RS_NFC_CFG_VALIDATION_ENABLED;
 
-    memset(&result, 0, sizeof(result));
-
-    st = rs_nfc_reader_Read(&cfg, &result);
+    /* Non-blocking read: cfg.callback is set, so rs_nfc_reader_Read() spawns
+     * a worker task and returns immediately. Pass NULL for result_out — the
+     * worker then uses its own task-local buffer. Passing the address of a
+     * local here would dangle the moment this function returns (the worker
+     * keeps writing to it), corrupting whatever reuses that stack region. */
+    st = rs_nfc_reader_Read(&cfg, NULL);
 
     if (RS_OK != st)
     {
-        ptxCommon_PrintF("rs_nfc_reader_Read launch FAILED (status=%d)\n", (int) st);
+        printf("rs_nfc_reader_Read launch FAILED (status=%d)\n", (int) st);
     }
     else
     {
-        ptxCommon_PrintF("RS NFC Reader launched (non-blocking)\n");
+        printf("RS NFC Reader launched (non-blocking)\n");
     }
 }

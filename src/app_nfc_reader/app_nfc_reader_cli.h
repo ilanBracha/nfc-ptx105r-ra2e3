@@ -1,15 +1,14 @@
 /*
  * app_nfc_reader_cli.h
  *
- * Tiny line-based command line interface running on top of g_uart0
- * (see user_uart_log). It is fully interrupt-driven:
- *   - RX bytes are forwarded by the UART ISR to an internal callback
- *     (registered via app_nfc_reader_log_rx_callback) which handles echo,
- *     backspace, and line buffering in ISR context.
- *   - When a full line (CR/LF) is received, the ISR parses and executes
- *     the command immediately — no main-loop or busy-wait is needed.
+ * Tiny line-based command line interface over the pes-console-io stdio UART.
+ *   - The UART RX ISR (registered via app_nfc_reader_log_rx_callback) only
+ *     enqueues raw bytes into an ISR-to-main FIFO.
+ *   - app_nfc_reader_cli_process(), called from the main loop, drains that
+ *     FIFO and performs echo, backspace/line editing and command dispatch
+ *     in main context (blocking stdio TX is safe there).
  *
- * Because logging (ptxCommon_PrintF -> UART) happens from the same main
+ * Because both logging (printf) and CLI output happen from the same main
  * context, log lines are never interleaved mid-byte with CLI output and the
  * user-visible behavior is: "menu on boot, prompt waiting, async logs scroll
  * past, prompt is re-printed after each command".
@@ -25,29 +24,17 @@ extern "C" {
 #endif
 
 /**
- * Maximum number of characters in a single CLI input line (not counting the
- * terminating NUL). Lines longer than this are truncated.
- */
-void app_nfc_reader_cli_prompt(void);
-
-/**
  * Print the welcome banner + menu, register the UART RX ISR callback, and
- * arm the line buffer. Requires app_nfc_reader_log_init() to have been called first.
+ * arm the line buffer.
  */
 void app_nfc_reader_cli_init(void);
 
 /**
- * Dispatch any pending command that was completed by the UART RX ISR.
- * Since v2 the dispatch happens directly in the RX ISR, so this function
- * is a no-op. Kept for backward compatibility so existing call sites compile.
+ * Drain bytes captured by the UART RX ISR and process them (echo, line
+ * editing, command dispatch) in main context. Call regularly from the
+ * main loop / a task.
  */
 void app_nfc_reader_cli_process(void);
-
-/**
- * Legacy API — equivalent to app_nfc_reader_cli_process(). Kept for backward
- * compatibility so existing call sites continue to compile.
- */
-void app_nfc_reader_cli_poll(void);
 
 /**
  * Print the menu again (useful from anywhere, e.g. after a long log burst).
