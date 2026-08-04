@@ -118,28 +118,30 @@ static void print_ndef_records (const rs_nfc_card_result_t * result)
                                         (uint32_t) result->ndef_len,
                                         &decoded))
     {
-        printf("  Records        : (decode failed)\n");
+        printf("Records        : (decode failed)\n");
         return;
     }
 
     if (0u == decoded.record_count)
     {
-        printf("  Records        : (none)\n");
+        printf("Records        : (none)\n");
         return;
     }
 
-    printf("  Records        : %u%s\n",
+    printf("Records        : %u%s\n",
            (unsigned) decoded.record_count,
            decoded.truncated ? " (truncated)" : "");
+
+    printf(APP_NFC_READER_LOG_COL_BRIGHT_CYAN);
 
     for (uint8_t i = 0; i < decoded.record_count; i++)
     {
         const rs_ndef_record_t * rec = &decoded.records[i];
 
-        printf("   [%u] TNF=0x%02X (%s) Type='", (unsigned) i,
+        printf("[%u] TNF=0x%02X (%s) Type='", (unsigned) i,
                (unsigned) rec->tnf, ndef_tnf_name(rec->tnf));
         print_printable(rec->type, rec->type_len);
-        printf("' Payload=%u bytes\n", (unsigned) rec->payload_len);
+        printf("'  Payload=%u bytes\n", (unsigned) rec->payload_len);
 
         /* Well-known Text record: [status][lang][UTF-8 text] */
         if ((0x01u == rec->tnf) &&
@@ -181,7 +183,7 @@ static void print_ndef_records (const rs_nfc_card_result_t * result)
         {
             printf("        Data : ");
             print_printable(rec->payload, rec->payload_len);
-            printf("\n");
+            printf("\n" APP_NFC_READER_LOG_COL_RESET);
         }
     }
 }
@@ -278,9 +280,9 @@ void app_nfc_reader_log_print_card_info (const rs_nfc_card_result_t * result)
     /* NDEF records */
     if (result->ndef_present && (result->ndef_len > 0u))
     {
-        printf("NDEF           : %u bytes\n",
-               (unsigned) result->ndef_len);
-        printf("  NDEF raw (%u bytes):", (unsigned) result->ndef_len);
+        printf("NDEF           : %u bytes\n", (unsigned) result->ndef_len);
+        printf("NDEF raw (%u bytes):", (unsigned) result->ndef_len);
+
         for (uint32_t k = 0u; k < result->ndef_len; k++)
         {
             if ((k > 0u) && (0u == (k % 16u)))
