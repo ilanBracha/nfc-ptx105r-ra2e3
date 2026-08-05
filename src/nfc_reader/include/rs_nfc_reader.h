@@ -26,7 +26,7 @@ extern "C" {
 
 #define RS_COMMON_UNUSED(x) (void)(x)
 
-typedef enum {
+typedef enum e_rs_status {
     RS_OK                  =   0,
     RS_ERR_TIMEOUT         =  -1,
     RS_ERR_CRED_INVALID    =  -2,
@@ -47,16 +47,17 @@ typedef void (*rs_callback_t)(rs_status_t status, void *p_context);
 #endif
 
 /**********************************************************************************************************************
- * NDEF parsing and decoding utilities
+ * NDEF decoded record types
+ *
+ * NDEF decoding is performed by the module: rs_nfc_reader_Read() parses the
+ * raw NDEF message into rs_nfc_card_result_t.decoded. Applications read
+ * result->decoded directly — no decode call is exposed.
  **********************************************************************************************************************/
 
 #define RS_NDEF_MAX_RECORDS        8U
 #define RS_NDEF_MAX_TYPE_LEN      32U
-#define RS_NDEF_WIFI_SSID_MAX     32U
-#define RS_NDEF_WIFI_PASS_MAX     64U
-#define RS_NDEF_BT_NAME_MAX       48U
 
-typedef struct {
+typedef struct st_rs_ndef_record {
     uint8_t  tnf;
     uint8_t  type[RS_NDEF_MAX_TYPE_LEN];
     uint8_t  type_len;
@@ -65,57 +66,11 @@ typedef struct {
     uint8_t  flags;
 } rs_ndef_record_t;
 
-typedef struct {
+typedef struct st_rs_ndef_decoded {
     rs_ndef_record_t records[RS_NDEF_MAX_RECORDS];
     uint8_t           record_count;
     bool              truncated;
 } rs_ndef_decoded_t;
-
-typedef struct {
-    char     ssid[RS_NDEF_WIFI_SSID_MAX + 1];
-    uint8_t  ssid_len;
-    uint16_t auth_type;
-    uint16_t enc_type;
-    char     password[RS_NDEF_WIFI_PASS_MAX + 1];
-    uint8_t  password_len;
-    uint8_t  mac_addr[6];
-    bool     mac_present;
-} rs_wifi_info_t;
-
-typedef struct {
-    uint8_t  bd_addr[6];
-    bool     addr_present;
-    char     local_name[RS_NDEF_BT_NAME_MAX + 1];
-    uint8_t  name_len;
-    bool     is_le;
-} rs_bt_info_t;
-
-rs_status_t rs_ndef_decode_message(const uint8_t     * msg,
-                                   uint32_t            len,
-                                   rs_ndef_decoded_t * out);
-
-rs_status_t rs_ndef_decode_wifi(const uint8_t  * payload,
-                                uint32_t         len,
-                                rs_wifi_info_t * out);
-
-rs_status_t rs_ndef_decode_bluetooth(const uint8_t * payload,
-                                     uint32_t        len,
-                                     bool            is_le,
-                                     rs_bt_info_t  * out);
-
-bool rs_ndef_tlv_find(const uint8_t  * buf,
-                      uint32_t         len,
-                      uint16_t         tag,
-                      const uint8_t ** val,
-                      uint32_t       * val_len);
-
-bool rs_ndef_type_equals(const uint8_t * type,
-                         uint8_t         type_len,
-                         const char    * str);
-
-bool rs_ndef_starts_with(const char * str,
-                         uint32_t     str_len,
-                         const char * prefix);
 
 /**********************************************************************************************************************
  * Technology mask
@@ -171,7 +126,7 @@ typedef uint32_t rs_nfc_tech_mask_t;
 /**********************************************************************************************************************
  * Card type (must precede result struct)
  **********************************************************************************************************************/
-typedef enum {
+typedef enum e_rs_nfc_card_type {
     RS_NFC_CARD_TYPE_UNKNOWN = 0,
     RS_NFC_CARD_TYPE_ISO14443A,
     RS_NFC_CARD_TYPE_ISO14443B,
@@ -187,7 +142,7 @@ typedef enum {
 /**********************************************************************************************************************
  * Active-card RF protocol (RS-owned mirror of PTX protocol enum)
  **********************************************************************************************************************/
-typedef enum {
+typedef enum e_rs_nfc_protocol {
     RS_NFC_PROT_UNDEFINED = 0,
     RS_NFC_PROT_T2T,
     RS_NFC_PROT_T3T,
@@ -209,8 +164,8 @@ typedef void (* rs_nfc_callback_t)(rs_status_t status, void * p_context);
 /**********************************************************************************************************************
  * Result (forward-declared so the per-card event cb can reference it)
  **********************************************************************************************************************/
-struct rs_nfc_card_result_s;
-typedef struct rs_nfc_card_result_s rs_nfc_card_result_t;
+struct st_rs_nfc_card_result;
+typedef struct st_rs_nfc_card_result rs_nfc_card_result_t;
 
 /**********************************************************************************************************************
  * Per-card event callback
@@ -229,7 +184,7 @@ typedef void (* rs_nfc_card_event_cb_t)(rs_status_t                  status,
 /**********************************************************************************************************************
  * Configuration
  **********************************************************************************************************************/
-typedef struct {
+typedef struct st_rs_nfc_reader_cfg {
     /* RF technologies to enable during discovery (bitmask of
      * RS_NFC_TECH_* flags, e.g. RS_NFC_TECH_ALL). Must be non-zero. */
     rs_nfc_tech_mask_t tech_mask;
@@ -301,7 +256,7 @@ typedef struct {
  * on_card_event callback (same contract as `summary`). Consumers must check
  * `valid` before using any other field.
  */
-typedef struct {
+typedef struct st_rs_nfc_raw_exchange {
     bool           valid;
     rs_status_t    status;
     const uint8_t *tx;
@@ -310,7 +265,7 @@ typedef struct {
     uint32_t       rx_len;
 } rs_nfc_raw_exchange_t;
 
-struct rs_nfc_card_result_s {
+struct st_rs_nfc_card_result {
     rs_nfc_card_type_t card_type;
     rs_nfc_protocol_t  protocol;     /* active RF protocol */
     uint8_t uid[RS_NFC_UID_MAX_BYTES];
@@ -318,6 +273,12 @@ struct rs_nfc_card_result_s {
     bool ndef_present;
     uint8_t ndef_data[RS_NFC_NDEF_MAX_BYTES];
     uint16_t ndef_len;
+
+    /* Decoded NDEF records, parsed from ndef_data by rs_nfc_reader_Read().
+     * Each record's `payload` points into ndef_data above, so it is valid
+     * only while this result is alive; do not use after a shallow copy. */
+    rs_ndef_decoded_t decoded;
+
     int8_t rssi_dbm; /* optional, HAL may return 0 if unsupported */
     uint32_t read_time_ms;
 
@@ -362,27 +323,6 @@ rs_status_t rs_nfc_reader_Read(const rs_nfc_reader_cfg_t * cfg,
  * @return RS_OK always.
  */
 rs_status_t rs_nfc_reader_Stop(void);
-
-/**
- * Read structured card information (CC, NDEF message, tag type, size,
- * write-access) from the currently-activated card. Dispatches internally
- * to the appropriate T2T/T3T/T4T/T5T read sequence based on `protocol`.
- *
- * Populates result->ndef_data/ndef_len/ndef_present, data_area_size,
- * writeable, and tag_type_name. Call from inside an on_card_event callback
- * while the card is still activated.
- *
- * @param[in]     protocol         Active RF protocol (from result->protocol).
- * @param[in,out] result           Result struct to populate. Must not be NULL.
- * @param[in]     max_ndef_bytes   Upper bound (in bytes) for the NDEF payload
- *                                 copied into result->ndef_data. Values > 
- *                                 RS_NFC_NDEF_MAX_BYTES are clamped; 0 is
- *                                 treated as RS_NFC_NDEF_MAX_BYTES.
- * @return RS_OK on success; RS_ERR_NOT_FOUND if not NDEF formatted.
- */
-rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t      protocol,
-                                   rs_nfc_card_result_t * result,
-                                   uint32_t               max_ndef_bytes);
 
 #ifdef __cplusplus
 }

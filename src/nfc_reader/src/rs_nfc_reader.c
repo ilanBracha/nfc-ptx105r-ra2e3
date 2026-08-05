@@ -19,7 +19,6 @@
 
 #include "rs_nfc_reader.h"
 #include "rs_nfc_ptx105r.h"
-#include "rs_nfc_reader_deps.h"
 #include <string.h>
 #include <stdint.h>
 #include "FreeRTOS.h"
@@ -60,19 +59,19 @@ static uint8_t g_raw_rx_buf[RAW_RX_BUF_SIZE];
 /***********************************************************************************************************************
  * Per-call orchestrator state
  **********************************************************************************************************************/
-typedef enum {
+typedef enum e_rs_nfc_reader_loop_state {
     LOOP_WAIT_FOR_ACTIVATION = 0,
     LOOP_DATA_EVENT,
     LOOP_DEACTIVATE,
     LOOP_SYSTEM_ERROR,
-} loop_state_t;
+} rs_nfc_reader_loop_state_t;
 
 /***********************************************************************************************************************
  * Stop-requested flag
  **********************************************************************************************************************/
 static volatile bool g_stop_requested = false;
 
-bool rs_nfc_reader_is_stop_requested (void)
+static bool rs_nfc_reader_is_stop_requested (void)
 {
     return g_stop_requested;
 }
@@ -80,13 +79,13 @@ bool rs_nfc_reader_is_stop_requested (void)
 /***********************************************************************************************************************
  * Non-blocking async context (static allocation)
  **********************************************************************************************************************/
-typedef struct {
+typedef struct st_rs_nfc_reader_async_ctx {
     rs_nfc_reader_cfg_t    cfg;            /* deep copy of caller cfg  */
     rs_nfc_card_result_t * p_result_out;   /* caller's result pointer  */
     volatile bool          active;         /* re-entrancy guard        */
-} rs_nfc_async_ctx_t;
+} rs_nfc_reader_async_ctx_t;
 
-static rs_nfc_async_ctx_t  g_async_ctx;
+static rs_nfc_reader_async_ctx_t  g_async_ctx;
 static StaticTask_t         g_async_task_tcb;
 static StackType_t          g_async_task_stack[ASYNC_TASK_STACK_WORDS];
 static TaskHandle_t         g_async_task_handle = NULL;
@@ -109,10 +108,87 @@ static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t   protocol,
                                               uint8_t           * rx,
                                               uint32_t          * rx_len);
 
+/* Module-private helpers (no external linkage). */
+static rs_status_t rs_nfc_reader_detect_wait(uint32_t               timeout_ms,
+                                             rs_nfc_ptx_disc_status_t * out_status);
+static bool rs_nfc_reader_is_stop_requested(void);
+static uint32_t rs_nfc_reader_card_summary_build(const rs_nfc_card_result_t * res,
+                                                 char                       * buf,
+                                                 uint32_t                     buf_size);
+
+/* Single-attempt read + retry wrapper + dependency check (reader-private). */
+static rs_status_t rs_nfc_reader_try_once(const void * cfg, void * result_out);
+static rs_status_t rs_nfc_reader_retry(const void * cfg,
+                                       void       * result_out,
+                                       uint8_t      max_retries);
+static rs_status_t rs_nfc_reader_validate_deps(void);
+
+/* Defined in rs_ndef_read.c — reads CC/NDEF/tag metadata into the result
+ * (and fills result->decoded). Module-internal; not part of the public API. */
+rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t      protocol,
+                                   rs_nfc_card_result_t * result,
+                                   uint32_t               max_ndef_bytes);
+
+/***********************************************************************************************************************
+ * Card detection (merged from rs_nfc_detect.c)
+ *
+ * Wait for a card-discovery event, the timeout to expire, or a stop
+ * request. Interrupt-driven — the task blocks on the reader IRQ. Uses only
+ * the rs_nfc_ptx API.
+ **********************************************************************************************************************/
+static rs_status_t rs_nfc_reader_detect_wait (uint32_t timeout_ms, rs_nfc_ptx_disc_status_t * out_status)
+{
+    rs_status_t st = RS_OK;
+
+    if (NULL == out_status)
+    {
+        return RS_ERR_INVALID_CFG;
+    }
+
+    /* Early exit on stop request */
+    if (rs_nfc_reader_is_stop_requested())
+    {
+        *out_status = RS_NFC_DISC_NO_CARD;
+
+        return RS_OK;
+    }
+
+    /* System-health check is now performed internally by
+     * rs_nfc_ptx_wait_for_card. */
+
+    /* Block (zero-CPU) until the reader's IRQ line signals an event or
+     * the timeout elapses. If rs_nfc_reader_Stop() is called while
+     * we are blocked, it sends a task notification to wake us
+     * immediately so we can observe the stop flag. */
+    st = rs_nfc_ptx_wait_for_card(timeout_ms, out_status);
+
+    if (RS_OK != st)
+    {
+        return st;
+    }
+
+    if (RS_NFC_DISC_NO_CARD != *out_status)
+    {
+        return RS_OK;  /* card found or discovery done */
+    }
+
+    /* Check stop again — we may have been woken by Stop(). */
+    if (rs_nfc_reader_is_stop_requested())
+    {
+        *out_status = RS_NFC_DISC_NO_CARD;
+
+        return RS_OK;
+    }
+
+    *out_status = RS_NFC_DISC_NO_CARD;
+
+    return RS_ERR_TIMEOUT;
+}
+
 /***********************************************************************************************************************
  * Single-attempt (used by retry wrapper & single-shot)
  **********************************************************************************************************************/
-rs_status_t rs_nfc_reader_try_once (const void * cfg_raw, void * result_raw)
+static rs_status_t rs_nfc_reader_try_once (const void * cfg_raw, void * result_raw)
 {
     const rs_nfc_reader_cfg_t * cfg = (const rs_nfc_reader_cfg_t *) cfg_raw;
     rs_nfc_card_result_t      * res = (rs_nfc_card_result_t *) result_raw;
@@ -121,8 +197,8 @@ rs_status_t rs_nfc_reader_try_once (const void * cfg_raw, void * result_raw)
     uint32_t timeout = (NULL != cfg) ? cfg->timeout_ms : DEFAULT_TIMEOUT_MS;
 
     /* 1. Wait for a card */
-    rs_nfc_disc_status_t disc = RS_NFC_DISC_NO_CARD;
-    st = rs_nfc_detect_wait(timeout, &disc);
+    rs_nfc_ptx_disc_status_t disc = RS_NFC_DISC_NO_CARD;
+    st = rs_nfc_reader_detect_wait(timeout, &disc);
 
     if (RS_OK != st)
     {
@@ -172,6 +248,49 @@ rs_status_t rs_nfc_reader_try_once (const void * cfg_raw, void * result_raw)
 }
 
 /***********************************************************************************************************************
+ * Retry wrapper
+ *
+ * Attempts a single-shot read up to (max_retries + 1) times, deactivating +
+ * re-discovering between attempts.
+ **********************************************************************************************************************/
+static rs_status_t rs_nfc_reader_retry (const void * cfg, void * result_out, uint8_t max_retries)
+{
+    rs_status_t st = RS_ERR_TIMEOUT;
+
+    for (uint8_t attempt = 0; attempt <= max_retries; attempt++)
+    {
+        st = rs_nfc_reader_try_once(cfg, result_out);
+
+        if (RS_OK == st)
+        {
+            break;
+        }
+
+        /* Deactivate + re-discover between retries */
+        (void)rs_nfc_ptx_deactivate();
+    }
+
+    return st;
+}
+
+/***********************************************************************************************************************
+ * Runtime dependency validation
+ *
+ * Checks that the PTX SDK backend has been opened successfully.
+ **********************************************************************************************************************/
+static rs_status_t rs_nfc_reader_validate_deps (void)
+{
+    /* rs_nfc_ptx_is_open() reflects whether rs_nfc_ptx_open() (which
+     * initializes the PTX SDK IoT-Reader context directly) has succeeded. */
+    if (!rs_nfc_ptx_is_open())
+    {
+        return RS_ERR_DEPENDENCY;
+    }
+
+    return RS_OK;
+}
+
+/***********************************************************************************************************************
  * Event-loop mode
  **********************************************************************************************************************/
 static rs_status_t run_event_loop (const rs_nfc_reader_cfg_t * cfg,
@@ -180,7 +299,7 @@ static rs_status_t run_event_loop (const rs_nfc_reader_cfg_t * cfg,
     rs_nfc_card_result_t   local_res;
     rs_nfc_card_result_t * res = (NULL != result_out) ? result_out : &local_res;
     char                    summary[SUMMARY_BUF_SIZE];
-    loop_state_t            state         = LOOP_WAIT_FOR_ACTIVATION;
+    rs_nfc_reader_loop_state_t state         = LOOP_WAIT_FOR_ACTIVATION;
     uint32_t                elapsed_ms    = 0u;
     const bool              loop_forever  = (UINT32_MAX == cfg->timeout_ms);
     uint8_t sys_state;
@@ -228,7 +347,7 @@ static rs_status_t run_event_loop (const rs_nfc_reader_cfg_t * cfg,
                                     ? UINT32_MAX
                                     : (cfg->timeout_ms - elapsed_ms);
 
-                rs_nfc_disc_status_t disc = RS_NFC_DISC_NO_CARD;
+                rs_nfc_ptx_disc_status_t disc = RS_NFC_DISC_NO_CARD;
 
                 if (RS_OK != rs_nfc_ptx_wait_for_card(wait_ms, &disc))
                 {
@@ -387,7 +506,7 @@ static rs_status_t rs_nfc_read_blocking (const rs_nfc_reader_cfg_t * cfg,
     }
     else if (cfg->retry_count > 0u)
     {
-        st = rs_nfc_retry(cfg, result_out, cfg->retry_count);
+        st = rs_nfc_reader_retry(cfg, result_out, cfg->retry_count);
     }
     else
     {
@@ -406,7 +525,7 @@ static rs_status_t rs_nfc_read_blocking (const rs_nfc_reader_cfg_t * cfg,
 static void rs_nfc_async_worker (void * pvParameters)
 {
     (void)pvParameters;
-    rs_nfc_async_ctx_t * ctx = &g_async_ctx;
+    rs_nfc_reader_async_ctx_t * ctx = &g_async_ctx;
 
     /* Run full blocking flow inside this dedicated task. */
     rs_status_t st = rs_nfc_read_blocking(&ctx->cfg, ctx->p_result_out);
@@ -629,9 +748,9 @@ static const char * card_type_name (rs_nfc_card_type_t t)
     }
 }
 
-uint32_t rs_nfc_reader_card_summary_build (const rs_nfc_card_result_t * res,
-                                           char                       * buf,
-                                           uint32_t                     buf_size)
+static uint32_t rs_nfc_reader_card_summary_build (const rs_nfc_card_result_t * res,
+                                                  char                       * buf,
+                                                  uint32_t                     buf_size)
 {
     if ((NULL == buf) || (0u == buf_size))
     {

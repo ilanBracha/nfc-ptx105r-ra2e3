@@ -8,8 +8,8 @@
  * ptxNDEF dispatcher (ptxNDEF.c) which unconditionally links all four
  * tag-type operation components (~13 KB flash).
  *
- * Also contains the NDEF message-level decoders (Wi-Fi, Bluetooth,
- * record parser) which have no SDK equivalent.
+ * Also contains the module-internal NDEF message record parser
+ * (rs_ndef_decode_message) which fills rs_nfc_card_result_t.decoded.
  *
  * NO printing — all results go into the caller's rs_nfc_card_result_t.
  */
@@ -27,6 +27,12 @@
  **********************************************************************************************************************/
 #define RX_BUF_SIZE   RS_NFC_PTX_RX_BUF_SIZE
 #define TX_BUF_SIZE   RS_NFC_PTX_TX_BUF_SIZE
+
+/* NDEF message decoder — module-internal; the parsed records are exposed to
+ * the application via rs_nfc_card_result_t.decoded. */
+static rs_status_t rs_ndef_decode_message(const uint8_t     * msg,
+                                          uint32_t            len,
+                                          rs_ndef_decoded_t * out);
 
 /***********************************************************************************************************************
  * Type 4 Tag NDEF Read — via PTX SDK ptxNDEF_T4TOP component
@@ -336,6 +342,7 @@ rs_status_t rs_ndef_read_card_info (rs_nfc_protocol_t      protocol,
     result->data_area_size = 0;
     result->writeable      = false;
     result->tag_type_name  = NULL;
+    (void)memset(&result->decoded, 0, sizeof(result->decoded));
 
     /* Clamp the caller-supplied cap to the on-stack / result buffer size.
      * 0 (unspecified) falls back to the max. */
@@ -343,19 +350,14 @@ rs_status_t rs_ndef_read_card_info (rs_nfc_protocol_t      protocol,
                    ? (uint32_t) RS_NFC_NDEF_MAX_BYTES
                    : max_ndef_bytes;
 
+    rs_status_t st;
+
     switch (protocol)
     {
-        case RS_NFC_PROT_ISODEP:
-            return read_t4t_ndef(result, cap);
-
-        case RS_NFC_PROT_T2T:
-            return read_t2t_ndef(result, cap);
-
-        case RS_NFC_PROT_T5T:
-            return read_t5t_ndef(result, cap);
-
-        case RS_NFC_PROT_T3T:
-            return read_t3t_ndef(result, cap);
+        case RS_NFC_PROT_ISODEP: st = read_t4t_ndef(result, cap); break;
+        case RS_NFC_PROT_T2T:    st = read_t2t_ndef(result, cap); break;
+        case RS_NFC_PROT_T5T:    st = read_t5t_ndef(result, cap); break;
+        case RS_NFC_PROT_T3T:    st = read_t3t_ndef(result, cap); break;
 
         case RS_NFC_PROT_NFCDEP:
             result->tag_type_name = "NFC-DEP (Peer-to-Peer)";
@@ -365,145 +367,25 @@ rs_status_t rs_ndef_read_card_info (rs_nfc_protocol_t      protocol,
             result->tag_type_name = "Unknown";
             return RS_OK;
     }
-}
 
-/***********************************************************************************************************************
- * NDEF parsing and decoding utilities
- **********************************************************************************************************************/
-
-/***********************************************************************************************************************
- * BER-TLV search
- **********************************************************************************************************************/
-
-bool rs_ndef_tlv_find (const uint8_t  * buf,
-                      uint32_t         len,
-                      uint16_t         tag,
-                      const uint8_t ** val,
-                      uint32_t       * val_len)
-{
-    uint32_t i = 0;
-    uint16_t ct;
-    uint8_t  constr;
-
-    while (i < len)
+    /* Parse the raw NDEF message into records for the application. */
+    if (result->ndef_present && (result->ndef_len > 0u))
     {
-        if ((0x00u == buf[i]) || (0xFFu == buf[i]))
-        {
-            i++;
-            continue;
-        }
-
-        ct = (uint16_t) buf[i];
-        constr = (uint8_t) (buf[i] & 0x20u);
-        i++;
-
-        if (((ct & 0x1Fu) == 0x1Fu) && (i < len))
-        {
-            ct = (uint16_t) ((ct << 8) | buf[i]);
-            i++;
-        }
-
-        if (i >= len)
-        {
-            break;
-        }
-
-        uint32_t cl = (uint32_t) buf[i];
-        i++;
-
-        if (0u != (cl & 0x80u))
-        {
-            uint8_t n = (uint8_t) (cl & 0x7Fu);
-            cl = 0;
-
-            while (n-- && (i < len))
-            {
-                cl = (cl << 8) | buf[i];
-                i++;
-            }
-        }
-
-        if ((i + cl) > len)
-        {
-            break;
-        }
-
-        if (ct == tag)
-        {
-            *val     = &buf[i];
-            *val_len = cl;
-
-            return true;
-        }
-
-        if (constr && rs_ndef_tlv_find(&buf[i], cl, tag, val, val_len))
-        {
-            return true;
-        }
-
-        i += cl;
+        (void)rs_ndef_decode_message(result->ndef_data,
+                                     (uint32_t) result->ndef_len,
+                                     &result->decoded);
     }
 
-    return false;
-}
-
-/***********************************************************************************************************************
- * String helpers
- **********************************************************************************************************************/
-
-bool rs_ndef_type_equals (const uint8_t * type,
-                          uint8_t         type_len,
-                          const char    * str)
-{
-    uint32_t n = 0;
-
-    while (str[n] != '\0')
-    {
-        n++;
-    }
-
-    if (n != (uint32_t) type_len)
-    {
-        return false;
-    }
-
-    for (uint32_t k = 0; k < n; k++)
-    {
-        if (type[k] != (uint8_t) str[k])
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool rs_ndef_starts_with (const char * str,
-                          uint32_t     str_len,
-                          const char * prefix)
-{
-    uint32_t n = 0;
-
-    while (prefix[n] != '\0')
-    {
-        if ((n >= str_len) || (str[n] != prefix[n]))
-        {
-            return false;
-        }
-
-        n++;
-    }
-
-    return true;
+    return st;
 }
 
 /***********************************************************************************************************************
  * NDEF message decoder
  **********************************************************************************************************************/
 
-rs_status_t rs_ndef_decode_message (const uint8_t     * msg,
-                                    uint32_t            len,
-                                    rs_ndef_decoded_t * out)
+static rs_status_t rs_ndef_decode_message (const uint8_t     * msg,
+                                           uint32_t            len,
+                                           rs_ndef_decoded_t * out)
 {
     uint32_t pos = 0;
     uint8_t hdr;
@@ -622,178 +504,6 @@ rs_status_t rs_ndef_decode_message (const uint8_t     * msg,
         {
             break;
         }
-    }
-
-    return RS_OK;
-}
-
-/***********************************************************************************************************************
- * Wi-Fi WSC attribute search
- **********************************************************************************************************************/
-
-static bool wsc_find (const uint8_t  * buf,
-                      uint32_t         len,
-                      uint16_t         want,
-                      const uint8_t ** val,
-                      uint16_t       * vlen)
-{
-    uint32_t i = 0;
-
-    while ((i + 4u) <= len)
-    {
-        uint16_t t = (uint16_t) (((uint16_t) buf[i] << 8) | buf[i + 1u]);
-        uint16_t l = (uint16_t) (((uint16_t) buf[i + 2u] << 8) | buf[i + 3u]);
-        i += 4u;
-
-        if (((uint32_t) i + l) > len)
-        {
-            break;
-        }
-
-        if (t == want)
-        {
-            *val  = &buf[i];
-            *vlen = l;
-
-            return true;
-        }
-
-        if (0x100Eu == t)
-        {
-            if (wsc_find(&buf[i], l, want, val, vlen))
-            {
-                return true;
-            }
-        }
-
-        i += l;
-    }
-
-    return false;
-}
-
-rs_status_t rs_ndef_decode_wifi (const uint8_t  * payload,
-                                uint32_t         len,
-                                rs_wifi_info_t * out)
-{
-    const uint8_t * v;
-    uint16_t vl;
-    uint8_t copy;
-    uint8_t pc;
-
-    if (NULL == out)
-    {
-        return RS_ERR_INVALID_CFG;
-    }
-
-    (void)memset(out, 0, sizeof(*out));
-
-    if (!wsc_find(payload, len, 0x1045u, &v, &vl))
-    {
-        return RS_ERR_NOT_FOUND;
-    }
-
-    copy = (vl <= RS_NDEF_WIFI_SSID_MAX) ? (uint8_t) vl : RS_NDEF_WIFI_SSID_MAX;
-    (void)memcpy(out->ssid, v, copy);
-    out->ssid[copy]  = '\0';
-    out->ssid_len    = copy;
-
-    if (wsc_find(payload, len, 0x1003u, &v, &vl) && (vl >= 2u))
-    {
-        out->auth_type = (uint16_t) (((uint16_t) v[0] << 8) | v[1]);
-    }
-
-    if (wsc_find(payload, len, 0x100Fu, &v, &vl) && (vl >= 2u))
-    {
-        out->enc_type = (uint16_t) (((uint16_t) v[0] << 8) | v[1]);
-    }
-
-    if (wsc_find(payload, len, 0x1027u, &v, &vl))
-    {
-        pc = (vl <= RS_NDEF_WIFI_PASS_MAX) ? (uint8_t) vl : RS_NDEF_WIFI_PASS_MAX;
-        (void)memcpy(out->password, v, pc);
-        out->password[pc] = '\0';
-        out->password_len = pc;
-    }
-
-    if (wsc_find(payload, len, 0x1020u, &v, &vl) && (vl >= 6u))
-    {
-        (void)memcpy(out->mac_addr, v, 6u);
-        out->mac_present = true;
-    }
-
-    return RS_OK;
-}
-
-/***********************************************************************************************************************
- * Bluetooth OOB decoder
- **********************************************************************************************************************/
-
-rs_status_t rs_ndef_decode_bluetooth (const uint8_t * payload,
-                                      uint32_t        len,
-                                      bool            is_le,
-                                      rs_bt_info_t  * out)
-{
-    uint32_t eir;
-    uint8_t k;
-    uint32_t i;
-    uint8_t l;
-    uint8_t adt;
-    uint8_t nc;
-
-    if (NULL == out)
-    {
-        return RS_ERR_INVALID_CFG;
-    }
-
-    (void)memset(out, 0, sizeof(*out));
-    out->is_le = is_le;
-
-    eir = is_le ? 0u : 8u;
-
-    if ((!is_le) && (len >= 8u))
-    {
-        for (k = 0; k < 6u; k++)
-        {
-            out->bd_addr[k] = payload[2u + (5u - k)];
-        }
-
-        out->addr_present = true;
-    }
-
-    i = eir;
-
-    while ((i + 1u) < len)
-    {
-        l = payload[i];
-
-        if (0u == l)
-        {
-            break;
-        }
-
-        if (((uint32_t) i + 1u + l) > len)
-        {
-            break;
-        }
-
-        adt = payload[i + 1u];
-
-        if ((0x09u == adt) || (0x08u == adt))
-        {
-            nc = (uint8_t) (l - 1u);
-
-            if (nc > RS_NDEF_BT_NAME_MAX)
-            {
-                nc = RS_NDEF_BT_NAME_MAX;
-            }
-
-            (void)memcpy(out->local_name, &payload[i + 2u], nc);
-            out->local_name[nc] = '\0';
-            out->name_len = nc;
-        }
-
-        i += (uint32_t) l + 1u;
     }
 
     return RS_OK;

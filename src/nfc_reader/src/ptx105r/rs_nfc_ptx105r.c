@@ -218,7 +218,7 @@ static void extract_uid (ptxIoTRd_CardParams_t * card, uint8_t * uid, uint8_t * 
     }
 }
 
-static rs_status_t ptx105r_discover_status (rs_nfc_disc_status_t * out_status)
+static rs_status_t ptx105r_discover_status (rs_nfc_ptx_disc_status_t * out_status)
 {
     if (NULL == out_status)
     {
@@ -386,7 +386,7 @@ rs_status_t rs_nfc_ptx_stop_discovery(void)
     return (ptxStatus_Success == st) ? RS_OK : RS_ERR_INTERNAL;
 }
 
-rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms, rs_nfc_disc_status_t *out_status)
+rs_status_t rs_nfc_ptx_wait_for_card(uint32_t timeout_ms, rs_nfc_ptx_disc_status_t *out_status)
 {
     if (NULL == out_status) { return RS_ERR_INVALID_CFG; }
     *out_status = RS_NFC_DISC_NO_CARD;

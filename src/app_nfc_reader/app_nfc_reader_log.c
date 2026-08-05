@@ -109,34 +109,32 @@ static void print_printable (const uint8_t * p, uint32_t len)
     }
 }
 
-/* Decode result->ndef_data (NDEF message) into records and print each one. */
+/* Local single-char NDEF type check (e.g. "T" text, "U" URI). */
+static bool ndef_type_is (const rs_ndef_record_t * rec, char c)
+{
+    return (1u == rec->type_len) && ((char) rec->type[0] == c);
+}
+
+/* Print the records already decoded by the module (result->decoded). */
 static void print_ndef_records (const rs_nfc_card_result_t * result)
 {
-    rs_ndef_decoded_t decoded;
+    const rs_ndef_decoded_t * decoded = &result->decoded;
 
-    if (RS_OK != rs_ndef_decode_message(result->ndef_data,
-                                        (uint32_t) result->ndef_len,
-                                        &decoded))
-    {
-        printf("Records        : (decode failed)\n");
-        return;
-    }
-
-    if (0u == decoded.record_count)
+    if (0u == decoded->record_count)
     {
         printf("Records        : (none)\n");
         return;
     }
 
     printf("Records        : %u%s\n",
-           (unsigned) decoded.record_count,
-           decoded.truncated ? " (truncated)" : "");
+           (unsigned) decoded->record_count,
+           decoded->truncated ? " (truncated)" : "");
 
     printf(APP_NFC_READER_LOG_COL_BRIGHT_CYAN);
 
-    for (uint8_t i = 0; i < decoded.record_count; i++)
+    for (uint8_t i = 0; i < decoded->record_count; i++)
     {
-        const rs_ndef_record_t * rec = &decoded.records[i];
+        const rs_ndef_record_t * rec = &decoded->records[i];
 
         printf("[%u] TNF=0x%02X (%s) Type='", (unsigned) i,
                (unsigned) rec->tnf, ndef_tnf_name(rec->tnf));
@@ -145,7 +143,7 @@ static void print_ndef_records (const rs_nfc_card_result_t * result)
 
         /* Well-known Text record: [status][lang][UTF-8 text] */
         if ((0x01u == rec->tnf) &&
-            rs_ndef_type_equals(rec->type, rec->type_len, "T") &&
+            ndef_type_is(rec, 'T') &&
             (rec->payload_len >= 1u))
         {
             uint8_t status   = rec->payload[0];
@@ -163,7 +161,7 @@ static void print_ndef_records (const rs_nfc_card_result_t * result)
         }
         /* Well-known URI record: [prefix-id][URI tail] */
         else if ((0x01u == rec->tnf) &&
-                 rs_ndef_type_equals(rec->type, rec->type_len, "U") &&
+                 ndef_type_is(rec, 'U') &&
                  (rec->payload_len >= 1u))
         {
             uint8_t id = rec->payload[0];
