@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include "ptx_IOT_READER.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -141,19 +142,6 @@ typedef enum e_rs_nfc_card_type {
     RS_NFC_CARD_TYPE_NFC_TAG_TYPE_5,
 } rs_nfc_card_type_t;
 
-/**********************************************************************************************************************
- * Active-card RF protocol (RS-owned mirror of PTX protocol enum)
- **********************************************************************************************************************/
-typedef enum e_rs_nfc_protocol {
-    RS_NFC_PROT_UNDEFINED = 0,
-    RS_NFC_PROT_T2T,
-    RS_NFC_PROT_T3T,
-    RS_NFC_PROT_ISODEP,
-    RS_NFC_PROT_NFCDEP,
-    RS_NFC_PROT_T5T,
-    RS_NFC_PROT_EXTENSION,
-} rs_nfc_protocol_t;
-
 
 /**********************************************************************************************************************
  * Callback typedefs (must precede rs_nfc_reader_cfg_t which uses them)
@@ -187,7 +175,7 @@ typedef struct st_rs_nfc_raw_exchange {
 
  typedef struct st_rs_nfc_card_result {
     rs_nfc_card_type_t card_type;
-    rs_nfc_protocol_t  protocol;     /* active RF protocol */
+    ptxIoTRd_CardProtocol_t  protocol;     /* active RF protocol */
     uint8_t uid[RS_NFC_UID_MAX_BYTES];
     uint8_t uid_len;
     bool ndef_present;

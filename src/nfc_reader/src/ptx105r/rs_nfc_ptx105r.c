@@ -126,20 +126,6 @@ static rs_nfc_card_type_t map_card_type (ptxIoTRd_CardParams_t * card,
     }
 }
 
-static rs_nfc_protocol_t map_protocol (ptxIoTRd_CardProtocol_t prot)
-{
-    switch (prot)
-    {
-        case Prot_T2T:       return RS_NFC_PROT_T2T;
-        case Prot_T3T:       return RS_NFC_PROT_T3T;
-        case Prot_ISODEP:    return RS_NFC_PROT_ISODEP;
-        case Prot_NFCDEP:    return RS_NFC_PROT_NFCDEP;
-        case Prot_T5T:       return RS_NFC_PROT_T5T;
-        case Prot_Extension: return RS_NFC_PROT_EXTENSION;
-        default:             return RS_NFC_PROT_UNDEFINED;
-    }
-}
-
 static ptxIoTRd_CardProtocol_t choose_protocol (ptxIoTRd_CardParams_t * card)
 {
     if (NULL == card)
@@ -455,7 +441,7 @@ rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t *card_info)
     if (NULL != reg->ActiveCard)
     {
         card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
-        card_info->protocol  = map_protocol(reg->ActiveCardProtType);
+        card_info->protocol  = reg->ActiveCardProtType;
         extract_uid(reg->ActiveCard, card_info->uid, &card_info->uid_len);
         return RS_OK;
     }
@@ -467,7 +453,7 @@ rs_status_t rs_nfc_ptx_activate_card(rs_nfc_ptx_card_info_t *card_info)
     if (ptxStatus_Success != st) { return RS_ERR_INTERNAL; }
 
     card_info->card_type = map_card_type(reg->ActiveCard, reg->ActiveCardProtType);
-    card_info->protocol  = map_protocol(reg->ActiveCardProtType);
+    card_info->protocol  = reg->ActiveCardProtType;
     extract_uid(reg->ActiveCard, card_info->uid, &card_info->uid_len);
     return RS_OK;
 }
@@ -560,7 +546,7 @@ void rs_nfc_ptx_wake_waiting_task(void)
  * SDK T4T NDEF component lifecycle (lean — see include-block note above)
  *
  * Call rs_nfc_ptx_ndef_open() once per card activation (protocol ==
- * RS_NFC_PROT_ISODEP), and rs_nfc_ptx_ndef_close() after NDEF
+ * Prot_ISODEP), and rs_nfc_ptx_ndef_close() after NDEF
  * operations are finished.
  **********************************************************************************************************************/
 
@@ -593,7 +579,7 @@ ptxNDEF_T4TOP_t * rs_nfc_ptx_get_ndef_comp(void)
  * SDK T5T NDEF component lifecycle (lean — see include-block note above)
  *
  * Call rs_nfc_ptx_ndef_t5t_open() once per card activation (protocol ==
- * RS_NFC_PROT_T5T), and rs_nfc_ptx_ndef_t5t_close() after NDEF
+ * Prot_T5T), and rs_nfc_ptx_ndef_t5t_close() after NDEF
  * operations are finished.
  **********************************************************************************************************************/
 
@@ -632,7 +618,7 @@ ptxNDEF_T5TOP_t * rs_nfc_ptx_get_ndef_t5t_comp(void)
  * SDK T3T NDEF component lifecycle
  *
  * Call rs_nfc_ptx_ndef_t3t_open() once per card activation (protocol ==
- * RS_NFC_PROT_T3T), and rs_nfc_ptx_ndef_t3t_close() after NDEF
+ * Prot_T3T), and rs_nfc_ptx_ndef_t3t_close() after NDEF
  * operations are finished. NFCID2 and MRTI timing parameters are read
  * from the active card's SENSF_RES — the card must already be activated.
  **********************************************************************************************************************/

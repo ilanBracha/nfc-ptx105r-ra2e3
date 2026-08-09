@@ -106,7 +106,7 @@ static rs_status_t run_event_loop(const rs_nfc_reader_cfg_t * cfg,
 
 /* Internal helpers (previously public API — now module-private). */
 static rs_status_t rs_nfc_reader_validate(const rs_nfc_reader_cfg_t * cfg);
-static rs_status_t rs_nfc_reader_raw_exchange(rs_nfc_protocol_t   protocol,
+static rs_status_t rs_nfc_reader_raw_exchange(ptxIoTRd_CardProtocol_t protocol,
                                               const uint8_t     * uid,
                                               uint8_t             uid_len,
                                               uint8_t           * tx,
@@ -131,7 +131,7 @@ static rs_status_t rs_nfc_reader_validate_deps(void);
 
 /* Defined in rs_ndef_read.c — reads CC/NDEF/tag metadata into the result
  * (and fills result->decoded). Module-internal; not part of the public API. */
-rs_status_t rs_ndef_read_card_info(rs_nfc_protocol_t      protocol,
+rs_status_t rs_ndef_read_card_info(ptxIoTRd_CardProtocol_t protocol,
                                    rs_nfc_card_result_t * result,
                                    uint32_t               max_ndef_bytes);
 
@@ -401,8 +401,8 @@ static rs_status_t run_event_loop (const rs_nfc_reader_cfg_t * cfg,
                      * rs_nfc_reader_raw_exchange itself. Prior memset() has
                      * already zero-initialised res->raw_exchange. */
                     if (cfg->run_raw_exchange &&
-                        (RS_NFC_PROT_ISODEP    != res->protocol) &&
-                        (RS_NFC_PROT_UNDEFINED != res->protocol))
+                        (Prot_ISODEP    != res->protocol) &&
+                        (Prot_Undefined != res->protocol))
                     {
                         uint32_t tx_len = 0u;
                         uint32_t rx_len = RAW_RX_BUF_SIZE;
@@ -827,7 +827,7 @@ static uint32_t rs_nfc_reader_card_summary_build (const rs_nfc_card_result_t * r
  * Raw exchange
  **********************************************************************************************************************/
 
-static rs_status_t rs_nfc_reader_raw_exchange (rs_nfc_protocol_t   protocol,
+static rs_status_t rs_nfc_reader_raw_exchange (ptxIoTRd_CardProtocol_t protocol,
                                                const uint8_t     * uid,
                                                uint8_t             uid_len,
                                                uint8_t           * tx,
@@ -844,7 +844,7 @@ static rs_status_t rs_nfc_reader_raw_exchange (rs_nfc_protocol_t   protocol,
 
     switch (protocol)
     {
-        case RS_NFC_PROT_T2T:
+        case Prot_T2T:
         {
             tx[0] = 0x30u;
             tx[1] = 0x00u;
@@ -852,7 +852,7 @@ static rs_status_t rs_nfc_reader_raw_exchange (rs_nfc_protocol_t   protocol,
             break;
         }
 
-        case RS_NFC_PROT_T3T:
+        case Prot_T3T:
         {
             static const uint8_t t3t_tail[] = {
                 0x01, 0x0B, 0x00, 0x01, 0x80, 0x00
@@ -874,7 +874,7 @@ static rs_status_t rs_nfc_reader_raw_exchange (rs_nfc_protocol_t   protocol,
             break;
         }
 
-        case RS_NFC_PROT_T5T:
+        case Prot_T5T:
         {
             tx[0] = 0x22u;
             tx[1] = 0x20u;
@@ -896,7 +896,7 @@ static rs_status_t rs_nfc_reader_raw_exchange (rs_nfc_protocol_t   protocol,
             break;
         }
 
-        case RS_NFC_PROT_NFCDEP:
+        case Prot_NFCDEP:
         {
             tx[0] = 0x00u;
             tx[1] = 0x00u;

@@ -48,7 +48,7 @@ typedef enum e_rs_nfc_ptx_disc_status {
 
 typedef struct st_rs_nfc_ptx_card_info {
     rs_nfc_card_type_t card_type;
-    rs_nfc_protocol_t  protocol;
+    ptxIoTRd_CardProtocol_t  protocol;
     uint8_t             uid[RS_NFC_UID_MAX_BYTES];
     uint8_t             uid_len;
 } rs_nfc_ptx_card_info_t;

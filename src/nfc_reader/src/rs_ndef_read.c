@@ -327,7 +327,7 @@ static rs_status_t read_t2t_ndef (rs_nfc_card_result_t * res, uint32_t ndef_cap)
  * Public API
  **********************************************************************************************************************/
 
-rs_status_t rs_ndef_read_card_info (rs_nfc_protocol_t      protocol,
+rs_status_t rs_ndef_read_card_info (ptxIoTRd_CardProtocol_t protocol,
                                     rs_nfc_card_result_t * result,
                                     uint32_t               max_ndef_bytes)
 {
@@ -354,12 +354,12 @@ rs_status_t rs_ndef_read_card_info (rs_nfc_protocol_t      protocol,
 
     switch (protocol)
     {
-        case RS_NFC_PROT_ISODEP: st = read_t4t_ndef(result, cap); break;
-        case RS_NFC_PROT_T2T:    st = read_t2t_ndef(result, cap); break;
-        case RS_NFC_PROT_T5T:    st = read_t5t_ndef(result, cap); break;
-        case RS_NFC_PROT_T3T:    st = read_t3t_ndef(result, cap); break;
+        case Prot_ISODEP: st = read_t4t_ndef(result, cap); break;
+        case Prot_T2T:    st = read_t2t_ndef(result, cap); break;
+        case Prot_T5T:    st = read_t5t_ndef(result, cap); break;
+        case Prot_T3T:    st = read_t3t_ndef(result, cap); break;
 
-        case RS_NFC_PROT_NFCDEP:
+        case Prot_NFCDEP:
             result->tag_type_name = "NFC-DEP (Peer-to-Peer)";
             return RS_OK;
 
