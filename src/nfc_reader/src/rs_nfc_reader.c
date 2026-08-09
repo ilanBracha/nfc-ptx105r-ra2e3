@@ -37,8 +37,8 @@
  * accessors are re-read only when the task is woken by one of those
  * events. */
 
-/* Async worker task configuration (static allocation — no heap) */
-#define ASYNC_TASK_STACK_WORDS   (3072U / sizeof(StackType_t))
+/* Async worker task configuration (static allocation — no heap) Do not reduce below 4096. */
+#define ASYNC_TASK_STACK_WORDS   (4096U / sizeof(StackType_t))
 #define ASYNC_TASK_PRIORITY      1U
 #define ASYNC_TASK_NAME          "RS_NFC"
 
