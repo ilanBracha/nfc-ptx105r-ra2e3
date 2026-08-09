@@ -67,9 +67,15 @@ typedef enum e_rs_nfc_reader_loop_state {
 } rs_nfc_reader_loop_state_t;
 
 /***********************************************************************************************************************
- * Stop-requested flag
+ * Stop-requested flag + reader-active flag
+ *
+ * g_reader_active is true between the entry of rs_nfc_reader_Read() and
+ * the completion of the corresponding operation (blocking return, or async
+ * worker self-delete). Stop() uses it to reject calls when nothing is
+ * running.
  **********************************************************************************************************************/
 static volatile bool g_stop_requested = false;
+static volatile bool g_reader_active  = false;
 
 static bool rs_nfc_reader_is_stop_requested (void)
 {
@@ -538,6 +544,7 @@ static void rs_nfc_async_worker (void * pvParameters)
 
     /* Mark context inactive and self-delete. */
     ctx->active = false;
+    g_reader_active = false;
     g_async_task_handle = NULL;
     vTaskDelete(NULL);
 }
@@ -623,6 +630,7 @@ rs_status_t rs_nfc_reader_Read (const rs_nfc_reader_cfg_t * cfg,
         g_async_ctx.p_result_out = result_out;
         g_async_ctx.active       = true;
         g_stop_requested         = false;
+        g_reader_active          = true;
 
         /* Create async worker (static allocation — no heap). */
         g_async_task_handle = xTaskCreateStatic(
@@ -638,6 +646,7 @@ rs_status_t rs_nfc_reader_Read (const rs_nfc_reader_cfg_t * cfg,
         if (NULL == g_async_task_handle)
         {
             g_async_ctx.active = false;
+            g_reader_active    = false;
 
             return RS_ERR_INTERNAL;
         }
@@ -648,12 +657,31 @@ rs_status_t rs_nfc_reader_Read (const rs_nfc_reader_cfg_t * cfg,
 
     /* Blocking path */
     g_stop_requested = false;
+    g_reader_active  = true;
 
-    return rs_nfc_read_blocking(cfg, result_out);
+    st = rs_nfc_read_blocking(cfg, result_out);
+
+    g_reader_active = false;
+
+    return st;
 }
 
 rs_status_t rs_nfc_reader_Stop (void)
 {
+    /* Nothing to stop — no Read() is currently in progress. */
+    if (!g_reader_active)
+    {
+        return RS_ERR_DEPENDENCY;
+    }
+
+    /* Stop() already invoked for the current Read(); reject the double
+     * request so callers can distinguish the first successful stop from
+     * subsequent no-op calls. */
+    if (g_stop_requested)
+    {
+        return RS_ERR_INTERNAL;
+    }
+
     g_stop_requested = true;
     /* Wake any task blocked in rs_nfc_ptx_wait_for_card() so it can
      * observe the stop flag immediately instead of sleeping until the

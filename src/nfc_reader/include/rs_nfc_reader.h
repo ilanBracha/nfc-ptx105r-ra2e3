@@ -40,7 +40,7 @@ typedef enum e_rs_status {
     RS_ERR_INTERNAL        = -99,
 } rs_status_t;
 
-typedef void (*rs_callback_t)(rs_status_t status, void *p_context);
+typedef void (* rs_callback_t)(rs_status_t status, void * p_context);
 
 #ifndef RS_LOG
 #define RS_LOG(fmt, ...)   /* default: silent */
@@ -123,6 +123,8 @@ typedef uint32_t rs_nfc_tech_mask_t;
 #define RS_NFC_CALLBACK_NONE              (NULL)
 #define RS_NFC_CONTEXT_NONE               (NULL)
 
+#define RS_NFC_UID_MAX_BYTES              10U
+#define RS_NFC_NDEF_MAX_BYTES             512U
 /**********************************************************************************************************************
  * Card type (must precede result struct)
  **********************************************************************************************************************/
@@ -152,9 +154,11 @@ typedef enum e_rs_nfc_protocol {
     RS_NFC_PROT_EXTENSION,
 } rs_nfc_protocol_t;
 
+
 /**********************************************************************************************************************
- * Operation-end callback (non-blocking mode)
+ * Callback typedefs (must precede rs_nfc_reader_cfg_t which uses them)
  **********************************************************************************************************************/
+
 /**
  * Fired once when a non-blocking rs_nfc_reader_Read() completes
  * (timeout, fatal error, or rs_nfc_reader_Stop() was called).
@@ -162,28 +166,65 @@ typedef enum e_rs_nfc_protocol {
 typedef void (* rs_nfc_callback_t)(rs_status_t status, void * p_context);
 
 /**********************************************************************************************************************
- * Result (forward-declared so the per-card event cb can reference it)
+ * Configuration
  **********************************************************************************************************************/
-struct st_rs_nfc_card_result;
-typedef struct st_rs_nfc_card_result rs_nfc_card_result_t;
+/**
+ * Snapshot of the last raw protocol exchange performed on an activated card.
+ * Populated only when cfg->run_raw_exchange = true and the active protocol
+ * supports it (i.e. NOT ISO-DEP / UNDEFINED). The tx / rx pointers reference
+ * RS-internal static buffers and MUST NOT be retained past the
+ * on_card_event callback (same contract as `summary`). Consumers must check
+ * `valid` before using any other field.
+ */
+typedef struct st_rs_nfc_raw_exchange {
+    bool           valid;
+    rs_status_t    status;
+    const uint8_t *tx;
+    uint32_t       tx_len;
+    const uint8_t *rx;
+    uint32_t       rx_len;
+} rs_nfc_raw_exchange_t;
 
-/**********************************************************************************************************************
- * Per-card event callback
- **********************************************************************************************************************/
+ typedef struct st_rs_nfc_card_result {
+    rs_nfc_card_type_t card_type;
+    rs_nfc_protocol_t  protocol;     /* active RF protocol */
+    uint8_t uid[RS_NFC_UID_MAX_BYTES];
+    uint8_t uid_len;
+    bool ndef_present;
+    uint8_t ndef_data[RS_NFC_NDEF_MAX_BYTES];
+    uint16_t ndef_len;
+
+    /* Decoded NDEF records, parsed from ndef_data by rs_nfc_reader_Read().
+     * Each record's `payload` points into ndef_data above, so it is valid
+     * only while this result is alive; do not use after a shallow copy. */
+    rs_ndef_decoded_t decoded;
+
+    int8_t rssi_dbm; /* optional, HAL may return 0 if unsupported */
+    uint32_t read_time_ms;
+
+    /* Extended card-info fields (populated by rs_ndef_read_card_info) */
+    uint32_t    data_area_size;   /**< Tag capacity in bytes (from CC)       */
+    bool        writeable;        /**< true if tag write-access is granted   */
+    const char *tag_type_name;    /**< Human-readable tag type, e.g.
+                                       "NFC Forum Type 2 Tag (T2T)".
+                                       Points to a static string — do NOT free. */
+
+    /* Last raw exchange (see rs_nfc_raw_exchange_t doc). Check
+     * raw_exchange.valid before use. */
+    rs_nfc_raw_exchange_t raw_exchange;
+} rs_nfc_card_result_t;
+
 /*
  * Fired by rs_nfc_reader_Read() each time a card is detected, activated
  * and (optionally) NDEF-read. The application MUST treat result/summary as
  * read-only and MUST NOT retain pointers past the call: both buffers are
  * reused on the next iteration of the read loop.
  */
-typedef void (* rs_nfc_card_event_cb_t)(rs_status_t                  status,
-                                        const rs_nfc_card_result_t * result,
-                                        const char                 * summary,
-                                        void                       * p_context);
+typedef void (* rs_nfc_card_event_cb_t)(rs_status_t                          status,
+                                        const struct st_rs_nfc_card_result * result,
+                                        const char                         * summary,
+                                        void                               * p_context);
 
-/**********************************************************************************************************************
- * Configuration
- **********************************************************************************************************************/
 typedef struct st_rs_nfc_reader_cfg {
     /* RF technologies to enable during discovery (bitmask of
      * RS_NFC_TECH_* flags, e.g. RS_NFC_TECH_ALL). Must be non-zero. */
@@ -240,59 +281,6 @@ typedef struct st_rs_nfc_reader_cfg {
      * validation enabled. */
     bool cfg_valid_check_en;
 } rs_nfc_reader_cfg_t;
-
-
-/**********************************************************************************************************************
- * Result
- **********************************************************************************************************************/
-#define RS_NFC_UID_MAX_BYTES       10U
-#define RS_NFC_NDEF_MAX_BYTES      512U
-
-/**
- * Snapshot of the last raw protocol exchange performed on an activated card.
- * Populated only when cfg->run_raw_exchange = true and the active protocol
- * supports it (i.e. NOT ISO-DEP / UNDEFINED). The tx / rx pointers reference
- * RS-internal static buffers and MUST NOT be retained past the
- * on_card_event callback (same contract as `summary`). Consumers must check
- * `valid` before using any other field.
- */
-typedef struct st_rs_nfc_raw_exchange {
-    bool           valid;
-    rs_status_t    status;
-    const uint8_t *tx;
-    uint32_t       tx_len;
-    const uint8_t *rx;
-    uint32_t       rx_len;
-} rs_nfc_raw_exchange_t;
-
-struct st_rs_nfc_card_result {
-    rs_nfc_card_type_t card_type;
-    rs_nfc_protocol_t  protocol;     /* active RF protocol */
-    uint8_t uid[RS_NFC_UID_MAX_BYTES];
-    uint8_t uid_len;
-    bool ndef_present;
-    uint8_t ndef_data[RS_NFC_NDEF_MAX_BYTES];
-    uint16_t ndef_len;
-
-    /* Decoded NDEF records, parsed from ndef_data by rs_nfc_reader_Read().
-     * Each record's `payload` points into ndef_data above, so it is valid
-     * only while this result is alive; do not use after a shallow copy. */
-    rs_ndef_decoded_t decoded;
-
-    int8_t rssi_dbm; /* optional, HAL may return 0 if unsupported */
-    uint32_t read_time_ms;
-
-    /* Extended card-info fields (populated by rs_ndef_read_card_info) */
-    uint32_t    data_area_size;   /**< Tag capacity in bytes (from CC)       */
-    bool        writeable;        /**< true if tag write-access is granted   */
-    const char *tag_type_name;    /**< Human-readable tag type, e.g.
-                                       "NFC Forum Type 2 Tag (T2T)".
-                                       Points to a static string — do NOT free. */
-
-    /* Last raw exchange (see rs_nfc_raw_exchange_t doc). Check
-     * raw_exchange.valid before use. */
-    rs_nfc_raw_exchange_t raw_exchange;
-};
 
 /**********************************************************************************************************************
  * API
