@@ -53,7 +53,28 @@ PES_IO_DEPS := $(PES_IO_OBJS:.o=.d)
 
 # Make sure the output directory exists at parse time (before any $(file > ...)
 # in the compile recipe expands, which happens *before* recipe lines run).
-$(shell mkdir -p $(PES_IO_OBJDIR))
+#
+# `mkdir -p` is a Unix-ism: it only works when make's $(shell ...) is run by a
+# Unix-like shell (sh / BusyBox, which some Windows setups have on PATH). On a
+# "plain" Windows PC $(shell ...) runs cmd.exe, where:
+#   * `-p` is not a valid option (it would create a stray folder named `-p`),
+#   * forward slashes are not accepted by cmd's mkdir, and
+#   * mkdir already creates intermediate directories on its own.
+# So pick the right incantation depending on the shell in use.
+ifeq ($(OS),Windows_NT)
+  ifeq (,$(findstring sh,$(notdir $(SHELL))))
+    # $(shell) is cmd.exe -> native mkdir with back-slashes, guarded by
+    # `if not exist` so re-parsing the makefile does not error out.
+    MKDIR_P = if not exist "$(subst /,\,$1)" mkdir "$(subst /,\,$1)"
+  else
+    # A Unix-like shell is available even on Windows (e.g. MSYS/BusyBox).
+    MKDIR_P = mkdir -p "$1"
+  endif
+else
+  MKDIR_P = mkdir -p "$1"
+endif
+
+$(shell $(call MKDIR_P,$(PES_IO_OBJDIR)))
 
 # Register with the standard managed-build variables.
 #   USER_OBJS -> picked up by the elf link rule:
